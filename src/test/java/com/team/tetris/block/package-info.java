@@ -1,2 +1,5 @@
-/** Tests for 담당자1's block package. */
+/**
+ * 담당자 1의 블록 단위·조합 테스트. 같은 패키지에서 내부 행 탐색을 검증하되
+ * 실제 보드 상태의 준비는 공개 배치 API만 사용한다. 엔진·UI·타이머에는 의존하지 않는다.
+ */
 package com.team.tetris.block;
