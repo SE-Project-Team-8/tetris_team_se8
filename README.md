@@ -2,7 +2,9 @@
 
 Java 21 + Gradle 기반 Swing 텍스트 테트리스 팀 프로젝트입니다.
 
-현재 저장소는 프로젝트 뼈대와 `common` 공용 계약만 포함합니다. 게임 로직과 실제 화면은 담당자가 구현할 예정입니다.
+담당자 2의 게임 진행·점수·설정·순위 저장 모듈과 테스트를 구현했습니다.
+현재 체크아웃의 블록과 화면은 뼈대이며, 실제 게임 실행에는 팀원 모듈 연결이 필요합니다.
+구현 규칙과 연결 API는 [담당자 2 연동 문서](docs/person2-integration.md)를 참고하세요.
 
 ## 코드 파일 구조
 
@@ -22,20 +24,20 @@ src/
 │   │
 │   ├── game/                                          # 담당자2
 │   │   └── package-info.java                          # 담당자2
-│   │       ├── GameEngine.java                        # 담당자2 (추가 예정)
-│   │       ├── GameState.java                         # 담당자2 (추가 예정)
-│   │       └── ScoreCalculator.java                   # 담당자2 (추가 예정)
+│   │       ├── GameEngine.java                        # 담당자2 (구현)
+│   │       ├── GameState.java                         # 담당자2 (구현)
+│   │       └── ScoreCalculator.java                   # 담당자2 (구현)
 │   │
 │   ├── settings/                                      # 담당자2
 │   │   └── package-info.java                          # 담당자2
-│   │       ├── GameSettings.java                      # 담당자2 (추가 예정)
-│   │       ├── SettingsRepository.java                # 담당자2 (추가 예정)
-│   │       └── KeyBindings.java                       # 담당자2 (추가 예정)
+│   │       ├── GameSettings.java                      # 담당자2 (구현)
+│   │       ├── SettingsRepository.java                # 담당자2 (구현)
+│   │       └── KeyBindings.java                       # 담당자2 (구현)
 │   │
 │   ├── scoreboard/                                    # 담당자2
 │   │   └── package-info.java                          # 담당자2
-│   │       ├── ScoreRecord.java                       # 담당자2 (추가 예정)
-│   │       └── ScoreboardRepository.java              # 담당자2 (추가 예정)
+│   │       ├── ScoreRecord.java                       # 담당자2 (구현)
+│   │       └── ScoreboardRepository.java              # 담당자2 (구현)
 │   │
 │   ├── ui/                                            # B
 │   │   └── package-info.java                          # B
@@ -51,6 +53,7 @@ src/
 │   └── common/                                        # 담당자2 + B (공용 계약)
 │       ├── package-info.java                          # 담당자2 + B
 │       ├── Screen.java                                # 담당자2 + B
+│       ├── persistence/PropertiesFile.java            # 담당자2 (UTF-8 저장)
 │       ├── constants/
 │       │   ├── GameConstants.java                     # 담당자2 + B
 │       │   └── package-info.java                      # 담당자2 + B
@@ -69,6 +72,7 @@ src/
 
 프로젝트 설정 및 협업 파일
 ├── build.gradle                                       # D
+├── gradle.properties                                  # 한글 경로 빌드 인코딩
 ├── settings.gradle                                    # D
 ├── gradlew                                            # D
 ├── gradlew.bat                                        # D
@@ -99,3 +103,7 @@ src/
 ```bash
 ./gradlew clean build
 ```
+
+Windows PowerShell에서는 `.\gradlew.bat clean build`를 실행합니다.
+테스트 결과는 `build/reports/tests/test/index.html`, 커버리지는
+`build/reports/jacoco/test/html/index.html`에서 확인할 수 있습니다.
