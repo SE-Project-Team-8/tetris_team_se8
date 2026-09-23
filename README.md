@@ -14,41 +14,45 @@ src/
 │   ├── Main.java                                      # B
 │   │
 │   ├── block/                                         # 담당자1
-│   │   └── package-info.java                          # 담당자1
-│   │       ├── Board.java                             # 담당자1 (추가 예정)
-│   │       ├── Tetromino.java                         # 담당자1 (추가 예정, 7종)
-│   │       ├── TetrominoGenerator.java                # 담당자1 (추가 예정)
-│   │       ├── CollisionChecker.java                  # 담당자1 (추가 예정)
-│   │       ├── LineClearer.java                       # 담당자1 (추가 예정)
-│   │       └── ColorScheme.java                       # 담당자1 (추가 예정)
+│   │   ├── package-info.java                          # 담당자1
+│   │   ├── Board.java                                 # 담당자1 (추가 예정)
+│   │   ├── Tetromino.java                             # 담당자1 (추가 예정, 7종)
+│   │   ├── TetrominoGenerator.java                    # 담당자1 (추가 예정)
+│   │   ├── CollisionChecker.java                      # 담당자1 (추가 예정)
+│   │   ├── LineClearer.java                           # 담당자1 (추가 예정)
+│   │   └── ColorScheme.java                           # 담당자1 (추가 예정)
 │   │
 │   ├── game/                                          # 담당자2
-│   │   └── package-info.java                          # 담당자2
-│   │       ├── GameEngine.java                        # 담당자2 (구현)
-│   │       ├── GameState.java                         # 담당자2 (구현)
-│   │       └── ScoreCalculator.java                   # 담당자2 (구현)
+│   │   ├── package-info.java                          # 담당자2
+│   │   ├── GameEngine.java                            # 담당자2 (구현)
+│   │   ├── GameAction.java                            # 키 입력과 독립적인 게임 동작
+│   │   ├── GameState.java                             # 담당자2 (구현)
+│   │   ├── ScoreCalculator.java                       # 기본 점수 정책
+│   │   ├── ScoringPolicy.java                         # 교체 가능한 점수 규칙
+│   │   ├── SpeedPolicy.java                           # 교체 가능한 낙하 속도 규칙
+│   │   └── DefaultSpeedPolicy.java                    # 1차 속도 정책
 │   │
 │   ├── settings/                                      # 담당자2
-│   │   └── package-info.java                          # 담당자2
-│   │       ├── GameSettings.java                      # 담당자2 (구현)
-│   │       ├── SettingsRepository.java                # 담당자2 (구현)
-│   │       └── KeyBindings.java                       # 담당자2 (구현)
+│   │   ├── package-info.java                          # 담당자2
+│   │   ├── GameSettings.java                          # 담당자2 (구현)
+│   │   ├── SettingsRepository.java                    # 담당자2 (구현)
+│   │   └── KeyBindings.java                           # 담당자2 (구현)
 │   │
 │   ├── scoreboard/                                    # 담당자2
-│   │   └── package-info.java                          # 담당자2
-│   │       ├── ScoreRecord.java                       # 담당자2 (구현)
-│   │       └── ScoreboardRepository.java              # 담당자2 (구현)
+│   │   ├── package-info.java                          # 담당자2
+│   │   ├── ScoreRecord.java                           # 담당자2 (구현)
+│   │   └── ScoreboardRepository.java                  # 담당자2 (구현)
 │   │
 │   ├── ui/                                            # B
-│   │   └── package-info.java                          # B
-│   │       ├── ScreenRouter.java                      # B (추가 예정)
-│   │       ├── MainMenuScreen.java                    # B (추가 예정)
-│   │       ├── GameScreen.java                        # B (추가 예정)
-│   │       ├── PauseScreen.java                       # B (추가 예정)
-│   │       ├── GameOverScreen.java                    # B (추가 예정)
-│   │       ├── NameInputScreen.java                   # B (추가 예정)
-│   │       ├── SettingsScreen.java                    # 담당자2 (추가 예정)
-│   │       └── ScoreboardScreen.java                  # 담당자2 (추가 예정)
+│   │   ├── package-info.java                          # B
+│   │   ├── ScreenRouter.java                          # B (추가 예정)
+│   │   ├── MainMenuScreen.java                        # B (추가 예정)
+│   │   ├── GameScreen.java                            # B (추가 예정)
+│   │   ├── PauseScreen.java                           # B (추가 예정)
+│   │   ├── GameOverScreen.java                        # B (추가 예정)
+│   │   ├── NameInputScreen.java                       # B (추가 예정)
+│   │   ├── SettingsScreen.java                        # 담당자2 (추가 예정)
+│   │   └── ScoreboardScreen.java                      # 담당자2 (추가 예정)
 │   │
 │   └── common/                                        # 담당자2 + B (공용 계약)
 │       ├── package-info.java                          # 담당자2 + B
@@ -85,7 +89,8 @@ src/
 └── README.md                                          # D
 ```
 
-`(추가 예정)` 파일은 현재 구현하지 않은 담당 영역입니다. 담당자는 해당 패키지의 `package-info.java`에 적힌 import 규칙을 지켜야 합니다.
+위 구조는 현재 구현한 파일과 계획된 파일을 함께 보여줍니다. `(추가 예정)` 파일은 현재 체크아웃에 없으며,
+`package-info.java`는 다른 Java 파일과 같은 깊이에 있습니다. 담당자는 각 패키지의 import 규칙을 지켜야 합니다.
 
 ## 역할 요약
 

@@ -1,9 +1,7 @@
 package com.team.tetris.game;
 
-import com.team.tetris.common.constants.GameConstants;
 import com.team.tetris.common.events.BoardSnapshot;
 import com.team.tetris.common.events.GameEventListener;
-import com.team.tetris.settings.KeyBindings;
 
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
@@ -15,12 +13,6 @@ import java.util.Objects;
  * this class. See docs/person2-integration.md for the block adapter contract.
  */
 public final class GameEngine implements AutoCloseable {
-    public static final int BLOCKS_PER_LEVEL = 10;
-    public static final int LINES_PER_LEVEL = 10;
-    public static final int MAX_LEVEL = 10;
-    public static final int MIN_DROP_INTERVAL_MS = 100;
-    public static final int SPEED_STEP_MS = 100;
-
     /**
      * Adapter implemented alongside 담당자1's block code, not by the block package
      * itself (block must not import game). Engine owns spawning and score calculation.
@@ -78,23 +70,31 @@ public final class GameEngine implements AutoCloseable {
 
     private final BoardDriver board;
     private final GameEventListener listener;
-    private final ScoreCalculator scoring;
+    private final ScoringPolicy scoring;
+    private final SpeedPolicy speedPolicy;
     private final DropTimer timer;
     private GameState state = GameState.READY;
     private int score;
-    private int level = 1;
+    private SpeedPolicy.Speed speed;
     private int generatedBlocks;
     private int clearedLines;
     private long timerGeneration;
 
     public GameEngine(BoardDriver board, GameEventListener listener) {
-        this(board, listener, new ScoreCalculator(), new SwingDropTimer());
+        this(board, listener, new ScoreCalculator(), new DefaultSpeedPolicy(), new SwingDropTimer());
     }
 
-    public GameEngine(BoardDriver board, GameEventListener listener, ScoreCalculator scoring, DropTimer timer) {
+    public GameEngine(BoardDriver board, GameEventListener listener, ScoringPolicy scoring, DropTimer timer) {
+        this(board, listener, scoring, new DefaultSpeedPolicy(), timer);
+    }
+
+    public GameEngine(BoardDriver board, GameEventListener listener, ScoringPolicy scoring,
+                      SpeedPolicy speedPolicy, DropTimer timer) {
         this.board = Objects.requireNonNull(board, "board");
         this.listener = Objects.requireNonNull(listener, "listener");
         this.scoring = Objects.requireNonNull(scoring, "scoring");
+        this.speedPolicy = Objects.requireNonNull(speedPolicy, "speedPolicy");
+        this.speed = Objects.requireNonNull(speedPolicy.calculate(0, 0), "speed");
         this.timer = Objects.requireNonNull(timer, "timer");
     }
 
@@ -105,9 +105,9 @@ public final class GameEngine implements AutoCloseable {
         cancelTimer();
         board.reset();
         score = 0;
-        level = 1;
         generatedBlocks = 0;
         clearedLines = 0;
+        updateSpeed();
         transition(GameState.RUNNING);
         listener.onPauseStateChanged(false);
         listener.onScoreChanged(0);
@@ -152,41 +152,34 @@ public final class GameEngine implements AutoCloseable {
     }
 
     /** Every movement key press is handled immediately, including repeated presses. */
-    public boolean handle(KeyBindings.Action action) {
+    public boolean handle(GameAction action) {
         requireEdt();
         Objects.requireNonNull(action, "action");
-        if (action == KeyBindings.Action.QUIT) return stop();
-        if (action == KeyBindings.Action.PAUSE) return state == GameState.PAUSED ? resume() : pause();
-        if (state != GameState.RUNNING) return false;
         return switch (action) {
-            case MOVE_LEFT -> publishIfMoved(board.moveLeft());
-            case MOVE_RIGHT -> publishIfMoved(board.moveRight());
-            case ROTATE_CLOCKWISE -> publishIfMoved(board.rotateClockwise());
-            case SOFT_DROP -> dropOneCell();
-            case HARD_DROP -> {
-                award(scoring.dropPoints(board.hardDrop(), level));
-                lockAndAdvance();
-                yield true;
-            }
-            default -> false;
+            case QUIT -> stop();
+            case PAUSE -> state == GameState.PAUSED ? resume() : pause();
+            case MOVE_LEFT -> state == GameState.RUNNING && publishIfMoved(board.moveLeft());
+            case MOVE_RIGHT -> state == GameState.RUNNING && publishIfMoved(board.moveRight());
+            case ROTATE_CLOCKWISE -> state == GameState.RUNNING && publishIfMoved(board.rotateClockwise());
+            case SOFT_DROP -> state == GameState.RUNNING && dropOneCell();
+            case HARD_DROP -> state == GameState.RUNNING && hardDrop();
         };
     }
 
-    public boolean handleKey(int keyCode, KeyBindings bindings) {
-        requireEdt();
-        return Objects.requireNonNull(bindings, "bindings").actionFor(keyCode)
-                .map(this::handle).orElse(false);
+    private boolean hardDrop() {
+        award(scoring.dropPoints(board.hardDrop(), getLevel()));
+        lockAndAdvance();
+        return true;
     }
 
     public GameState getState() { return state; }
     public int getScore() { return score; }
-    public int getLevel() { return level; }
+    public int getLevel() { return speed.level(); }
     public int getGeneratedBlocks() { return generatedBlocks; }
     public int getClearedLines() { return clearedLines; }
 
     public int getDropIntervalMillis() {
-        return Math.max(MIN_DROP_INTERVAL_MS,
-                (int) GameConstants.INITIAL_DROP_INTERVAL_MS - (level - 1) * SPEED_STEP_MS);
+        return speed.dropIntervalMillis();
     }
 
     @Override
@@ -198,7 +191,7 @@ public final class GameEngine implements AutoCloseable {
 
     private boolean dropOneCell() {
         if (board.moveDown()) {
-            award(scoring.dropPoints(1, level));
+            award(scoring.dropPoints(1, getLevel()));
             publishBoard();
         } else {
             lockAndAdvance();
@@ -212,8 +205,8 @@ public final class GameEngine implements AutoCloseable {
             gameOver();
             return;
         }
-        award(scoring.lineClearPoints(result.clearedLines(), level));
-        clearedLines = scoring.add(clearedLines, result.clearedLines());
+        award(scoring.lineClearPoints(result.clearedLines(), getLevel()));
+        clearedLines = addCount(clearedLines, result.clearedLines());
         if (!spawn()) {
             gameOver();
             return;
@@ -225,10 +218,17 @@ public final class GameEngine implements AutoCloseable {
 
     private boolean spawn() {
         if (!board.spawnNextBlock()) return false;
-        generatedBlocks = scoring.add(generatedBlocks, 1);
-        level = Math.min(MAX_LEVEL, 1 + Math.max(generatedBlocks / BLOCKS_PER_LEVEL,
-                clearedLines / LINES_PER_LEVEL));
+        generatedBlocks = addCount(generatedBlocks, 1);
+        updateSpeed();
         return true;
+    }
+
+    private void updateSpeed() {
+        speed = Objects.requireNonNull(speedPolicy.calculate(generatedBlocks, clearedLines), "speed");
+    }
+
+    private static int addCount(int count, int increment) {
+        return (int) Math.min(Integer.MAX_VALUE, (long) count + increment);
     }
 
     private void gameOver() {
@@ -239,6 +239,7 @@ public final class GameEngine implements AutoCloseable {
     }
 
     private void award(int points) {
+        if (points == 0) return;
         int updated = scoring.add(score, points);
         if (updated != score) {
             score = updated;

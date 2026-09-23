@@ -14,7 +14,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
-import static com.team.tetris.settings.KeyBindings.Action.*;
+import static com.team.tetris.game.GameAction.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 class GameEngineTest {
@@ -55,13 +55,15 @@ class GameEngineTest {
     void repeatedMovementKeysAreNotDebouncedAndBlockedMovementDoesNotScore() throws Exception {
         edt(() -> {
             engine.start();
-            for (int i = 0; i < 5; i++) assertTrue(engine.handleKey(KeyEvent.VK_LEFT, KeyBindings.defaults()));
+            for (int i = 0; i < 5; i++) {
+                assertTrue(engine.handle(KeyBindings.defaults().actionFor(KeyEvent.VK_LEFT).orElseThrow()));
+            }
             assertEquals(5, board.leftCalls);
             assertTrue(engine.handle(MOVE_RIGHT));
             assertTrue(engine.handle(ROTATE_CLOCKWISE));
             board.canMove = false;
             assertFalse(engine.handle(MOVE_LEFT));
-            assertFalse(engine.handleKey(KeyEvent.VK_F1, KeyBindings.defaults()));
+            assertTrue(KeyBindings.defaults().actionFor(KeyEvent.VK_F1).isEmpty());
             assertEquals(0, engine.getScore());
         });
     }
@@ -104,7 +106,7 @@ class GameEngineTest {
             assertFalse(timer.running);
             assertFalse(engine.start());
             assertFalse(engine.pause());
-            for (KeyBindings.Action action : new KeyBindings.Action[]{MOVE_LEFT, MOVE_RIGHT,
+            for (GameAction action : new GameAction[]{MOVE_LEFT, MOVE_RIGHT,
                     SOFT_DROP, HARD_DROP, ROTATE_CLOCKWISE}) assertFalse(engine.handle(action));
             oldTick.run();
             assertEquals(0, engine.getScore());
@@ -194,6 +196,23 @@ class GameEngineTest {
     }
 
     @Test
+    void failedRestartResetsSpeedEvenWhenNoNewPieceCanSpawn() throws Exception {
+        edt(() -> {
+            engine.start();
+            board.dropDistance = 0;
+            for (int i = 0; i < 9; i++) engine.handle(HARD_DROP);
+            assertEquals(2, engine.getLevel());
+            engine.stop();
+            board.canSpawn = false;
+            engine.start();
+            assertEquals(GameState.GAME_OVER, engine.getState());
+            assertEquals(1, engine.getLevel());
+            assertEquals(1000, engine.getDropIntervalMillis());
+            assertEquals(0, engine.getGeneratedBlocks());
+        });
+    }
+
+    @Test
     void quitWorksDuringRunningAndPausedWithoutSubmittingAScore() throws Exception {
         edt(() -> {
             engine.start();
@@ -229,6 +248,34 @@ class GameEngineTest {
         assertFalse(GameState.RUNNING.canTransitionTo(GameState.RUNNING));
         assertFalse(GameState.RUNNING.canTransitionTo(null));
         assertThrows(IllegalArgumentException.class, () -> new GameEngine.LockResult(5, false));
+    }
+
+    @Test
+    void injectedPoliciesChangeScoringAndGravityWithoutChangingProgressCounters() throws Exception {
+        ScoringPolicy customScore = new ScoringPolicy() {
+            public int dropPoints(int cells, int level) { return cells * 7; }
+            public int lineClearPoints(int lines, int level) { return lines * 11; }
+            public int add(int current, int points) { return current + points + 1000; }
+        };
+        SpeedPolicy customSpeed = (blocks, lines) ->
+                new SpeedPolicy.Speed(1 + blocks, 600 - blocks * 20);
+        engine = new GameEngine(board, events, customScore, customSpeed, timer);
+
+        edt(() -> {
+            engine.start();
+            assertEquals(1, engine.getGeneratedBlocks());
+            assertEquals(2, engine.getLevel());
+            assertEquals(580, timer.interval);
+            timer.fire();
+            assertEquals(1007, engine.getScore());
+            board.dropDistance = 0;
+            board.lines = 2;
+            engine.handle(HARD_DROP);
+            assertEquals(2, engine.getGeneratedBlocks());
+            assertEquals(2, engine.getClearedLines());
+            assertEquals(560, timer.interval);
+            assertEquals(2029, engine.getScore());
+        });
     }
 
     @Test

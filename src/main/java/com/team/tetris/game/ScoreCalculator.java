@@ -1,10 +1,11 @@
 package com.team.tetris.game;
 
 /** Pure scoring policy. Automatic, soft and hard drops use the same rule. */
-public final class ScoreCalculator {
+public final class ScoreCalculator implements ScoringPolicy {
     private static final int[] LINE_POINTS = {0, 100, 300, 500, 800};
 
     /** One base point per actual cell, plus level - 1 speed bonus per cell. */
+    @Override
     public int dropPoints(int cells, int level) {
         if (cells < 0) throw new IllegalArgumentException("cells must be non-negative");
         requireLevel(level);
@@ -12,6 +13,7 @@ public final class ScoreCalculator {
     }
 
     /** Extra scoring rule: reward clearing multiple lines in one placement. */
+    @Override
     public int lineClearPoints(int lines, int level) {
         if (lines < 0 || lines >= LINE_POINTS.length) {
             throw new IllegalArgumentException("lines must be between 0 and 4");
@@ -20,6 +22,7 @@ public final class ScoreCalculator {
         return saturate((long) LINE_POINTS[lines] * level);
     }
 
+    @Override
     public int add(int score, int points) {
         if (score < 0 || points < 0) throw new IllegalArgumentException("negative score");
         return saturate((long) score + points);

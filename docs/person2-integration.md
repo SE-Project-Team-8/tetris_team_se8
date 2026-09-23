@@ -2,7 +2,8 @@
 
 Java 21, 기존 패키지와 `GameEventListener` 계약을 유지한다. 이번 구현 범위는 요청한
 `GameEngine`, `GameState`, `ScoreCalculator`, `GameSettings`, `SettingsRepository`,
-`KeyBindings`, `ScoreRecord`, `ScoreboardRepository`이다. 공통 파일 저장 코드는
+`KeyBindings`, `ScoreRecord`, `ScoreboardRepository`이다. 이후 정책 교체를 위해 `GameAction`,
+`ScoringPolicy`, `SpeedPolicy`, `DefaultSpeedPolicy`를 추가했다. 공통 파일 저장 코드는
 `common/persistence/PropertiesFile`에 모았다.
 
 현재 체크아웃의 `block`과 실제 게임 UI는 아직 뼈대이므로 이 변경만으로 플레이 가능한 게임이 실행되지는 않는다.
@@ -25,6 +26,24 @@ Java 21, 기존 패키지와 `GameEventListener` 계약을 유지한다. 이번 
 `game`은 `ui`를 import하지 않는다. `block`은 `game`, `settings`, `scoreboard`, `ui`를
 import하지 않는다. 어댑터를 `game` 패키지에 두고 `block` 객체를 조합하면 이 규칙을 지킬 수 있다.
 기존 `common` 이벤트의 시그니처는 변경하지 않았다.
+
+게임 입력은 `GameAction`으로 표현한다. `settings.KeyBindings`는 물리 키를 `GameAction`으로
+변환하지만 엔진은 설정 패키지를 import하지 않는다. 화면 버튼도 동일한 `GameAction`을 엔진에
+전달할 수 있다. `GameEngine.handleKey`는 제거했고 UI가 변환을 담당한다. 새 `GameAction`을
+추가하면 엔진의 exhaustive switch에서 처리가 빠진 경우 컴파일 단계에 표시된다.
+
+점수 계산은 `ScoringPolicy`와 기본 구현 `ScoreCalculator`, 속도 계산은 `SpeedPolicy`와 기본
+구현 `DefaultSpeedPolicy`로 나뉜다. 엔진은 규칙 계산 결과를 사용해 타이머와 점수 표시를 갱신한다.
+다른 모드를 구현할 때 새 정책 구현을 생성자에 전달하면 된다.
+
+```java
+GameEngine engine = new GameEngine(boardDriver, listener,
+        new ScoreCalculator(), new DefaultSpeedPolicy(), timer);
+```
+
+`ScoringPolicy.add`는 최종 점수만 더하며, 생성 블록 수와 삭제 줄 수는 엔진이 별도로 센다.
+점수를 주지 않는 0칸 낙하에서는 `add`를 호출하지 않는다. 두 정책은 순수 계산으로 작성해야
+타이머 호출과 UI 갱신 중에도 예측 가능한 결과를 얻을 수 있다.
 
 ## 요구사항과 선택한 규칙
 
@@ -111,8 +130,8 @@ GameEngine engine = new GameEngine(boardDriver, listener);
 engine.start();
 
 // Swing InputMap/ActionMap의 WHEN_IN_FOCUSED_WINDOW에 설정 키를 등록하는 방식을 권장.
-engine.handleKey(keyCode, settings.keyBindings());
-// 또는 ActionMap에서 engine.handle(KeyBindings.Action.MOVE_LEFT) 등을 호출.
+settings.keyBindings().actionFor(keyCode).ifPresent(engine::handle);
+// 또는 ActionMap에서 engine.handle(GameAction.MOVE_LEFT) 등을 호출.
 // 화면 크기: settings.screenSize().width(), settings.screenSize().height()
 ```
 
@@ -139,7 +158,15 @@ Esc 게임 종료. 이동 키 반복 입력은 매번 처리한다. P/Esc는 UI�
 
 기본 경로는 사용자 홈의 `.tetris-team-se8/settings.properties`, `scores.properties`이다.
 현재 작업 디렉터리가 바뀌어도 같은 파일을 읽는다. 테스트/다른 배포에서는 생성자의 `Path`로 변경한다.
-파일 내용은 UTF-8 properties이며 버전은 1이다. 외부 JSON 라이브러리가 필요하지 않다.
+파일 내용은 UTF-8 properties이다. 점수 기록은 버전 1, 설정의 현재 저장 버전은 2이며
+기존 버전 1 설정도 읽는다. 외부 JSON 라이브러리가 필요하지 않다.
+
+설정 v1에 저장된 원래 일곱 동작의 키는 그대로 유지한다. 이후 새 `GameAction`을 추가할 때는
+`KeyBindings.defaults()`에 기본키를 배정한다. 옛 파일에 그 키가 없어도 로드 중 새 동작만
+기본값으로 채운다. 새 기본키가 사용자의 기존 키와 겹치면 사용자의 키를 우선하고,
+새 동작에 사용하지 않은 F1~F12(그다음 A~Z)를 배정한다. v1에 원래 존재해야 하는 키가
+누락된 경우는 손상된 파일로 취급한다. `ORIGINAL_ACTIONS` 목록은 새 동작을 추가해도
+변경하지 않는다. 데이터 형식이 더 바뀔 때는 새 버전과 변환 규칙을 추가한다.
 
 파일이 없거나 비어 있으면 기본 설정/빈 순위를 반환한다. 존재하는 데이터의 버전, 필수 값,
 키 중복, 음수 점수 등이 잘못되면 `IOException`으로 알리고 읽기 과정에서 덮어쓰지 않는다.
