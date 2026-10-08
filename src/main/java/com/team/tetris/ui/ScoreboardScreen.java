@@ -14,12 +14,17 @@ import javax.swing.SwingWorker;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Font;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 
 /** Persistent ranking view. Disk reads run off the event dispatch thread. */
 public final class ScoreboardScreen extends JPanel implements Screen {
+    private static final int DISPLAY_LIMIT = 10;
+    private static final DateTimeFormatter DATE_FORMAT =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd").withZone(ZoneId.systemDefault());
     private final ScreenRouter router;
     private final ScoreboardRepository repository;
     private final JTextArea results = new JTextArea();
@@ -66,12 +71,14 @@ public final class ScoreboardScreen extends JPanel implements Screen {
                         results.setText("No scores yet.");
                         return;
                     }
-                    StringBuilder text = new StringBuilder("  RANK  NAME                    SCORE\n\n");
-                    for (int index = 0; index < records.size(); index++) {
+                    StringBuilder text = new StringBuilder(
+                            "  RANK  NAME                    SCORE  DATE\n\n");
+                    int displayedRecords = Math.min(DISPLAY_LIMIT, records.size());
+                    for (int index = 0; index < displayedRecords; index++) {
                         ScoreRecord record = records.get(index);
                         String marker = record.id().equals(highlightedId) ? "▶" : " ";
-                        text.append(String.format("%s %3d   %-20s %10d%n", marker, index + 1,
-                                record.name(), record.score()));
+                        text.append(String.format("%s %3d   %-20s %10d  %s%n", marker, index + 1,
+                                record.name(), record.score(), DATE_FORMAT.format(record.recordedAt())));
                     }
                     results.setText(text.toString());
                 } catch (Exception failure) {
