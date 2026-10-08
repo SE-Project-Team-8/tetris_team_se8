@@ -1,6 +1,12 @@
 /**
- * 담당자1 owns pure block-domain logic: Board, seven Tetrominoes,
- * TetrominoGenerator, CollisionChecker, LineClearer, and ColorScheme.
- * This package must not import game, ui, settings, or scoreboard.
+ * 담당자 1의 순수 블록 도메인: 고정 보드, 일곱 형태, 생성, 충돌, 낙하 거리, 줄 삭제, 색상.
+ *
+ * 좌표 순서는 (행, 열)이며 아래·오른쪽이 양의 방향이다. 보드는 고정 셀만 소유하고,
+ * 현재 블록·점수·큐·타이머·이벤트는 엔진이 관리한다. 불변 후보를 계산한 뒤 배치 가능할
+ * 때만 엔진이 채택한다. 보드 변경과 난수원 사용은 세션의 단일 실행 흐름에서 수행한다.
+ *
+ * game, ui, settings, scoreboard를 import하지 않는다. 화면 DTO 변환과 기술적
+ * 실패의 기록·사용자 안내는 상위 경계의 책임이다. 정상 충돌은 false, 잘못된 API 사용은
+ * 명시된 unchecked 예외로 구분한다. 공개 API의 배열·목록을 통해 내부 상태를 수정할 수 없다.
  */
 package com.team.tetris.block;
