@@ -3,7 +3,8 @@
 Java 21 + Gradle 기반 Swing 텍스트 테트리스 팀 프로젝트입니다.
 
 담당자 2의 게임 진행·점수·설정·순위 저장 모듈과 테스트를 구현했습니다.
-현재 체크아웃의 블록과 화면은 뼈대이며, 실제 게임 실행에는 팀원 모듈 연결이 필요합니다.
+블록 도메인과 게임 엔진은 `BlockBoardDriver`로 연결했습니다. 실제 게임 화면은 아직 구현 전이므로
+플레이 가능한 앱으로 실행하려면 UI 연결이 필요합니다.
 구현 규칙과 연결 API는 [담당자 2 연동 문서](docs/person2-integration.md)를 참고하세요.
 
 ## 코드 파일 구조
@@ -15,16 +16,20 @@ src/
 │   │
 │   ├── block/                                         # 담당자1
 │   │   ├── package-info.java                          # 담당자1
-│   │   ├── Board.java                                 # 담당자1 (추가 예정)
-│   │   ├── Tetromino.java                             # 담당자1 (추가 예정, 7종)
-│   │   ├── TetrominoGenerator.java                    # 담당자1 (추가 예정)
-│   │   ├── CollisionChecker.java                      # 담당자1 (추가 예정)
-│   │   ├── LineClearer.java                           # 담당자1 (추가 예정)
-│   │   └── ColorScheme.java                           # 담당자1 (추가 예정)
+│   │   ├── Board.java, BoardView.java, Cell.java       # 보드/셀
+│   │   ├── Tetromino.java, TetrominoType.java          # 블록과 7종 타입
+│   │   ├── Rotation.java, TetrominoGenerator.java      # 회전/생성 계약
+│   │   ├── UniformTetrominoGenerator.java             # 기본 생성기
+│   │   ├── CollisionChecker.java, DropCalculator.java # 충돌/낙하
+│   │   ├── LineClearer.java, ColorScheme.java          # 줄 삭제/색상
+│   │   ├── InvalidTetrominoIdException.java          # 잘못된 블록 ID
+│   │   ├── InvalidPlacementException.java            # 잘못된 배치
+│   │   └── InvalidColorSchemeException.java          # 잘못된 색상 모드
 │   │
 │   ├── game/                                          # 담당자2
 │   │   ├── package-info.java                          # 담당자2
 │   │   ├── GameEngine.java                            # 담당자2 (구현)
+│   │   ├── BlockBoardDriver.java                      # block ↔ game 어댑터
 │   │   ├── GameAction.java                            # 키 입력과 독립적인 게임 동작
 │   │   ├── GameState.java                             # 담당자2 (구현)
 │   │   ├── ScoreCalculator.java                       # 기본 점수 정책
@@ -110,5 +115,8 @@ src/
 ```
 
 Windows PowerShell에서는 `.\gradlew.bat clean build`를 실행합니다.
+`gradle.properties`의 `-Dfile.encoding=COMPAT`은 Java 21에서 Windows 한글 체크아웃 경로의
+Gradle 테스트 실행 인수 파일을 시스템 문자셋으로 읽도록 하기 위한 설정입니다. macOS/Linux의
+일반적인 UTF-8 환경에서는 동작에 영향이 없으며, 소스와 저장 데이터는 별도로 UTF-8을 사용합니다.
 테스트 결과는 `build/reports/tests/test/index.html`, 커버리지는
 `build/reports/jacoco/test/html/index.html`에서 확인할 수 있습니다.

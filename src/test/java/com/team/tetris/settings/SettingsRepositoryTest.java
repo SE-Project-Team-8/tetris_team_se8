@@ -11,8 +11,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.EnumMap;
-import java.util.Properties;
-import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -54,45 +52,10 @@ class SettingsRepositoryTest {
     }
 
     @Test
-    void loadsVersionOneWithoutLosingCustomPreferencesThenSavesVersionTwo() throws Exception {
-        Path file = directory.resolve("settings.properties");
-        SettingsRepository repository = new SettingsRepository(file);
-        GameSettings custom = GameSettings.defaults()
-                .withScreenSize(GameSettings.ScreenSize.LARGE)
-                .withColorBlindMode(GameSettings.ColorBlindMode.BLUE_YELLOW)
-                .withKeyBindings(KeyBindings.defaults().withKey(GameAction.MOVE_LEFT, KeyEvent.VK_A));
-        repository.save(custom);
-        String versionOne = Files.readString(file).replace("version=2", "version=1");
-        Files.writeString(file, versionOne);
-
-        assertEquals(custom, new SettingsRepository(file).load());
-        assertEquals(versionOne, Files.readString(file), "Reading must not rewrite the user's file");
-        repository.save(custom);
-        assertTrue(Files.readString(file).contains("version=2"));
-    }
-
-    @Test
-    void newActionGetsUnusedFallbackWhenItsDefaultConflictsWithASavedKey() {
-        Properties saved = new Properties();
-        KeyBindings defaults = KeyBindings.defaults();
-        for (GameAction action : GameAction.values()) {
-            if (action != GameAction.QUIT) {
-                int key = action == GameAction.MOVE_LEFT ? KeyEvent.VK_ESCAPE : defaults.keyFor(action);
-                saved.setProperty("key." + action.name(), Integer.toString(key));
-            }
-        }
-        Set<String> oldActions = Set.of("MOVE_LEFT", "MOVE_RIGHT", "SOFT_DROP",
-                "ROTATE_CLOCKWISE", "HARD_DROP", "PAUSE");
-        KeyBindings migrated = SettingsRepository.loadBindings(saved, oldActions);
-        assertEquals(KeyEvent.VK_ESCAPE, migrated.keyFor(GameAction.MOVE_LEFT));
-        assertEquals(KeyEvent.VK_F1, migrated.keyFor(GameAction.QUIT));
-        assertEquals(GameAction.QUIT, migrated.actionFor(KeyEvent.VK_F1).orElseThrow());
-    }
-
-    @Test
     void brokenFilesAreReportedAndPreserved() throws Exception {
         Path file = directory.resolve("settings.properties");
-        for (String invalid : new String[]{"version=99\n", "version=1\nscreenSize=UNKNOWN\n", "bad=\\uXYZW"}) {
+        for (String invalid : new String[]{"version=99\n", "version=2\n",
+                "version=1\nscreenSize=UNKNOWN\n", "bad=\\uXYZW"}) {
             Files.writeString(file, invalid);
             assertThrows(IOException.class, () -> new SettingsRepository(file).load());
             assertEquals(invalid, Files.readString(file));
@@ -109,7 +72,7 @@ class SettingsRepositoryTest {
     }
 
     @Test
-    void missingPreviouslySavedActionIsCorruptionRatherThanMigration() throws Exception {
+    void missingActionIsRejectedWithoutRewritingTheFile() throws Exception {
         Path file = directory.resolve("settings.properties");
         new SettingsRepository(file).save(GameSettings.defaults());
         String broken = Files.readString(file).replaceAll("(?m)^key\\.MOVE_LEFT=.*\\R?", "");

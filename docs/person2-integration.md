@@ -2,13 +2,14 @@
 
 Java 21, 기존 패키지와 `GameEventListener` 계약을 유지한다. 이번 구현 범위는 요청한
 `GameEngine`, `GameState`, `ScoreCalculator`, `GameSettings`, `SettingsRepository`,
-`KeyBindings`, `ScoreRecord`, `ScoreboardRepository`이다. 이후 정책 교체를 위해 `GameAction`,
+`KeyBindings`, `ScoreRecord`, `ScoreboardRepository`와 `BlockBoardDriver`이다. 이후 정책 교체를 위해 `GameAction`,
 `ScoringPolicy`, `SpeedPolicy`, `DefaultSpeedPolicy`를 추가했다. 공통 파일 저장 코드는
 `common/persistence/PropertiesFile`에 모았다.
 
-현재 체크아웃의 `block`과 실제 게임 UI는 아직 뼈대이므로 이 변경만으로 플레이 가능한 게임이 실행되지는 않는다.
+`block` 구현과 엔진은 `BlockBoardDriver`로 연결했다. 실제 게임 UI는 아직 뼈대이므로 이 변경만으로
+플레이 가능한 게임이 실행되지는 않는다.
 `Main`의 placeholder, `SettingsScreen`, `ScoreboardScreen`을 포함한 화면 구현은 이번 변경에
-포함하지 않는다. 아래 API와 연결 지점을 이용하여 화면과 블록 구현을 통합한다.
+포함하지 않는다. 아래 API를 이용하여 화면을 연결한다.
 
 ## 디렉터리와 의존성
 
@@ -37,7 +38,7 @@ import하지 않는다. 어댑터를 `game` 패키지에 두고 `block` 객체�
 다른 모드를 구현할 때 새 정책 구현을 생성자에 전달하면 된다.
 
 ```java
-GameEngine engine = new GameEngine(boardDriver, listener,
+GameEngine engine = new GameEngine(new BlockBoardDriver(), listener,
         new ScoreCalculator(), new DefaultSpeedPolicy(), timer);
 ```
 
@@ -69,28 +70,29 @@ GameEngine engine = new GameEngine(boardDriver, listener,
 첫 블록도 생성 수에 포함한다. 새 블록 생성 이후 레벨을 갱신하므로 10번째 블록부터 레벨 2이다.
 낙하와 줄 삭제 점수는 그 동작을 수행한 레벨로 계산한다. 점수는 공용 이벤트의 `int` 범위를
 초과하면 `Integer.MAX_VALUE`로 유지하여 음수가 되지 않는다. 벽에 막힌 이동, 회전, 0칸 낙하는
-낙하 점수를 주지 않는다. 하드 드롭은 0칸이어도 블록을 고정한다.
+낙하 점수를 주지 않는다. 하드 드롭은 0칸이어도 블록을 고정한다. 마지막 고정에서 줄을 지운 뒤
+게임이 종료되어도 그 줄의 점수는 최종 점수에 포함한다.
 
 ## 담당자 1: 블록 연결 계약
 
-`GameEngine.BoardDriver` 구현체를 `game` 패키지에 작성해 엔진 생성자에 전달한다.
-`main`에는 블록 구현이 없으므로 `BoardDriver`를 주입받으며, 기본 생성 가능한 게임 보드는 제공하지 않는다.
-2026-09-23에 원격 `feat/block`의 `63b1e21`까지 확인했으며, 아래에 실제 API의 대응 관계를 정리했다.
-이 브랜치는 이번 작업에서 병합하지 않았다.
+`game.BlockBoardDriver`가 병합된 `block` 패키지를 `GameEngine.BoardDriver` 계약에 맞게 연결한다.
+기본 생성자는 `Board`와 균등 확률 생성기를 만들고, `BlockBoardDriver(Board, TetrominoGenerator)`는
+테스트나 다른 생성 규칙을 주입할 때 사용한다.
 
-1. `reset()`은 보드/생성기/다음 블록 큐를 초기화한다. 현재 블록은 생성하지 않는다.
+1. `reset()`은 보드와 다음 블록 큐를 초기화한다. 생성기의 난수 흐름은 유지하며 현재 블록은 생성하지 않는다.
 2. `spawnNextBlock()`은 큐의 블록을 현재 블록으로 만들고 큐를 채운다. 생성 충돌이면 `false`.
 3. `moveLeft()`, `moveRight()`, `moveDown()`, `rotateClockwise()`는 성공 여부를 반환한다.
    `moveDown()`은 정확히 한 칸만 이동하며 실패해도 자체적으로 고정/생성하지 않는다.
 4. `hardDrop()`은 마지막 유효 위치까지 이동하고 실제 이동 칸 수를 반환한다. 고정/생성하지 않는다.
 5. `lockAndClearLines()`은 현재 블록을 한 번 고정하고 `LockResult(삭제 줄 수, topOut)`을 반환한다.
-   보드 위쪽 초과는 `topOut=true`. 다음 블록 생성은 엔진이 한다.
+   현재 블록 구현에는 숨겨진 상단 행이 없으므로 이 어댑터는 `topOut=false`를 반환한다.
+   다음 블록 생성은 엔진이 하며, 생성 위치가 막히면 게임이 종료된다.
 6. `snapshot()`은 낙하 중 블록을 포함한 20×10 최종 화면이다. 빈칸은 `BoardSnapshot.EMPTY(-1)`.
 7. `nextBlockTypes()`는 다음 블록 ID 배열이다. ID 0~6의 도형별 매핑은 담당자 1과 B가 맞춘다.
 
 엔진은 UI에 전달할 때 보드 배열과 다음 블록 배열을 복사한다.
 
-### feat/block API 대응 (63b1e21)
+### 병합된 block API 대응
 
 담당자 1의 `Board`는 **고정된 셀만** 보유한다. 따라서 `BoardDriver` 구현체가 현재 `Tetromino`,
 `TetrominoGenerator`, 미리보기 큐를 소유한다. 어댑터는 담당자 2의 `game` 패키지에 둔다.
@@ -125,8 +127,8 @@ UI 이벤트와 이동 처리가 동시에 보드를 수정하지 않는다. 콜
 콜백 안에서 엔진의 새 게임/종료 등을 다시 호출해야 하면 `SwingUtilities.invokeLater`로 예약한다.
 
 ```java
-// EDT에서, boardDriver는 위 계약의 실제 구현, listener는 기존 GameEventListener 구현.
-GameEngine engine = new GameEngine(boardDriver, listener);
+// EDT에서, listener는 기존 GameEventListener 구현.
+GameEngine engine = new GameEngine(new BlockBoardDriver(), listener);
 engine.start();
 
 // Swing InputMap/ActionMap의 WHEN_IN_FOCUSED_WINDOW에 설정 키를 등록하는 방식을 권장.
@@ -142,7 +144,7 @@ Esc 게임 종료. 이동 키 반복 입력은 매번 처리한다. P/Esc는 UI�
 `onBoardUpdated`, `onScoreChanged`, `onNextBlocksChanged`로 표시를 갱신하고,
 `onPauseStateChanged`로 일시정지 화면을 전환한다. `onGameOver(finalScore)`에서는 다음을 진행한다.
 
-1. `scoreboard.qualifies(finalScore)`를 확인한다.
+1. 조립부에서 `scoreboard.qualifies(finalScore)`를 확인한다. 디스크 오류는 사용자에게 알리고 재시도한다.
 2. 등재 가능하면 이름을 입력받고 `scoreboard.add(name, finalScore)`를 호출한다.
 3. 반환된 `Optional<ScoreRecord>`가 있으면 `id()`를 보관한다.
 4. `scoreboard.load()`로 점수 내림차순 목록을 표시하고 같은 ID인 행을 강조한다.
@@ -152,21 +154,41 @@ Esc 게임 종료. 이동 키 반복 입력은 매번 처리한다. P/Esc는 UI�
 우선한다. 이름은 앞뒤 공백 제거 후 1~20 유니코드 코드 포인트이며 제어 문자를 금지한다.
 
 사용자 Esc 종료는 `STOPPED`가 되며 `onGameOver`를 발생시키지 않는다. `handle(QUIT)` 또는
-`stop()`의 성공 결과를 보고 UI가 메뉴로 이동한다. 화면을 떠날 때 `close()`로 타이머를 정리한다.
+`stop()`의 성공 결과를 보고 UI가 메뉴로 이동한다. 일시정지 화면으로 이동할 때는 `pause()`로
+타이머를 멈추고, 게임을 완전히 버리거나 앱을 닫을 때 `close()`로 정리한다.
+
+### PR #6 화면과의 연동 계약
+
+PR #5의 `GameEngine`과 PR #6의 화면을 연결할 때 `GameSession`은 사용하지 않는다.
+`Main` 등 조립부가 `GameEngine(new BlockBoardDriver(), listener)`를 만들고, 화면의 조작 요청은
+`engine.start()`, `engine.handle(GameAction)`, `engine.pause()`, `engine.resume()`로 전달한다.
+모두 Swing EDT에서 호출한다. `GameScreen`의 새 게임 시작과 화면 재진입이 같은 판을 두 번
+시작하지 않도록, 새 게임은 `start()` 한 번, 일시정지 복귀는 `resume()` 한 번만 호출한다.
+`GameEngine`은 생성자에서 리스너 하나를 받는다. 표시 화면과 결과 처리기가 모두 이벤트를
+받아야 한다면 조립부에서 이 둘에 전달하는 복합 `GameEventListener`를 만든다. 화면 표시를
+숨기는 것과 엔진 이벤트 수신 여부는 분리한다.
+
+| 항목 | 연결 방식 |
+| --- | --- |
+| 게임 입력 | `KeyBindings.actionFor(keyCode).ifPresent(engine::handle)`; 설정을 바꾸면 Swing 키 바인딩도 다시 등록 |
+| Esc / P | 플레이 중 Esc는 `QUIT` → `STOPPED` 후 메뉴, P는 `PAUSE` 토글. 일시정지 메뉴의 종료는 `handle(QUIT)`, 재개는 `resume()` |
+| 게임 오버 | `onGameOver(score)`에서 `engine.getLevel()`과 `engine.getClearedLines()`를 읽어 결과 화면에 전달; 이벤트 시그니처는 유지 |
+| 순위권 판정 | 조립부가 `ScoreboardRepository.qualifies(score)`를 호출. `IOException`은 비순위권으로 취급하지 않고 오류 표시·재시도 제공 |
+| 창 크기 | 시작 시 저장된 `GameSettings.screenSize().width()/height()`를 `ScreenRouter.updateWindowSize`에 전달 |
+| 보드 | `new BlockBoardDriver()` 사용; `BoardDriver`를 UI가 직접 구현하거나 블록 상태를 중복 관리하지 않음 |
+
+`onGameOver`는 EDT에서 호출된다. 디스크를 읽는 순위권 판정과 기록 저장은 `SwingWorker` 등으로
+EDT 밖에서 실행하고, 결과 화면 갱신은 EDT로 되돌린다. 게임 도중 `STOPPED`가 되면
+`onGameOver`가 오지 않으므로 UI가 종료 명령의 반환값을 보고 메뉴로 이동해야 한다.
 
 ## 저장 경로와 오류 처리
 
 기본 경로는 사용자 홈의 `.tetris-team-se8/settings.properties`, `scores.properties`이다.
 현재 작업 디렉터리가 바뀌어도 같은 파일을 읽는다. 테스트/다른 배포에서는 생성자의 `Path`로 변경한다.
-파일 내용은 UTF-8 properties이다. 점수 기록은 버전 1, 설정의 현재 저장 버전은 2이며
-기존 버전 1 설정도 읽는다. 외부 JSON 라이브러리가 필요하지 않다.
-
-설정 v1에 저장된 원래 일곱 동작의 키는 그대로 유지한다. 이후 새 `GameAction`을 추가할 때는
-`KeyBindings.defaults()`에 기본키를 배정한다. 옛 파일에 그 키가 없어도 로드 중 새 동작만
-기본값으로 채운다. 새 기본키가 사용자의 기존 키와 겹치면 사용자의 키를 우선하고,
-새 동작에 사용하지 않은 F1~F12(그다음 A~Z)를 배정한다. v1에 원래 존재해야 하는 키가
-누락된 경우는 손상된 파일로 취급한다. `ORIGINAL_ACTIONS` 목록은 새 동작을 추가해도
-변경하지 않는다. 데이터 형식이 더 바뀔 때는 새 버전과 변환 규칙을 추가한다.
+파일 내용은 UTF-8 properties이며 설정과 점수 기록 모두 저장 버전 1을 사용한다.
+아직 배포된 이전 형식이 없으므로 마이그레이션 코드는 두지 않았다. 모든 `GameAction` 키가
+설정 파일에 있어야 하며, 새 동작을 추가하면서 저장 형식이 바뀌면 그때 버전과 변환 규칙을 추가한다.
+외부 JSON 라이브러리는 필요하지 않다.
 
 파일이 없거나 비어 있으면 기본 설정/빈 순위를 반환한다. 존재하는 데이터의 버전, 필수 값,
 키 중복, 음수 점수 등이 잘못되면 `IOException`으로 알리고 읽기 과정에서 덮어쓰지 않는다.
@@ -194,5 +216,6 @@ JUnit 5로 상태/낙하/점수/속도 증가, 실제 Swing 타이머, 키 반�
 종료/재시작 뒤 남은 타이머 무시, 한글 저장, 재로드, 동점 및 상위 10개, 초기화, 손상 데이터와
 I/O 실패를 확인한다. 테스트는 `@TempDir`을 사용해 실제 사용자 설정/기록을 변경하지 않는다.
 리포트: `build/reports/tests/test/index.html`, `build/reports/jacoco/test/html/index.html`.
-블록 어댑터 테스트는 가짜 보드를 사용하므로 실제 충돌/회전/줄 삭제의 검증은 담당자 1 테스트와
-통합 후 수행한다. 프로젝트의 기존 D 담당 NFR 테스트는 비활성 placeholder 상태로 유지했다.
+`BlockBoardDriverTest`는 실제 `Board`로 생성·충돌·회전·줄 삭제·스냅샷과 엔진 연동을 검증한다.
+최종 고정에서 줄을 지운 직후 `topOut`이 발생하는 다른 어댑터에서도 해당 줄의 점수를 먼저 반영한다.
+프로젝트의 기존 D 담당 NFR 테스트는 비활성 placeholder 상태로 유지했다.

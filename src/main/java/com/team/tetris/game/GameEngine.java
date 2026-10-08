@@ -13,12 +13,9 @@ import java.util.Objects;
  * this class. See docs/person2-integration.md for the block adapter contract.
  */
 public final class GameEngine implements AutoCloseable {
-    /**
-     * Adapter implemented alongside 담당자1's block code, not by the block package
-     * itself (block must not import game). Engine owns spawning and score calculation.
-     */
+    /** BlockBoardDriver adapts the block package without adding a game dependency to it. */
     public interface BoardDriver {
-        /** Empty the board and reset the generator/preview; do not spawn a block. */
+        /** Empty the board and preview; do not spawn a block. */
         void reset();
         /** Consume the preview and spawn one piece; false means blocked spawn. */
         boolean spawnNextBlock();
@@ -201,12 +198,12 @@ public final class GameEngine implements AutoCloseable {
 
     private void lockAndAdvance() {
         LockResult result = Objects.requireNonNull(board.lockAndClearLines(), "lock result");
+        award(scoring.lineClearPoints(result.clearedLines(), getLevel()));
+        clearedLines = addCount(clearedLines, result.clearedLines());
         if (result.topOut()) {
             gameOver();
             return;
         }
-        award(scoring.lineClearPoints(result.clearedLines(), getLevel()));
-        clearedLines = addCount(clearedLines, result.clearedLines());
         if (!spawn()) {
             gameOver();
             return;

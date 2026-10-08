@@ -196,6 +196,21 @@ class GameEngineTest {
     }
 
     @Test
+    void topOutStillAwardsLinesClearedByTheFinalLock() throws Exception {
+        edt(() -> {
+            engine.start();
+            board.dropDistance = 0;
+            board.lines = 2;
+            board.topOut = true;
+            engine.handle(HARD_DROP);
+            assertEquals(GameState.GAME_OVER, engine.getState());
+            assertEquals(2, engine.getClearedLines());
+            assertEquals(300, engine.getScore());
+            assertEquals(300, events.finalScore);
+        });
+    }
+
+    @Test
     void failedRestartResetsSpeedEvenWhenNoNewPieceCanSpawn() throws Exception {
         edt(() -> {
             engine.start();
