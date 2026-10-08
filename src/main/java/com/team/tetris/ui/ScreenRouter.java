@@ -10,6 +10,7 @@ import javax.swing.JPanel;
 
 import com.team.tetris.common.Screen;
 import com.team.tetris.common.constants.GameConstants;
+import com.team.tetris.settings.GameSettings;
 
 /**
  * 등록된 화면을 하나의 창에서 관리하고 CardLayout으로 전환한다.
@@ -29,11 +30,18 @@ public class ScreenRouter extends JFrame {
     private final JPanel containerPanel;
     private final Map<String, Screen> screens;
 
-    private int currentWidth = 400;
-    private int currentHeight = 600;
+    private int currentWidth;
+    private int currentHeight;
     private String currentScreenName;
 
     public ScreenRouter() {
+        this(GameSettings.defaults().screenSize());
+    }
+
+    public ScreenRouter(GameSettings.ScreenSize size) {
+        Objects.requireNonNull(size, "size");
+        currentWidth = size.width();
+        currentHeight = size.height();
         setTitle(GameConstants.GAME_TITLE);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setResizable(false);

@@ -7,6 +7,7 @@ import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.event.ActionEvent;
+import java.awt.event.KeyEvent;
 import java.util.Arrays;
 import java.util.Locale;
 import java.util.Objects;
@@ -26,11 +27,14 @@ import com.team.tetris.common.Screen;
 import com.team.tetris.common.constants.GameConstants;
 import com.team.tetris.common.events.BoardSnapshot;
 import com.team.tetris.common.events.GameEventListener;
-import com.team.tetris.game.GameSession;
+import com.team.tetris.game.GameAction;
+import com.team.tetris.game.GameEngine;
+import com.team.tetris.game.GameState;
+import com.team.tetris.settings.KeyBindings;
 
 /**
- * 게임 세션의 이벤트를 화면에 그려 주고, 키보드 입력을 세션 명령으로 전달한다.
- * 보드·점수·다음 블록의 실제 상태는 이 화면이 계산하지 않고 GameSession이 소유한다.
+ * 엔진의 이벤트를 화면에 그려 주고, 설정된 키를 게임 동작으로 변환한다.
+ * 보드·점수·다음 블록의 실제 상태는 GameEngine이 소유한다.
  */
 public class GameScreen extends JPanel implements Screen {
     // 화면 크기와 관계없이 유지할 여백 및 상·하단 영역의 기준 크기다.
@@ -41,14 +45,12 @@ public class GameScreen extends JPanel implements Screen {
     private static final Color BACKGROUND = new Color(ColorScheme.standard().emptyRgb());
     private static final Color GRID_COLOR = new Color(255, 255, 255, 35);
 
-    // router는 화면 전환을, session은 게임 명령과 상태 이벤트를 담당한다.
     private final ScreenRouter router;
-    private final GameSession session;
-    // 게임 종료 점수를 결과 화면에 반영하는 책임은 앱 조립부에 위임한다.
+    private final GameEngine engine;
     private final IntConsumer gameOverAction;
+    private KeyBindings keyBindings;
 
-    // 엔진은 화면과 별도 스레드에서 이벤트를 보낼 수도 있다.
-    // 보드 데이터는 이벤트가 끝난 뒤에도 안전하게 보관할 수 있도록 먼저 복사한다.
+    // 엔진 이벤트는 EDT에서 온다. 배열은 화면 상태로 보관하기 전에 복사한다.
     private final GameEventListener eventListener = new GameEventListener() {
         @Override
         public void onBoardUpdated(BoardSnapshot snapshot) {
@@ -81,7 +83,7 @@ public class GameScreen extends JPanel implements Screen {
 
         @Override
         public void onPauseStateChanged(boolean isPaused) {
-            onEdt(() -> paused = isPaused);
+            // The separate pause screen reflects this state; no board change is needed.
         }
 
         @Override
@@ -102,25 +104,27 @@ public class GameScreen extends JPanel implements Screen {
     private int[] nextBlocks = new int[0];
     private int score;
     private ColorScheme colorScheme = ColorScheme.standard();
-    private boolean listenerRegistered;
-    private boolean sessionStarted;
-    private boolean paused = true;
     private boolean gameOver;
 
     /**
         * @param router 화면 전환을 관리하는 라우터
-        * @param session 게임 입력을 처리하고 상태 이벤트를 발행하는 세션
+        * @param engine 게임 입력과 상태를 담당하는 엔진
         * @param gameOverAction 최종 점수를 전달받아 결과 화면을 설정하고 전환할 동작
      */
-    public GameScreen(ScreenRouter router, GameSession session, IntConsumer gameOverAction) {
+    public GameScreen(ScreenRouter router, GameEngine engine, KeyBindings bindings, IntConsumer gameOverAction) {
         this.router = Objects.requireNonNull(router, "router");
-        this.session = Objects.requireNonNull(session, "session");
+        this.engine = Objects.requireNonNull(engine, "engine");
         this.gameOverAction = Objects.requireNonNull(gameOverAction, "gameOverAction");
 
         setBackground(BACKGROUND);
         setOpaque(true);
         setFocusable(true);
-        installKeyBindings();
+        updateKeyBindings(bindings);
+    }
+
+    /** The app composition root forwards its single engine listener here. */
+    public GameEventListener eventListener() {
+        return eventListener;
     }
 
     @Override
@@ -130,45 +134,35 @@ public class GameScreen extends JPanel implements Screen {
 
     @Override
     public void onShow() {
-        registerListener();
         requestFocusInWindow();
-
-        // 최초 진입 또는 게임 오버 뒤 재진입은 새 게임으로 처리한다.
-        if (!sessionStarted || gameOver) {
+        if (engine.getState() == GameState.READY || engine.getState() == GameState.STOPPED
+                || engine.getState() == GameState.GAME_OVER) {
             resetViewState();
             gameOver = false;
-            sessionStarted = true;
-            paused = false;
-            session.startNewGame();
-        } else if (paused) {
-            // 일시정지 화면에서 돌아온 경우 기존 판을 유지한 채 다시 진행한다.
-            paused = false;
-            session.resume();
+            engine.start();
+        } else if (engine.getState() == GameState.PAUSED) {
+            engine.resume();
         }
         repaint();
     }
 
     @Override
     public void onHide() {
-        // 다른 화면으로 이동할 때 진행 중인 판을 멈춰 숨은 화면의 타이머가 계속 돌지 않게 한다.
-        if (sessionStarted && !gameOver) {
-            paused = true;
-            session.pause();
+        if (engine.getState() == GameState.RUNNING) {
+            engine.pause();
         }
-        unregisterListener();
     }
 
     /** 시작 메뉴의 새 게임 동작에서 호출해 이전 상태를 버리고 새 판을 시작한다. */
     public void startNewGame() {
         onEdt(() -> {
-            registerListener();
-            resetViewState();
-            gameOver = false;
-            sessionStarted = true;
-            paused = false;
-            session.startNewGame();
+            if (engine.getState() == GameState.RUNNING || engine.getState() == GameState.PAUSED) {
+                engine.stop();
+            }
             if (!ScreenRouter.GAME.equals(router.getCurrentScreenName())) {
                 router.showScreen(ScreenRouter.GAME);
+            } else {
+                onShow();
             }
             requestFocusInWindow();
         });
@@ -187,15 +181,22 @@ public class GameScreen extends JPanel implements Screen {
         });
     }
 
-    private void installKeyBindings() {
-        // 포커스가 자식 컴포넌트로 이동해도 게임 조작 키를 받을 수 있도록 창 범위에 등록한다.
-        bindKey("moveLeft", KeyStroke.getKeyStroke("LEFT"), session::moveLeft);
-        bindKey("moveRight", KeyStroke.getKeyStroke("RIGHT"), session::moveRight);
-        bindKey("moveDown", KeyStroke.getKeyStroke("DOWN"), session::moveDown);
-        bindKey("rotate", KeyStroke.getKeyStroke("UP"), session::rotateClockwise);
-        bindKey("hardDrop", KeyStroke.getKeyStroke("SPACE"), session::hardDrop);
-        bindKey("pauseP", KeyStroke.getKeyStroke("P"), this::showPauseScreen);
-        bindKey("pauseEscape", KeyStroke.getKeyStroke("ESCAPE"), this::showPauseScreen);
+    public void updateKeyBindings(KeyBindings bindings) {
+        keyBindings = Objects.requireNonNull(bindings, "bindings");
+        getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).clear();
+        getActionMap().clear();
+        for (GameAction action : GameAction.values()) {
+            int keyCode = bindings.keyFor(action);
+            bindKey(action.name(), KeyStroke.getKeyStroke(keyCode, 0), () ->
+                    keyBindings.actionFor(keyCode).ifPresent(this::handleAction));
+        }
+        repaint();
+    }
+
+    private void handleAction(GameAction action) {
+        if (!engine.handle(action)) return;
+        if (action == GameAction.PAUSE) router.showScreen(ScreenRouter.PAUSE);
+        if (action == GameAction.QUIT) router.showScreen(ScreenRouter.MAIN_MENU);
     }
 
     private void bindKey(String name, KeyStroke keyStroke, Runnable command) {
@@ -204,33 +205,11 @@ public class GameScreen extends JPanel implements Screen {
         getActionMap().put(name, new AbstractAction() {
             @Override
             public void actionPerformed(ActionEvent event) {
-                // 시작 전·일시정지·게임 종료 상태에서는 이동 명령을 세션으로 보내지 않는다.
-                if (sessionStarted && !paused && !gameOver) {
+                if (engine.getState() == GameState.RUNNING && !gameOver) {
                     command.run();
                 }
             }
         });
-    }
-
-    private void showPauseScreen() {
-        // 화면 전환 과정에서 onHide()가 세션을 멈추고, 복귀 시 onShow()가 다시 시작한다.
-        router.showScreen(ScreenRouter.PAUSE);
-    }
-
-    private void registerListener() {
-        // 화면 재진입이 반복되어도 같은 리스너가 중복 등록되지 않도록 상태를 추적한다.
-        if (!listenerRegistered) {
-            session.addListener(eventListener);
-            listenerRegistered = true;
-        }
-    }
-
-    private void unregisterListener() {
-        // 화면이 숨겨진 동안에는 불필요한 UI 갱신과 리스너 참조가 남지 않도록 해제한다.
-        if (listenerRegistered) {
-            session.removeListener(eventListener);
-            listenerRegistered = false;
-        }
     }
 
     private void resetViewState() {
@@ -299,7 +278,10 @@ public class GameScreen extends JPanel implements Screen {
 
             g2d.setColor(new Color(185, 193, 204));
             g2d.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
-            String help = "← → Move   ↓ Drop   ↑ Rotate   Space Hard Drop   P / Esc Pause";
+            String help = "Move " + keyText(GameAction.MOVE_LEFT) + "/" + keyText(GameAction.MOVE_RIGHT)
+                    + "  Drop " + keyText(GameAction.SOFT_DROP) + "  Rotate "
+                    + keyText(GameAction.ROTATE_CLOCKWISE) + "  Hard " + keyText(GameAction.HARD_DROP)
+                    + "  Pause " + keyText(GameAction.PAUSE) + "  Quit " + keyText(GameAction.QUIT);
             FontMetrics metrics = g2d.getFontMetrics();
             int helpX = Math.max(PADDING, (width - metrics.stringWidth(help)) / 2);
             g2d.drawString(help, helpX, height - 12);
@@ -412,6 +394,10 @@ public class GameScreen extends JPanel implements Screen {
             // 잘못된 ID 하나 때문에 전체 화면 그리기가 중단되지 않도록 해당 셀만 생략한다.
             return null;
         }
+    }
+
+    private String keyText(GameAction action) {
+        return KeyEvent.getKeyText(keyBindings.keyFor(action));
     }
 
     private static void onEdt(Runnable action) {

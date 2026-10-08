@@ -7,6 +7,7 @@ import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
 import java.util.Objects;
+import java.util.function.Consumer;
 
 import javax.swing.AbstractAction;
 import javax.swing.BorderFactory;
@@ -27,12 +28,15 @@ public class NameInputScreen extends JPanel implements Screen {
 	private static final Color ERROR_COLOR = Color.RED;
 
 	private final ScreenRouter router;
+	private final Consumer<String> onSubmit;
 	private final JTextField nameField;
 	private final JLabel validationLabel;
+	private final JButton submitButton;
 	private String submittedName;
 
-	public NameInputScreen(ScreenRouter router) {
+	public NameInputScreen(ScreenRouter router, Consumer<String> onSubmit) {
 		this.router = Objects.requireNonNull(router, "router");
+		this.onSubmit = Objects.requireNonNull(onSubmit, "onSubmit");
 
 		setLayout(new BorderLayout(16, 16));
 		setBackground(BACKGROUND_COLOR);
@@ -66,7 +70,7 @@ public class NameInputScreen extends JPanel implements Screen {
 		validationLabel.setForeground(ERROR_COLOR);
 		validationLabel.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
 
-		JButton submitButton = new JButton("Submit");
+		submitButton = new JButton("Submit");
 		submitButton.setFont(new Font(Font.MONOSPACED, Font.BOLD, 14));
 		submitButton.addActionListener(event -> submitName());
 
@@ -117,6 +121,8 @@ public class NameInputScreen extends JPanel implements Screen {
 		submittedName = null;
 		nameField.setText("");
 		validationLabel.setText(" ");
+		submitButton.setEnabled(true);
+		nameField.setEnabled(true);
 		nameField.requestFocusInWindow();
 	}
 
@@ -130,6 +136,13 @@ public class NameInputScreen extends JPanel implements Screen {
 		return submittedName;
 	}
 
+	public void showError(String message) {
+		validationLabel.setText(Objects.requireNonNull(message, "message"));
+		submitButton.setEnabled(true);
+		nameField.setEnabled(true);
+		nameField.requestFocusInWindow();
+	}
+
 	private void submitName() {
 		String name = nameField.getText().strip();
 		if (name.isEmpty()) {
@@ -137,8 +150,15 @@ public class NameInputScreen extends JPanel implements Screen {
 			nameField.requestFocusInWindow();
 			return;
 		}
+		if (name.codePointCount(0, name.length()) > 20 || name.codePoints().anyMatch(Character::isISOControl)) {
+			validationLabel.setText("Use 1-20 characters without control keys.");
+			nameField.requestFocusInWindow();
+			return;
+		}
 
 		submittedName = name;
-		router.showScreen(ScreenRouter.SCOREBOARD);
+		submitButton.setEnabled(false);
+		nameField.setEnabled(false);
+		onSubmit.accept(name);
 	}
 }
