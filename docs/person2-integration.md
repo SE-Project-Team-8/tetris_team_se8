@@ -6,10 +6,9 @@ Java 21, 기존 패키지와 `GameEventListener` 계약을 유지한다. 이번 
 `ScoringPolicy`, `SpeedPolicy`, `DefaultSpeedPolicy`를 추가했다. 공통 파일 저장 코드는
 `common/persistence/PropertiesFile`에 모았다.
 
-`block` 구현과 엔진은 `BlockBoardDriver`로 연결했다. 실제 게임 UI는 아직 뼈대이므로 이 변경만으로
-플레이 가능한 게임이 실행되지는 않는다.
-`Main`의 placeholder, `SettingsScreen`, `ScoreboardScreen`을 포함한 화면 구현은 이번 변경에
-포함하지 않는다. 아래 API를 이용하여 화면을 연결한다.
+`block` 구현과 엔진은 `BlockBoardDriver`로 연결했다. PR #6에서 `Main`이 엔진, 화면,
+설정과 순위 저장소를 조립하고 `SettingsScreen`, `ScoreboardScreen`까지 등록한다.
+아래 계약은 현재 UI 연결 방식이다.
 
 ## 디렉터리와 의존성
 
@@ -169,7 +168,7 @@ Esc 게임 종료. 이동 키 반복 입력은 매번 처리한다. P/Esc는 UI�
 | 6 | 순위권 판정 | 조립부가 `ScoreboardRepository.qualifies(score)`를 EDT 밖에서 호출한다. `IOException`이면 오류를 표시하고 재시도하도록 하며 임의로 탈락 처리하지 않는다. |
 | 7 | 창 크기 | 시작 시 `GameSettings.screenSize()`를 읽어 `ScreenRouter.updateWindowSize(width, height)`에 적용한다. |
 
-PR #5의 `GameEngine`과 PR #6의 화면을 연결할 때 `GameSession`은 사용하지 않는다.
+PR #5의 `GameEngine`과 PR #6의 화면은 `GameSession` 없이 연결한다.
 `Main` 등 조립부가 `GameEngine(new BlockBoardDriver(), listener)`를 만들고, 화면의 조작 요청은
 `engine.start()`, `engine.handle(GameAction)`, `engine.pause()`, `engine.resume()`로 전달한다.
 모두 Swing EDT에서 호출한다. `GameScreen`의 새 게임 시작과 화면 재진입이 같은 판을 두 번
