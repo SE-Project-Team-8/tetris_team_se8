@@ -159,6 +159,16 @@ Esc 게임 종료. 이동 키 반복 입력은 매번 처리한다. P/Esc는 UI�
 
 ### PR #6 화면과의 연동 계약
 
+| 번호 | 항목 | 결정 |
+| --- | --- | --- |
+| 1 | 게임 조작 API | `GameSession`을 제거하고 UI는 `GameEngine.start()` 및 `handle(GameAction)`을 호출한다. |
+| 2 | 리스너 | 엔진 생성자에는 리스너 하나만 주입한다. 화면과 결과 처리에 모두 필요하면 조립부가 복합 리스너로 전달한다. |
+| 3 | Esc | 플레이 중 Esc는 `QUIT`로 게임을 종료하고 메뉴로 간다. P는 일시정지·재개에 쓴다. 일시정지 메뉴의 종료도 `QUIT`이다. |
+| 4 | 키 설정 | UI는 저장된 `KeyBindings`로 키 코드를 `GameAction`에 매핑하고 설정 변경 시 바인딩을 다시 등록한다. |
+| 5 | 게임 오버 정보 | `onGameOver(score)`는 유지하고, 레벨·삭제 줄 수는 `GameEngine` getter로 조회한다. |
+| 6 | 순위권 판정 | 조립부가 `ScoreboardRepository.qualifies(score)`를 EDT 밖에서 호출한다. `IOException`이면 오류를 표시하고 재시도하도록 하며 임의로 탈락 처리하지 않는다. |
+| 7 | 창 크기 | 시작 시 `GameSettings.screenSize()`를 읽어 `ScreenRouter.updateWindowSize(width, height)`에 적용한다. |
+
 PR #5의 `GameEngine`과 PR #6의 화면을 연결할 때 `GameSession`은 사용하지 않는다.
 `Main` 등 조립부가 `GameEngine(new BlockBoardDriver(), listener)`를 만들고, 화면의 조작 요청은
 `engine.start()`, `engine.handle(GameAction)`, `engine.pause()`, `engine.resume()`로 전달한다.
