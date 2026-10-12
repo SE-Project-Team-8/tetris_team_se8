@@ -137,6 +137,7 @@ public final class SettingsScreen extends JPanel implements Screen {
         JButton defaults = new JButton("Restore Defaults");
         styleButton(defaults, false);
         defaults.addActionListener(event -> save(GameSettings.defaults()));
+        defaults.addActionListener(event -> resetSettings());
         JButton clearScores = new JButton("Reset Scores");
         styleButton(clearScores, false);
         clearScores.addActionListener(event -> resetScores());
@@ -198,6 +199,26 @@ public final class SettingsScreen extends JPanel implements Screen {
                 } catch (Exception failure) {
                     showMessage("Could not save settings. Please retry.", "Settings Error",
                             JOptionPane.ERROR_MESSAGE);
+                }
+            }
+        }.execute();
+    }
+
+    private void resetSettings() {
+        new SwingWorker<GameSettings, Void>() {
+            @Override protected GameSettings doInBackground() throws Exception {
+                return settingsRepository.reset();
+            }
+
+            @Override protected void done() {
+                try {
+                    GameSettings defaults = get();
+                    display(defaults);
+                    settingsUpdated.accept(defaults);
+                    router.showScreen(ScreenRouter.MAIN_MENU);
+                } catch (Exception failure) {
+                    JOptionPane.showMessageDialog(SettingsScreen.this,
+                            "Could not restore default settings. Please retry.");
                 }
             }
         }.execute();
