@@ -28,10 +28,10 @@ public class MainMenuScreen extends JPanel implements Screen {
     public MainMenuScreen(ScreenRouter router) {
     Objects.requireNonNull(router, "router");
     menuItems = List.of(
-        new MenuItem("게임 시작", () -> router.showScreen(ScreenRouter.GAME)),
-        new MenuItem("설정", () -> router.showScreen(ScreenRouter.SETTINGS)),
-        new MenuItem("스코어보드", () -> router.showScreen(ScreenRouter.SCOREBOARD)),
-        new MenuItem("게임 종료", () -> System.exit(0))
+        new MenuItem("New Game", () -> router.showScreen(ScreenRouter.GAME)),
+        new MenuItem("Settings", () -> router.showScreen(ScreenRouter.SETTINGS)),
+        new MenuItem("Scoreboard", () -> router.showScreen(ScreenRouter.SCOREBOARD)),
+        new MenuItem("Exit", () -> System.exit(0))
     );
 
         setBackground(Color.BLACK);
@@ -151,7 +151,7 @@ public class MainMenuScreen extends JPanel implements Screen {
                 label = "  " + label;
             }
 
-            int x = (width - metrics.stringWidth(label)) / 2;
+            int x = (width - metrics.stringWidth(label)) / 2 - metrics.charWidth(' ');
             int y = startY + (i * lineSpacing);
             g2d.drawString(label, x, y);
         }
@@ -164,7 +164,7 @@ public class MainMenuScreen extends JPanel implements Screen {
         g2d.setColor(Color.GRAY);
         g2d.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
 
-        String hint = "[↑/↓ 또는 W/S] 이동  [ENTER/SPACE] 선택";
+        String hint = "[↑/↓ or W/S] Move   [ENTER / SPACE] Select";
         FontMetrics metrics = g2d.getFontMetrics();
         int x = (width - metrics.stringWidth(hint)) / 2;
         int y = height - 30;
