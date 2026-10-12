@@ -136,7 +136,6 @@ public final class SettingsScreen extends JPanel implements Screen {
         save.addActionListener(event -> saveSelected());
         JButton defaults = new JButton("Restore Defaults");
         styleButton(defaults, false);
-        defaults.addActionListener(event -> save(GameSettings.defaults()));
         defaults.addActionListener(event -> resetSettings());
         JButton clearScores = new JButton("Reset Scores");
         styleButton(clearScores, false);

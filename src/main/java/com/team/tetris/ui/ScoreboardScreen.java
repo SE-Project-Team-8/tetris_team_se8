@@ -24,8 +24,6 @@ import java.awt.Color;
 import java.awt.Component;
 import java.awt.FlowLayout;
 import java.awt.Font;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -39,9 +37,6 @@ public final class ScoreboardScreen extends JPanel implements Screen {
     private static final Color ACCENT = Color.CYAN;
     private static final Color MUTED = new Color(155, 165, 180);
 
-    private static final int DISPLAY_LIMIT = 10;
-    private static final DateTimeFormatter DATE_FORMAT =
-            DateTimeFormatter.ofPattern("yyyy-MM-dd").withZone(ZoneId.systemDefault());
     private final ScreenRouter router;
     private final ScoreboardRepository repository;
     private final ScoreTableModel tableModel = new ScoreTableModel();
@@ -120,17 +115,6 @@ public final class ScoreboardScreen extends JPanel implements Screen {
                         contentLayout.show(content, "status");
                     } else {
                         contentLayout.show(content, "table");
-                        results.setText("No scores yet.");
-                        return;
-                    }
-                    StringBuilder text = new StringBuilder(
-                            "  RANK  NAME                    SCORE  DATE\n\n");
-                    int displayedRecords = Math.min(DISPLAY_LIMIT, records.size());
-                    for (int index = 0; index < displayedRecords; index++) {
-                        ScoreRecord record = records.get(index);
-                        String marker = record.id().equals(highlightedId) ? "▶" : " ";
-                        text.append(String.format("%s %3d   %-20s %10d  %s%n", marker, index + 1,
-                                record.name(), record.score(), DATE_FORMAT.format(record.recordedAt())));
                     }
                 } catch (Exception failure) {
                     status.setText("COULD NOT LOAD SCORES. RETURN TO THE MENU AND TRY AGAIN.");
