@@ -5,6 +5,7 @@ import com.team.tetris.common.events.GameEventListener;
 
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -30,15 +31,35 @@ public final class GameEngine implements AutoCloseable {
         LockResult lockAndClearLines();
         /** Composed 20 x 10 board; EMPTY = -1; falling piece is included. */
         BoardSnapshot snapshot();
+        /** Cells occupied by the falling piece only, or null when unavailable. */
+        default BoardSnapshot fallingSnapshot() { return null; }
+        /** Landing ghost cells for the falling piece, or null when unavailable. */
+        default BoardSnapshot landingSnapshot() { return null; }
         /** Preview block IDs use the block/UI team's agreed 0..6 mapping. */
         int[] nextBlockTypes();
     }
 
-    public record LockResult(int clearedLines, boolean topOut) {
+    public record LockResult(
+            int clearedLines, boolean topOut, List<Integer> clearedRows, BoardSnapshot boardBeforeClear) {
         public LockResult {
             if (clearedLines < 0 || clearedLines > 4) {
                 throw new IllegalArgumentException("clearedLines must be between 0 and 4");
             }
+            clearedRows = List.copyOf(Objects.requireNonNull(clearedRows, "clearedRows"));
+            if (!clearedRows.isEmpty() && clearedRows.size() != clearedLines) {
+                throw new IllegalArgumentException("clearedRows must match clearedLines");
+            }
+            if (!clearedRows.isEmpty() && boardBeforeClear == null) {
+                throw new IllegalArgumentException("A pre-clear board snapshot is required for cleared rows");
+            }
+        }
+
+        public LockResult(int clearedLines, boolean topOut, List<Integer> clearedRows) {
+            this(clearedLines, topOut, clearedRows, null);
+        }
+
+        public LockResult(int clearedLines, boolean topOut) {
+            this(clearedLines, topOut, List.of(), null);
         }
     }
 
@@ -198,6 +219,9 @@ public final class GameEngine implements AutoCloseable {
 
     private void lockAndAdvance() {
         LockResult result = Objects.requireNonNull(board.lockAndClearLines(), "lock result");
+        if (!result.clearedRows().isEmpty()) {
+            listener.onLinesCleared(result.clearedRows(), result.boardBeforeClear());
+        }
         award(scoring.lineClearPoints(result.clearedLines(), getLevel()));
         clearedLines = addCount(clearedLines, result.clearedLines());
         if (result.topOut()) {
@@ -254,6 +278,7 @@ public final class GameEngine implements AutoCloseable {
         int[][] copy = new int[cells.length][];
         for (int row = 0; row < cells.length; row++) copy[row] = cells[row].clone();
         listener.onBoardUpdated(new BoardSnapshot(copy));
+        listener.onLandingUpdated(board.fallingSnapshot(), board.landingSnapshot());
     }
 
     private void publishPreview() {

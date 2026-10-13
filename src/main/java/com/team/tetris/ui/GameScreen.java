@@ -1,5 +1,6 @@
 package com.team.tetris.ui;
 
+import java.awt.AlphaComposite;
 import java.awt.Color;
 import java.awt.Font;
 import java.awt.FontMetrics;
@@ -9,6 +10,7 @@ import java.awt.RenderingHints;
 import java.awt.event.ActionEvent;
 import java.awt.event.KeyEvent;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.function.IntConsumer;
@@ -18,6 +20,7 @@ import javax.swing.JComponent;
 import javax.swing.JPanel;
 import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
+import javax.swing.Timer;
 
 import com.team.tetris.block.ColorScheme;
 import com.team.tetris.block.Rotation;
@@ -42,8 +45,14 @@ public class GameScreen extends JPanel implements Screen {
     private static final int PANEL_GAP = 16;
     private static final int HEADER_HEIGHT = 40;
     private static final int FOOTER_HEIGHT = 36;
+    private static final int[] LINE_CLEAR_FLASH_ALPHA = {255, 70, 255, 0};
+    private static final int LINE_CLEAR_FLASH_INTERVAL_MS = 65;
+    private static final int BEST_SCORE_TICK_MS = 30;
+    private static final int BEST_SCORE_HOLD_MS = 500;
+    private static final int BEST_SCORE_FADE_MS = 1_500;
     private static final Color BACKGROUND = new Color(ColorScheme.standard().emptyRgb());
     private static final Color GRID_COLOR = new Color(255, 255, 255, 35);
+    private static final Color BEST_SCORE_COLOR = new Color(255, 211, 64);
 
     private final ScreenRouter router;
     private final GameEngine engine;
@@ -59,7 +68,71 @@ public class GameScreen extends JPanel implements Screen {
                 return;
             }
             onEdt(() -> {
-                board = cells;
+                if (lineClearAnimating) {
+                    pendingBoard = cells;
+                } else {
+                    board = cells;
+                }
+                repaint();
+            });
+        }
+
+        @Override
+        public void onLandingUpdated(BoardSnapshot fallingPiece, BoardSnapshot landingPiece) {
+            int[][] fallingCells = fallingPiece == null ? null : copyBoard(fallingPiece);
+            int[][] landingCells = landingPiece == null ? null : copyBoard(landingPiece);
+            if ((fallingPiece != null && fallingCells == null)
+                    || (landingPiece != null && landingCells == null)) {
+                return;
+            }
+            onEdt(() -> {
+                if (lineClearAnimating) {
+                    pendingFalling = fallingCells;
+                    pendingLanding = landingCells;
+                } else {
+                    falling = fallingCells;
+                    landing = landingCells;
+                }
+                repaint();
+            });
+        }
+
+        @Override
+        public void onLinesCleared(List<Integer> rows, BoardSnapshot boardBeforeClear) {
+            int[][] beforeClear = copyBoard(Objects.requireNonNull(boardBeforeClear, "boardBeforeClear"));
+            if (beforeClear == null) {
+                throw new IllegalArgumentException("Pre-clear board does not match the game board dimensions");
+            }
+            startLineClearAnimation(rows, beforeClear);
+        }
+
+        @Override
+        public void onLinesCleared(List<Integer> rows) {
+            startLineClearAnimation(rows, null);
+        }
+
+        private void startLineClearAnimation(List<Integer> rows, int[][] beforeClear) {
+            int[] copy = Objects.requireNonNull(rows, "rows").stream()
+                    .mapToInt(row -> Objects.requireNonNull(row, "row"))
+                    .toArray();
+            for (int row : copy) {
+                if (row < 0 || row >= GameConstants.BOARD_ROWS) {
+                    throw new IllegalArgumentException("Cleared row is outside the game board: " + row);
+                }
+            }
+            onEdt(() -> {
+                if (beforeClear != null) {
+                    board = beforeClear;
+                }
+                pendingBoard = null;
+                falling = null;
+                pendingFalling = null;
+                landing = null;
+                pendingLanding = null;
+                flashingRows = copy;
+                flashFrame = 0;
+                lineClearAnimating = true;
+                lineClearTimer.restart();
                 repaint();
             });
         }
@@ -68,6 +141,7 @@ public class GameScreen extends JPanel implements Screen {
         public void onScoreChanged(int updatedScore) {
             onEdt(() -> {
                 score = updatedScore;
+                updateBestScoreNotification();
                 repaint();
             });
         }
@@ -94,6 +168,7 @@ public class GameScreen extends JPanel implements Screen {
                 }
                 gameOver = true;
                 score = finalScore;
+                updateBestScoreNotification();
                 gameOverAction.accept(finalScore);
             });
         }
@@ -105,6 +180,65 @@ public class GameScreen extends JPanel implements Screen {
     private int score;
     private ColorScheme colorScheme = ColorScheme.standard();
     private boolean gameOver;
+    private int[] flashingRows = new int[0];
+    private int flashFrame;
+    private boolean lineClearAnimating;
+    private int bestScore = -1;
+    private boolean bestScoreNotificationShown;
+    private int bestScoreElapsedMs;
+    private int[][] pendingBoard;
+    private int[][] falling;
+    private int[][] pendingFalling;
+    private int[][] landing;
+    private int[][] pendingLanding;
+    private final Timer lineClearTimer = new Timer(LINE_CLEAR_FLASH_INTERVAL_MS, event -> advanceLineClearAnimation());
+    private final Timer bestScoreTimer = new Timer(BEST_SCORE_TICK_MS, event -> advanceBestScoreAnimation());
+
+    public void setBestScore(int bestScore) {
+        if (bestScore < -1) {
+            throw new IllegalArgumentException("bestScore must be non-negative or -1 when no score exists");
+        }
+        onEdt(() -> {
+            this.bestScore = bestScore;
+            updateBestScoreNotification();
+        });
+    }
+
+    private void updateBestScoreNotification() {
+        if (bestScore >= 0 && score > bestScore && !bestScoreNotificationShown) {
+            bestScoreNotificationShown = true;
+            bestScoreElapsedMs = 0;
+            bestScoreTimer.restart();
+            repaint();
+        }
+    }
+
+    private void advanceBestScoreAnimation() {
+        bestScoreElapsedMs += BEST_SCORE_TICK_MS;
+        if (bestScoreElapsedMs >= BEST_SCORE_HOLD_MS + BEST_SCORE_FADE_MS) {
+            bestScoreTimer.stop();
+        }
+        repaint();
+    }
+
+    private void advanceLineClearAnimation() {
+        if (flashFrame + 1 >= LINE_CLEAR_FLASH_ALPHA.length) {
+            flashingRows = new int[0];
+            lineClearAnimating = false;
+            if (pendingBoard != null) {
+                board = pendingBoard;
+                pendingBoard = null;
+            }
+            falling = pendingFalling;
+            pendingFalling = null;
+            landing = pendingLanding;
+            pendingLanding = null;
+            lineClearTimer.stop();
+        } else {
+            flashFrame++;
+        }
+        repaint();
+    }
 
     /**
         * @param router 화면 전환을 관리하는 라우터
@@ -214,6 +348,17 @@ public class GameScreen extends JPanel implements Screen {
 
     private void resetViewState() {
         // 새 게임 시작 시 이전 판에서 전달받은 표시 데이터만 초기화한다.
+        lineClearTimer.stop();
+        bestScoreTimer.stop();
+        flashingRows = new int[0];
+        lineClearAnimating = false;
+        bestScoreNotificationShown = false;
+        bestScoreElapsedMs = 0;
+        pendingBoard = null;
+        falling = null;
+        pendingFalling = null;
+        landing = null;
+        pendingLanding = null;
         board = emptyBoard();
         nextBlocks = new int[0];
         score = 0;
@@ -275,6 +420,7 @@ public class GameScreen extends JPanel implements Screen {
 
             drawBoard(g2d, boardX, boardY, cellSize);
             drawSidebar(g2d, sideX, HEADER_HEIGHT + PADDING, sideWidth);
+            drawBestScoreNotification(g2d, width, height);
 
             if (engine.getState() != GameState.PAUSED) {
                 g2d.setColor(new Color(185, 193, 204));
@@ -291,6 +437,30 @@ public class GameScreen extends JPanel implements Screen {
             // create()로 만든 Graphics 복사본은 사용 후 반드시 해제한다.
             g2d.dispose();
         }
+    }
+
+    private void drawBestScoreNotification(Graphics2D g2d, int width, int height) {
+        if (!bestScoreNotificationShown
+                || bestScoreElapsedMs >= BEST_SCORE_HOLD_MS + BEST_SCORE_FADE_MS) {
+            return;
+        }
+
+        float alpha = 1f;
+        if (bestScoreElapsedMs > BEST_SCORE_HOLD_MS) {
+            alpha = 1f - (float) (bestScoreElapsedMs - BEST_SCORE_HOLD_MS) / BEST_SCORE_FADE_MS;
+        }
+        var originalComposite = g2d.getComposite();
+        g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, Math.max(0f, alpha)));
+        g2d.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 30));
+        String message = "Best Score!";
+        FontMetrics metrics = g2d.getFontMetrics();
+        int messageX = (width - metrics.stringWidth(message)) / 2;
+        int messageY = Math.max(HEADER_HEIGHT + 20, height / 5);
+        g2d.setColor(new Color(105, 65, 0));
+        g2d.drawString(message, messageX + 2, messageY + 2);
+        g2d.setColor(BEST_SCORE_COLOR);
+        g2d.drawString(message, messageX, messageY);
+        g2d.setComposite(originalComposite);
     }
 
     private void drawBoard(Graphics2D g2d, int x, int y, int cellSize) {
@@ -313,6 +483,20 @@ public class GameScreen extends JPanel implements Screen {
             }
         }
 
+        if (flashingRows.length > 0) {
+            int alpha = LINE_CLEAR_FLASH_ALPHA[flashFrame];
+            g2d.setComposite(AlphaComposite.SrcOver);
+            g2d.setColor(new Color(255, 255, 255, alpha));
+            for (int row : flashingRows) {
+                g2d.fillRect(x + 1, y + row * cellSize + 1,
+                        Math.max(1, width - 2), Math.max(1, cellSize - 2));
+            }
+        }
+
+        if (!lineClearAnimating && landing != null) {
+            drawLandingGhost(g2d, x, y, cellSize);
+        }
+
         g2d.setColor(GRID_COLOR);
         for (int col = 0; col <= GameConstants.BOARD_COLS; col++) {
             int lineX = x + col * cellSize;
@@ -324,6 +508,24 @@ public class GameScreen extends JPanel implements Screen {
         }
         g2d.setColor(new Color(185, 193, 204));
         g2d.drawRect(x, y, width, height);
+    }
+
+    private void drawLandingGhost(Graphics2D g2d, int x, int y, int cellSize) {
+        for (int row = 0; row < landing.length; row++) {
+            for (int col = 0; col < landing[row].length; col++) {
+                TetrominoType type = typeFromId(landing[row][col]);
+                if (type == null) {
+                    continue;
+                }
+                Color blockColor = new Color(colorScheme.rgbOf(type));
+                int cellX = x + col * cellSize;
+                int cellY = y + row * cellSize;
+                g2d.setColor(new Color(blockColor.getRed(), blockColor.getGreen(), blockColor.getBlue(), 75));
+                g2d.fillRect(cellX + 2, cellY + 2, Math.max(1, cellSize - 4), Math.max(1, cellSize - 4));
+                g2d.setColor(new Color(255, 255, 255, 180));
+                g2d.drawRect(cellX + 2, cellY + 2, Math.max(1, cellSize - 4), Math.max(1, cellSize - 4));
+            }
+        }
     }
 
     private void drawSidebar(Graphics2D g2d, int x, int y, int width) {
