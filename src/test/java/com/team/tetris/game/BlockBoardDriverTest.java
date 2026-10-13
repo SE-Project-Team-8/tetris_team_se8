@@ -10,6 +10,7 @@ import com.team.tetris.common.events.GameEventListener;
 import org.junit.jupiter.api.Test;
 
 import javax.swing.SwingUtilities;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -92,6 +93,24 @@ class BlockBoardDriverTest {
     }
 
     @Test
+    void landingSnapshotShowsTheGhostAtTheCollisionLimitedLandingPosition() {
+        Board board = new Board();
+        BlockBoardDriver driver = new BlockBoardDriver(board, sequence(TetrominoType.O));
+        driver.reset();
+        assertTrue(board.tryPlace(new Tetromino(TetrominoType.O, Rotation.SPAWN, 18, 4)));
+        assertTrue(driver.spawnNextBlock());
+
+        int[][] landing = driver.landingSnapshot().cells();
+        for (int row = 0; row < landing.length; row++) {
+            for (int col = 0; col < landing[row].length; col++) {
+                int expected = row >= 16 && row <= 17 && col >= 4 && col <= 5
+                        ? TetrominoType.O.id() : BoardSnapshot.EMPTY;
+                assertEquals(expected, landing[row][col], "cell at row " + row + ", col " + col);
+            }
+        }
+    }
+
+    @Test
     void locksAndClearsTwoLinesWithoutKeepingTheOldFallingBlock() {
         Board board = new Board();
         BlockBoardDriver driver = new BlockBoardDriver(board, sequence(TetrominoType.O));
@@ -101,7 +120,12 @@ class BlockBoardDriverTest {
         }
         assertTrue(driver.spawnNextBlock());
         assertEquals(18, driver.hardDrop());
-        assertEquals(new GameEngine.LockResult(2, false), driver.lockAndClearLines());
+        GameEngine.LockResult result = driver.lockAndClearLines();
+        assertEquals(2, result.clearedLines());
+        assertEquals(List.of(18, 19), result.clearedRows());
+        assertNotNull(result.boardBeforeClear());
+        assertEquals(TetrominoType.O.id(), result.boardBeforeClear().cells()[18][1]);
+        assertEquals(TetrominoType.O.id(), result.boardBeforeClear().cells()[19][1]);
         for (int[] row : driver.snapshot().cells()) {
             for (int cell : row) assertEquals(BoardSnapshot.EMPTY, cell);
         }

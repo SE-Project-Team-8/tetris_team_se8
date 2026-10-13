@@ -95,9 +95,18 @@ public final class Board implements BoardView {
      * @return 삭제한 행 수. 완성 행이 없으면 0
      */
     public int clearFullLines() {
+        return clearFullLinesAndGetRows().size();
+    }
+
+    /**
+     * 완성 행을 삭제하고 삭제 전 보드에서의 행 번호를 위에서 아래 순서로 반환한다.
+     *
+     * @return 삭제한 행 번호의 불변 목록
+     */
+    public List<Integer> clearFullLinesAndGetRows() {
         List<Integer> fullRows = LineClearer.findFullRows(this);
         if (fullRows.isEmpty()) {
-            return 0;
+            return fullRows;
         }
 
         TetrominoType[][] compacted = new TetrominoType[rows][cols];
@@ -113,7 +122,7 @@ public final class Board implements BoardView {
             }
         }
         cells = compacted;
-        return fullRows.size();
+        return fullRows;
     }
 
     /**

@@ -13,6 +13,8 @@ import com.team.tetris.common.constants.GameConstants;
 import com.team.tetris.common.events.BoardSnapshot;
 
 import java.util.ArrayDeque;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Objects;
 import java.util.Random;
 
@@ -98,7 +100,10 @@ public final class BlockBoardDriver implements GameEngine.BoardDriver {
             throw new IllegalStateException("A valid falling block could not be locked");
         }
         current = null;
-        return new GameEngine.LockResult(board.clearFullLines(), false);
+        BoardSnapshot boardBeforeClear = snapshot();
+        List<Integer> clearedRows = board.clearFullLinesAndGetRows();
+        return new GameEngine.LockResult(clearedRows.size(), false, clearedRows,
+                clearedRows.isEmpty() ? null : boardBeforeClear);
     }
 
     @Override
@@ -114,6 +119,31 @@ public final class BlockBoardDriver implements GameEngine.BoardDriver {
             for (Cell cell : current.cells()) {
                 cells[cell.row()][cell.col()] = current.type().id();
             }
+        }
+        return new BoardSnapshot(cells);
+    }
+
+    @Override
+    public BoardSnapshot fallingSnapshot() {
+        return current == null ? null : pieceSnapshot(current);
+    }
+
+    @Override
+    public BoardSnapshot landingSnapshot() {
+        if (current == null) {
+            return null;
+        }
+        int distance = DropCalculator.dropDistance(board, current);
+        return distance > 0 ? pieceSnapshot(current.moveBy(distance, 0)) : null;
+    }
+
+    private BoardSnapshot pieceSnapshot(Tetromino piece) {
+        int[][] cells = new int[board.rows()][board.cols()];
+        for (int[] row : cells) {
+            Arrays.fill(row, BoardSnapshot.EMPTY);
+        }
+        for (Cell cell : piece.cells()) {
+            cells[cell.row()][cell.col()] = piece.type().id();
         }
         return new BoardSnapshot(cells);
     }
