@@ -6,6 +6,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.TreeSet;
 
 /**
  * 고정된 블록 셀을 소유하는 보드. 현재 낙하 블록·점수·타이머는 엔진이 소유한다.
@@ -95,25 +96,31 @@ public final class Board implements BoardView {
      * @return 삭제한 행 수. 완성 행이 없으면 0
      */
     public int clearFullLines() {
-        List<Integer> fullRows = LineClearer.findFullRows(this);
-        if (fullRows.isEmpty()) {
+        return clearLinesIncluding(-1);
+    }
+
+    /** 완성된 행과 아이템이 지정한 행을 중복 없이 함께 제거한다. -1은 지정 행 없음. */
+    public int clearLinesIncluding(int forcedRow) {
+        if (forcedRow < -1 || forcedRow >= rows) {
+            throw new IndexOutOfBoundsException("Invalid row: " + forcedRow);
+        }
+        TreeSet<Integer> rowsToClear = new TreeSet<>(LineClearer.findFullRows(this));
+        if (forcedRow >= 0) rowsToClear.add(forcedRow);
+        if (rowsToClear.isEmpty()) {
             return 0;
         }
 
         TetrominoType[][] compacted = new TetrominoType[rows][cols];
-        int nextFull = fullRows.size() - 1;
         int destination = rows - 1;
         for (int source = rows - 1; source >= 0; source--) {
-            if (nextFull >= 0 && source == fullRows.get(nextFull)) {
-                nextFull--;
-            } else {
+            if (!rowsToClear.contains(source)) {
                 // 행 참조를 재사용하지 않아 이후 한 행의 변경이 다른 행에 전파되지 않는다.
                 System.arraycopy(cells[source], 0, compacted[destination], 0, cols);
                 destination--;
             }
         }
         cells = compacted;
-        return fullRows.size();
+        return rowsToClear.size();
     }
 
     /**
