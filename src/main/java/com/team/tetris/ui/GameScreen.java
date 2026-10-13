@@ -26,6 +26,7 @@ import com.team.tetris.block.TetrominoType;
 import com.team.tetris.common.Screen;
 import com.team.tetris.common.constants.GameConstants;
 import com.team.tetris.common.events.BoardSnapshot;
+import com.team.tetris.common.events.LineDeleteIds;
 import com.team.tetris.common.events.GameEventListener;
 import com.team.tetris.game.GameAction;
 import com.team.tetris.game.GameEngine;
@@ -302,10 +303,14 @@ public class GameScreen extends JPanel implements Screen {
             for (int col = 0; col < board[row].length; col++) {
                 int blockId = board[row][col];
                 if (blockId != BoardSnapshot.EMPTY) {
-                    TetrominoType type = typeFromId(blockId);
+                    boolean itemCell = LineDeleteIds.isItemCell(blockId);
+                    TetrominoType type = typeFromId(itemCell ? LineDeleteIds.boardType(blockId) : blockId);
                     if (type != null) {
-                        drawBlockCell(g2d, x + col * cellSize, y + row * cellSize,
+                        int cellX = x + col * cellSize;
+                        int cellY = y + row * cellSize;
+                        drawBlockCell(g2d, cellX, cellY,
                                 cellSize, type, colorScheme);
+                        if (itemCell) drawItemLetter(g2d, cellX, cellY, cellSize);
                     }
                 }
             }
@@ -352,7 +357,8 @@ public class GameScreen extends JPanel implements Screen {
     }
 
     private void drawPreview(Graphics2D g2d, int blockId, int x, int y, int width, int height) {
-        TetrominoType type = typeFromId(blockId);
+        boolean item = LineDeleteIds.isItemPreview(blockId);
+        TetrominoType type = typeFromId(item ? LineDeleteIds.previewType(blockId) : blockId);
         if (type == null) {
             return;
         }
@@ -371,11 +377,30 @@ public class GameScreen extends JPanel implements Screen {
         int shapeX = x + (width - shapeWidth) / 2;
         int shapeY = y + (height - shapeHeight) / 2;
 
-        for (var cell : piece.cells()) {
+        var occupied = piece.cells();
+        for (int index = 0; index < occupied.size(); index++) {
+            var cell = occupied.get(index);
             int cellX = shapeX + (cell.col() - minCol) * previewCellSize;
             int cellY = shapeY + (cell.row() - minRow) * previewCellSize;
             drawBlockCell(g2d, cellX, cellY, previewCellSize, type, colorScheme);
+            if (item && index == LineDeleteIds.previewCellIndex(blockId)) {
+                drawItemLetter(g2d, cellX, cellY, previewCellSize);
+            }
         }
+    }
+
+    private static void drawItemLetter(Graphics2D g2d, int x, int y, int size) {
+        g2d.setFont(new Font(Font.MONOSPACED, Font.BOLD, Math.max(12, size * 2 / 3)));
+        FontMetrics metrics = g2d.getFontMetrics();
+        int letterX = x + (size - metrics.stringWidth("L")) / 2;
+        int letterY = y + (size - metrics.getHeight()) / 2 + metrics.getAscent();
+        g2d.setColor(Color.BLACK);
+        g2d.drawString("L", letterX - 1, letterY);
+        g2d.drawString("L", letterX + 1, letterY);
+        g2d.drawString("L", letterX, letterY - 1);
+        g2d.drawString("L", letterX, letterY + 1);
+        g2d.setColor(Color.WHITE);
+        g2d.drawString("L", letterX, letterY);
     }
 
     private static void drawBlockCell(Graphics2D g2d, int x, int y, int size,

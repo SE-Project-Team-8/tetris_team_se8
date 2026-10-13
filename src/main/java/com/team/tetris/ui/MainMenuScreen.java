@@ -25,10 +25,13 @@ public class MainMenuScreen extends JPanel implements Screen {
     private final List<MenuItem> menuItems;
     private int selectedIndex = 0;
 
-    public MainMenuScreen(ScreenRouter router) {
+    public MainMenuScreen(ScreenRouter router, Runnable startNormal, Runnable startItemMode) {
     Objects.requireNonNull(router, "router");
+    Objects.requireNonNull(startNormal, "startNormal");
+    Objects.requireNonNull(startItemMode, "startItemMode");
     menuItems = List.of(
-        new MenuItem("게임 시작", () -> router.showScreen(ScreenRouter.GAME)),
+        new MenuItem("게임 시작", startNormal),
+        new MenuItem("아이템 모드 시작", startItemMode),
         new MenuItem("설정", () -> router.showScreen(ScreenRouter.SETTINGS)),
         new MenuItem("스코어보드", () -> router.showScreen(ScreenRouter.SCOREBOARD)),
         new MenuItem("게임 종료", () -> System.exit(0))
