@@ -1,5 +1,13 @@
 package com.team.tetris;
 
+import java.io.IOException;
+import java.util.Objects;
+import java.util.Optional;
+
+import javax.swing.JOptionPane;
+import javax.swing.SwingUtilities;
+import javax.swing.SwingWorker;
+
 import com.team.tetris.block.ColorScheme;
 import com.team.tetris.common.events.BoardSnapshot;
 import com.team.tetris.common.events.GameEventListener;
@@ -17,13 +25,6 @@ import com.team.tetris.ui.PauseScreen;
 import com.team.tetris.ui.ScoreboardScreen;
 import com.team.tetris.ui.ScreenRouter;
 import com.team.tetris.ui.SettingsScreen;
-
-import javax.swing.JOptionPane;
-import javax.swing.SwingUtilities;
-import javax.swing.SwingWorker;
-import java.io.IOException;
-import java.util.Objects;
-import java.util.Optional;
 
 /** Composition root for the game engine, screens, settings, and ranking storage. */
 public final class Main {

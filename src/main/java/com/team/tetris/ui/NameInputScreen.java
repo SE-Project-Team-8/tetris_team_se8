@@ -101,6 +101,7 @@ public class NameInputScreen extends JPanel implements Screen {
 		helpLabel.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
 		add(helpLabel, BorderLayout.SOUTH);
 
+		// 입력창이나 버튼에 포커스가 있어도 ESC로 게임 오버 화면에 돌아갈 수 있게 한다.
 		getInputMap(WHEN_ANCESTOR_OF_FOCUSED_COMPONENT).put(
 				KeyStroke.getKeyStroke("ESCAPE"), "backToGameOver");
 		getActionMap().put("backToGameOver", new AbstractAction() {
@@ -118,6 +119,7 @@ public class NameInputScreen extends JPanel implements Screen {
 
 	@Override
 	public void onShow() {
+		// 화면 인스턴스를 다시 사용할 때 이전 입력, 오류 메시지, 제출값이 남지 않게 초기화한다.
 		submittedName = null;
 		nameField.setText("");
 		validationLabel.setText(" ");
@@ -143,6 +145,7 @@ public class NameInputScreen extends JPanel implements Screen {
 		nameField.requestFocusInWindow();
 	}
 
+	// Enter 키와 제출 버튼이 같은 검증 및 화면 전환 경로를 사용하도록 한다.
 	private void submitName() {
 		String name = nameField.getText().strip();
 		if (name.isEmpty()) {
