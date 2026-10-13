@@ -52,6 +52,46 @@ class BlockBoardDriverTest {
     }
 
     @Test
+    void rotatesIBlockAgainstEitherSideWall() {
+        BlockBoardDriver left = new BlockBoardDriver(new Board(), sequence(TetrominoType.I));
+        left.reset();
+        assertTrue(left.spawnNextBlock());
+        assertTrue(left.moveDown());
+        assertTrue(left.rotateClockwise());
+        for (int step = 0; step < 5; step++) assertTrue(left.moveLeft());
+        assertFalse(left.moveLeft());
+        assertTrue(left.rotateClockwise());
+        assertArrayEquals(new int[]{0, 0, 0, 0, -1, -1, -1, -1, -1, -1},
+                left.snapshot().cells()[2]);
+
+        BlockBoardDriver right = new BlockBoardDriver(new Board(), sequence(TetrominoType.I));
+        right.reset();
+        assertTrue(right.spawnNextBlock());
+        assertTrue(right.moveDown());
+        assertTrue(right.rotateClockwise());
+        for (int step = 0; step < 4; step++) assertTrue(right.moveRight());
+        assertFalse(right.moveRight());
+        assertTrue(right.rotateClockwise());
+        assertArrayEquals(new int[]{-1, -1, -1, -1, -1, -1, 0, 0, 0, 0},
+                right.snapshot().cells()[2]);
+    }
+
+    @Test
+    void wallCorrectionDoesNotRotateThroughFixedBlocks() {
+        Board board = new Board();
+        BlockBoardDriver driver = new BlockBoardDriver(board, sequence(TetrominoType.I));
+        driver.reset();
+        assertTrue(driver.spawnNextBlock());
+        assertTrue(driver.moveDown());
+        assertTrue(driver.rotateClockwise());
+        for (int step = 0; step < 5; step++) assertTrue(driver.moveLeft());
+        assertTrue(board.tryPlace(new Tetromino(TetrominoType.O, Rotation.SPAWN, 2, 1)));
+        BoardSnapshot before = driver.snapshot();
+        assertFalse(driver.rotateClockwise());
+        assertArrayEquals(before.cells()[2], driver.snapshot().cells()[2]);
+    }
+
+    @Test
     void locksAndClearsTwoLinesWithoutKeepingTheOldFallingBlock() {
         Board board = new Board();
         BlockBoardDriver driver = new BlockBoardDriver(board, sequence(TetrominoType.O));
