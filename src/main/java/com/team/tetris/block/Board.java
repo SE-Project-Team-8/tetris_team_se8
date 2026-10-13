@@ -87,6 +87,26 @@ public final class Board implements BoardView {
     }
 
     /**
+     * Crush specified cells without shifting any row. Validate the entire request first.
+     * Duplicate/empty positions do not increase the removed-cell count; no scoring occurs here.
+     */
+    public int eraseCells(List<Cell> positions) {
+        List<Cell> checked = List.copyOf(Objects.requireNonNull(positions, "positions"));
+        for (Cell cell : checked) {
+            Objects.checkIndex(cell.row(), rows);
+            Objects.checkIndex(cell.col(), cols);
+        }
+        int removed = 0;
+        for (Cell cell : checked) {
+            if (cells[cell.row()][cell.col()] != null) {
+                cells[cell.row()][cell.col()] = null;
+                removed++;
+            }
+        }
+        return removed;
+    }
+
+    /**
      * 완성 행을 한 번에 제거하고 생존 행의 상대적 순서를 유지하며 아래로 압축한다.
      *
      * 새 배열을 완성한 후 참조를 교체해 부분 압축 상태를 남기지 않는다.
