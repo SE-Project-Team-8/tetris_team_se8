@@ -12,6 +12,19 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class BoardTest {
     @Test
+    void itemRowAndFullRowAreRemovedTogetherWithoutDoubleCounting() {
+        Board board = new Board(4, 4);
+        assertTrue(board.tryPlace(new Tetromino(TetrominoType.I, Rotation.SPAWN, 1, 0)));
+        assertTrue(board.tryPlace(new Tetromino(TetrominoType.O, Rotation.SPAWN, 0, 0)));
+        assertEquals(2, board.clearLinesIncluding(1));
+        assertEquals(List.of("....", "....", "OO..", "...."), BoardFixtures.picture(board));
+
+        Board duplicate = new Board(4, 4);
+        assertTrue(duplicate.tryPlace(new Tetromino(TetrominoType.I, Rotation.SPAWN, 1, 0)));
+        assertEquals(1, duplicate.clearLinesIncluding(2));
+    }
+
+    @Test
     void defaultBoardHasRequiredDimensionsAndOnlyEmptyCells() {
         var board = new Board();
         assertEquals(20, board.rows());
