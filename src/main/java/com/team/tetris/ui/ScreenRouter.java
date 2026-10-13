@@ -1,11 +1,13 @@
 package com.team.tetris.ui;
 
 import java.awt.CardLayout;
+import java.awt.Component;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 
 import javax.swing.JFrame;
+import javax.swing.JLayeredPane;
 import javax.swing.JPanel;
 
 import com.team.tetris.common.Screen;
@@ -28,6 +30,7 @@ public class ScreenRouter extends JFrame {
 
     private final CardLayout cardLayout;
     private final JPanel containerPanel;
+    private final JLayeredPane layeredPane;
     private final Map<String, Screen> screens;
 
     private int currentWidth;
@@ -48,9 +51,18 @@ public class ScreenRouter extends JFrame {
 
         cardLayout = new CardLayout();
         containerPanel = new JPanel(cardLayout);
+        layeredPane = new JLayeredPane() {
+            @Override
+            public void doLayout() {
+                for (Component component : getComponents()) {
+                    component.setBounds(0, 0, getWidth(), getHeight());
+                }
+            }
+        };
         screens = new HashMap<>();
 
-        add(containerPanel);
+        layeredPane.add(containerPanel, JLayeredPane.DEFAULT_LAYER);
+        setContentPane(layeredPane);
         setSize(currentWidth, currentHeight);
         setLocationRelativeTo(null);
     }
@@ -64,7 +76,12 @@ public class ScreenRouter extends JFrame {
         if (screens.putIfAbsent(name, screen) != null) {
             throw new IllegalArgumentException("Screen is already registered: " + name);
         }
-        containerPanel.add(panel, name);
+        if (PAUSE.equals(name)) {
+            panel.setVisible(false);
+            layeredPane.add(panel, JLayeredPane.PALETTE_LAYER);
+        } else {
+            containerPanel.add(panel, name);
+        }
     }
 
     /** 현재 화면을 숨기고 지정한 화면을 표시하며, 양쪽 화면의 콜백을 호출한다. */
@@ -81,7 +98,15 @@ public class ScreenRouter extends JFrame {
         if (currentScreenName != null) {
             screens.get(currentScreenName).onHide();
         }
-        cardLayout.show(containerPanel, name);
+        if (PAUSE.equals(name)) {
+            screens.get(PAUSE).getPanel().setVisible(true);
+        } else {
+            Screen pauseScreen = screens.get(PAUSE);
+            if (pauseScreen != null) {
+                pauseScreen.getPanel().setVisible(false);
+            }
+            cardLayout.show(containerPanel, name);
+        }
         currentScreenName = name;
         nextScreen.onShow();
         nextScreen.getPanel().requestFocusInWindow();

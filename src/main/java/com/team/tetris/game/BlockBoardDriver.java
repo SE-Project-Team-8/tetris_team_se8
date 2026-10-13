@@ -89,7 +89,16 @@ public final class BlockBoardDriver implements GameEngine.BoardDriver {
 
     @Override
     public boolean rotateClockwise() {
-        return adopt(requireCurrent().rotateClockwise());
+        Tetromino rotated = requireCurrent().rotateClockwise();
+        if (adopt(rotated)) return true;
+
+        int minCol = rotated.cells().stream().mapToInt(Cell::col).min().orElseThrow();
+        int maxCol = rotated.cells().stream().mapToInt(Cell::col).max().orElseThrow();
+        // Shift only far enough to bring occupied cells back inside a side wall.
+        int correction = 0;
+        if (minCol < 0) correction = -minCol;
+        else if (maxCol >= board.cols()) correction = board.cols() - 1 - maxCol;
+        return correction != 0 && adopt(rotated.moveBy(0, correction));
     }
 
     /** Select the rules for the next game. */

@@ -5,6 +5,8 @@ import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.KeyboardFocusManager;
+import java.awt.KeyEventDispatcher;
 import java.awt.RenderingHints;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
@@ -23,12 +25,13 @@ public class PauseScreen extends JPanel implements Screen {
     private final ScreenRouter router;
     private final GameEngine engine;
     private final Supplier<KeyBindings> bindings;
+    private final KeyEventDispatcher resumeKeyDispatcher;
 
     // 일시정지 메뉴 항목
     private final String[] menuItems = {
         "Resume",
         "Main Menu",
-        "Exit Game"
+        "Exit"
     };
 
     private int selectedIndex = 0; // 현재 선택된 메뉴 인덱스
@@ -37,9 +40,17 @@ public class PauseScreen extends JPanel implements Screen {
         this.router = Objects.requireNonNull(router, "router");
         this.engine = Objects.requireNonNull(engine, "engine");
         this.bindings = Objects.requireNonNull(bindings, "bindings");
+        resumeKeyDispatcher = event -> {
+            if (event.getID() == KeyEvent.KEY_PRESSED && event.getKeyCode() == KeyEvent.VK_P
+                    && ScreenRouter.PAUSE.equals(router.getCurrentScreenName())) {
+                router.showScreen(ScreenRouter.GAME);
+                return true;
+            }
+            return false;
+        };
         setBackground(Color.BLACK);
         setFocusable(true);
-        setOpaque(true);
+        setOpaque(false);
 
         // 키보드 조작 이벤트 등록
         addKeyListener(new KeyAdapter() {
@@ -57,18 +68,22 @@ public class PauseScreen extends JPanel implements Screen {
 
     @Override
     public void onShow() {
+        KeyboardFocusManager.getCurrentKeyboardFocusManager()
+                .addKeyEventDispatcher(resumeKeyDispatcher);
         requestFocusInWindow();
         repaint();
     }
 
     @Override
     public void onHide() {
+        KeyboardFocusManager.getCurrentKeyboardFocusManager()
+                .removeKeyEventDispatcher(resumeKeyDispatcher);
     }
 
     // 키보드 조작 처리
     private void handleKeyPress(int keyCode) {
         GameAction action = bindings.get().actionFor(keyCode).orElse(null);
-        if (action == GameAction.PAUSE) {
+        if (keyCode == KeyEvent.VK_P || action == GameAction.PAUSE) {
             router.showScreen(ScreenRouter.GAME);
             return;
         }
@@ -117,6 +132,9 @@ public class PauseScreen extends JPanel implements Screen {
 
         Graphics2D g2d = (Graphics2D) g.create();
         try {
+            g2d.setColor(new Color(0, 0, 0, 160));
+            g2d.fillRect(0, 0, getWidth(), getHeight());
+
             g2d.setRenderingHint(
                     RenderingHints.KEY_TEXT_ANTIALIASING,
                     RenderingHints.VALUE_TEXT_ANTIALIAS_ON
@@ -134,7 +152,7 @@ public class PauseScreen extends JPanel implements Screen {
             g2d.drawString(title, titleX, screenHeight / 4);
 
             // 메뉴 항목 렌더링
-            g2d.setFont(new Font(Font.MONOSPACED, Font.BOLD, 18));
+            g2d.setFont(new Font(Font.MONOSPACED, Font.BOLD, 20));
             FontMetrics fmMenu = g2d.getFontMetrics();
             int startY = screenHeight / 2 - 20;
             int lineSpacing = 40;
@@ -147,10 +165,11 @@ public class PauseScreen extends JPanel implements Screen {
                     itemText = "▶ " + itemText;
                 } else {
                     g2d.setColor(Color.WHITE);
-                    itemText = "   " + itemText;
+                    itemText = "  " + itemText;
                 }
 
-                int itemX = (screenWidth - fmMenu.stringWidth(itemText)) / 2;
+                int itemX = (screenWidth - fmMenu.stringWidth(itemText)) / 2
+                        - fmMenu.charWidth(' ');
                 g2d.drawString(itemText, itemX, startY + (i * lineSpacing));
             }
 

@@ -277,15 +277,17 @@ public class GameScreen extends JPanel implements Screen {
             drawBoard(g2d, boardX, boardY, cellSize);
             drawSidebar(g2d, sideX, HEADER_HEIGHT + PADDING, sideWidth);
 
-            g2d.setColor(new Color(185, 193, 204));
-            g2d.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
-            String help = "Move " + keyText(GameAction.MOVE_LEFT) + "/" + keyText(GameAction.MOVE_RIGHT)
-                    + "  Drop " + keyText(GameAction.SOFT_DROP) + "  Rotate "
-                    + keyText(GameAction.ROTATE_CLOCKWISE) + "  Hard " + keyText(GameAction.HARD_DROP)
-                    + "  Pause " + keyText(GameAction.PAUSE) + "  Quit " + keyText(GameAction.QUIT);
-            FontMetrics metrics = g2d.getFontMetrics();
-            int helpX = Math.max(PADDING, (width - metrics.stringWidth(help)) / 2);
-            g2d.drawString(help, helpX, height - 12);
+            if (engine.getState() != GameState.PAUSED) {
+                g2d.setColor(new Color(185, 193, 204));
+                g2d.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
+                String help = "Move : " + keyText(GameAction.MOVE_LEFT) + "/" + keyText(GameAction.MOVE_RIGHT)
+                        + "  Drop : " + keyText(GameAction.SOFT_DROP) + "  Rotate : "
+                        + keyText(GameAction.ROTATE_CLOCKWISE) + "  Hard Drop : " + keyText(GameAction.HARD_DROP)
+                        + "  Pause : " + keyText(GameAction.PAUSE) + "  Quit : " + keyText(GameAction.QUIT);
+                FontMetrics metrics = g2d.getFontMetrics();
+                int helpX = Math.max(PADDING, (width - metrics.stringWidth(help)) / 2);
+                g2d.drawString(help, helpX, height - 12);
+            }
         } finally {
             // create()로 만든 Graphics 복사본은 사용 후 반드시 해제한다.
             g2d.dispose();
@@ -354,6 +356,14 @@ public class GameScreen extends JPanel implements Screen {
         g2d.setColor(Color.WHITE);
         g2d.setFont(new Font(Font.MONOSPACED, Font.BOLD, 20));
         g2d.drawString(String.format(Locale.ROOT, "%06d", score), x, scoreY + 29);
+
+        int levelY = scoreY + 58;
+        g2d.setColor(new Color(190, 198, 208));
+        g2d.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 14));
+        g2d.drawString("LEVEL", x, levelY);
+        g2d.setColor(Color.WHITE);
+        g2d.setFont(new Font(Font.MONOSPACED, Font.BOLD, 20));
+        g2d.drawString(String.valueOf(engine.getLevel()), x, levelY + 29);
     }
 
     private void drawPreview(Graphics2D g2d, int blockId, int x, int y, int width, int height) {
@@ -422,7 +432,13 @@ public class GameScreen extends JPanel implements Screen {
     }
 
     private String keyText(GameAction action) {
-        return KeyEvent.getKeyText(keyBindings.keyFor(action));
+        return switch (keyBindings.keyFor(action)) {
+            case KeyEvent.VK_LEFT -> "←";
+            case KeyEvent.VK_RIGHT -> "→";
+            case KeyEvent.VK_UP -> "↑";
+            case KeyEvent.VK_DOWN -> "↓";
+            default -> KeyEvent.getKeyText(keyBindings.keyFor(action));
+        };
     }
 
     private static void onEdt(Runnable action) {
