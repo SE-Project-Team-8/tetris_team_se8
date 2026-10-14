@@ -80,6 +80,7 @@ public final class GameEngine implements AutoCloseable {
     private int generatedBlocks;
     private int clearedLines;
     private long timerGeneration;
+    private int slowdownSteps;
 
     public GameEngine(BoardDriver board, GameEventListener listener) {
         this(board, listener, new ScoreCalculator(), new DefaultSpeedPolicy(), new SwingDropTimer());
@@ -108,6 +109,7 @@ public final class GameEngine implements AutoCloseable {
         score = 0;
         generatedBlocks = 0;
         clearedLines = 0;
+        slowdownSteps = 0;
         updateSpeed();
         transition(GameState.RUNNING);
         listener.onPauseStateChanged(false);
@@ -206,6 +208,8 @@ public final class GameEngine implements AutoCloseable {
         LockResult result = Objects.requireNonNull(board.lockAndClearLines(), "lock result");
         award(scoring.lineClearPoints(result.clearedLines(), getLevel()));
         clearedLines = addCount(clearedLines, result.clearedLines());
+        // Item effects start after the locked piece's own points are awarded.
+        activateItem(Objects.requireNonNull(board.lockedItem(), "locked item"));
         if (result.topOut()) {
             gameOver();
             return;
@@ -219,6 +223,14 @@ public final class GameEngine implements AutoCloseable {
         publishPreview();
     }
 
+    private void activateItem(ItemType item) {
+        if (item == ItemType.SLOW_DOWN && getLevel() > 1) {
+            // Level 1 has nothing to lower, so the item is not saved for a later level-up.
+            slowdownSteps++;
+            updateSpeed();
+        }
+    }
+
     private boolean spawn() {
         if (!board.spawnNextBlock()) return false;
         generatedBlocks = addCount(generatedBlocks, 1);
@@ -227,7 +239,8 @@ public final class GameEngine implements AutoCloseable {
     }
 
     private void updateSpeed() {
-        speed = Objects.requireNonNull(speedPolicy.calculate(generatedBlocks, clearedLines), "speed");
+        speed = Objects.requireNonNull(
+                speedPolicy.calculate(generatedBlocks, clearedLines, slowdownSteps), "speed");
     }
 
     private static int addCount(int count, int increment) {

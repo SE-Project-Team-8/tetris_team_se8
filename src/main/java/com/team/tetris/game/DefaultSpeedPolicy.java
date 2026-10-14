@@ -12,11 +12,18 @@ public final class DefaultSpeedPolicy implements SpeedPolicy {
 
     @Override
     public Speed calculate(int generatedBlocks, int clearedLines) {
-        if (generatedBlocks < 0 || clearedLines < 0) {
+        return calculate(generatedBlocks, clearedLines, 0);
+    }
+
+    /** Each slow-down step lowers the capped level by one, never below level 1. */
+    @Override
+    public Speed calculate(int generatedBlocks, int clearedLines, int slowdownSteps) {
+        if (generatedBlocks < 0 || clearedLines < 0 || slowdownSteps < 0) {
             throw new IllegalArgumentException("Progress counters must be non-negative");
         }
         int level = Math.min(MAX_LEVEL, 1 + Math.max(
                 generatedBlocks / BLOCKS_PER_LEVEL, clearedLines / LINES_PER_LEVEL));
+        level = Math.max(1, level - slowdownSteps);
         int interval = Math.max(MIN_DROP_INTERVAL_MS,
                 (int) GameConstants.INITIAL_DROP_INTERVAL_MS - (level - 1) * SPEED_STEP_MS);
         return new Speed(level, interval);
