@@ -12,7 +12,8 @@ import java.util.List;
 public enum ItemType {
     NONE(0, ' ', false),
     LINE_DELETE(LineDeleteIds.ITEM_ID, 'L', true),
-    ANVIL(2, 'W', false);
+    ANVIL(2, 'W', false),
+    BOMB(4, 'B', true);
 
     private static final List<ItemType> EARNABLE = Arrays.stream(values())
             .filter(item -> item != NONE).toList();

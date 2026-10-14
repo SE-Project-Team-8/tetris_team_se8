@@ -2,6 +2,7 @@ package com.team.tetris.game;
 
 import com.team.tetris.block.Board;
 import com.team.tetris.block.Anvil;
+import com.team.tetris.block.Bomb;
 import com.team.tetris.block.Cell;
 import com.team.tetris.block.CollisionChecker;
 import com.team.tetris.block.DropCalculator;
@@ -170,6 +171,10 @@ public final class BlockBoardDriver implements GameEngine.BoardDriver {
         }
         int forcedRow = currentItem == ItemType.LINE_DELETE
                 ? landed.cells().get(currentItemIndex).row() : -1;
+        if (currentItem == ItemType.BOMB) {
+            // Explode before clearing; rows this piece completed stay intact so they still clear and score.
+            board.eraseCells(Bomb.blastCells(board, landed.cells().get(currentItemIndex)));
+        }
         lockedItem = currentItem;
         current = null;
         currentItem = ItemType.NONE;
