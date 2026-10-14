@@ -33,6 +33,9 @@ public final class SettingsRepository {
             return new GameSettings(
                     GameSettings.ScreenSize.valueOf(PropertiesFile.required(properties, "screenSize")),
                     GameSettings.ColorBlindMode.valueOf(PropertiesFile.required(properties, "colorBlindMode")),
+                    properties.containsKey("difficulty")
+                            ? GameSettings.Difficulty.valueOf(PropertiesFile.required(properties, "difficulty"))
+                            : GameSettings.Difficulty.NORMAL,
                     new KeyBindings(keys));
         } catch (IllegalArgumentException invalid) {
             throw new IOException("Invalid settings: " + file, invalid);
@@ -45,6 +48,7 @@ public final class SettingsRepository {
         properties.setProperty("version", "1");
         properties.setProperty("screenSize", settings.screenSize().name());
         properties.setProperty("colorBlindMode", settings.colorBlindMode().name());
+        properties.setProperty("difficulty", settings.difficulty().name());
         settings.keyBindings().keys().forEach((action, key) ->
                 properties.setProperty("key." + action.name(), key.toString()));
         PropertiesFile.write(file, properties);

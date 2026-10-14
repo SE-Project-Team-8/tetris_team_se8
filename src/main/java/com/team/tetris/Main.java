@@ -13,6 +13,7 @@ import com.team.tetris.common.events.BoardSnapshot;
 import com.team.tetris.common.events.GameEventListener;
 import com.team.tetris.game.BlockBoardDriver;
 import com.team.tetris.game.GameEngine;
+import com.team.tetris.scoreboard.ScoreDifficulty;
 import com.team.tetris.scoreboard.ScoreRecord;
 import com.team.tetris.scoreboard.ScoreboardRepository;
 import com.team.tetris.settings.GameSettings;
@@ -46,6 +47,7 @@ public final class Main {
         private final NameInputScreen nameInputScreen = new NameInputScreen(router, this::saveScore);
         private final ScoreboardScreen scoreboardScreen = new ScoreboardScreen(router, scoreboardRepository);
         private int finalScore;
+        private ScoreDifficulty finalDifficulty = ScoreDifficulty.NORMAL;
 
         private Application() {
             listener.setDelegate(gameScreen.eventListener());
@@ -100,16 +102,18 @@ public final class Main {
 
         private void onGameOver(int score) {
             finalScore = score;
+            finalDifficulty = ScoreDifficulty.valueOf(settings.difficulty().name());
             int level = engine.getLevel();
             int lines = engine.getClearedLines();
             // Avoid changing screens from inside the engine's notification stack.
-            SwingUtilities.invokeLater(() -> checkRanking(score, level, lines));
+            ScoreDifficulty difficulty = finalDifficulty;
+            SwingUtilities.invokeLater(() -> checkRanking(score, level, lines, difficulty));
         }
 
-        private void checkRanking(int score, int level, int lines) {
+        private void checkRanking(int score, int level, int lines, ScoreDifficulty difficulty) {
             new SwingWorker<Boolean, Void>() {
                 @Override protected Boolean doInBackground() throws Exception {
-                    return scoreboardRepository.qualifies(score);
+                    return scoreboardRepository.qualifies(score, difficulty);
                 }
 
                 @Override protected void done() {
@@ -122,7 +126,7 @@ public final class Main {
                                 "Could not read saved scores.", "Scoreboard error",
                                 JOptionPane.DEFAULT_OPTION, JOptionPane.ERROR_MESSAGE, null,
                                 new String[]{"Retry", "Main Menu"}, "Retry");
-                        if (choice == 0) checkRanking(score, level, lines);
+                        if (choice == 0) checkRanking(score, level, lines, difficulty);
                         else router.showScreen(ScreenRouter.MAIN_MENU);
                     }
                 }
@@ -132,7 +136,7 @@ public final class Main {
         private void saveScore(String name) {
             new SwingWorker<Optional<ScoreRecord>, Void>() {
                 @Override protected Optional<ScoreRecord> doInBackground() throws Exception {
-                    return scoreboardRepository.add(name, finalScore);
+                    return scoreboardRepository.add(name, finalScore, finalDifficulty);
                 }
 
                 @Override protected void done() {

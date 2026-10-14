@@ -1,25 +1,5 @@
 package com.team.tetris.ui;
 
-import com.team.tetris.common.Screen;
-import com.team.tetris.game.GameAction;
-import com.team.tetris.scoreboard.ScoreboardRepository;
-import com.team.tetris.settings.GameSettings;
-import com.team.tetris.settings.KeyBindings;
-import com.team.tetris.settings.SettingsRepository;
-
-import javax.swing.BorderFactory;
-import javax.swing.JButton;
-import javax.swing.JComboBox;
-import javax.swing.JComponent;
-import javax.swing.DefaultListCellRenderer;
-import javax.swing.JLabel;
-import javax.swing.JList;
-import javax.swing.JOptionPane;
-import javax.swing.JPanel;
-import javax.swing.JScrollPane;
-import javax.swing.JTextField;
-import javax.swing.KeyStroke;
-import javax.swing.SwingWorker;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
@@ -35,6 +15,27 @@ import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
+
+import javax.swing.BorderFactory;
+import javax.swing.DefaultListCellRenderer;
+import javax.swing.JButton;
+import javax.swing.JComboBox;
+import javax.swing.JComponent;
+import javax.swing.JLabel;
+import javax.swing.JList;
+import javax.swing.JOptionPane;
+import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.JTextField;
+import javax.swing.KeyStroke;
+import javax.swing.SwingWorker;
+
+import com.team.tetris.common.Screen;
+import com.team.tetris.game.GameAction;
+import com.team.tetris.scoreboard.ScoreboardRepository;
+import com.team.tetris.settings.GameSettings;
+import com.team.tetris.settings.KeyBindings;
+import com.team.tetris.settings.SettingsRepository;
 
 /** User preferences, including editable game keys and independent score reset. */
 public final class SettingsScreen extends JPanel implements Screen {
@@ -54,6 +55,8 @@ public final class SettingsScreen extends JPanel implements Screen {
             new JComboBox<>(GameSettings.ScreenSize.values());
     private final JComboBox<GameSettings.ColorBlindMode> color =
             new JComboBox<>(GameSettings.ColorBlindMode.values());
+    private final JComboBox<GameSettings.Difficulty> difficulty =
+            new JComboBox<>(GameSettings.Difficulty.values());
     private final EnumMap<GameAction, JTextField> keyFields = new EnumMap<>(GameAction.class);
     private final EnumMap<GameAction, Integer> selectedKeys = new EnumMap<>(GameAction.class);
 
@@ -72,16 +75,19 @@ public final class SettingsScreen extends JPanel implements Screen {
 
         styleComboBox(size);
         size.setRenderer(new ValueRenderer<GameSettings.ScreenSize>(value -> switch (value) {
-            case SMALL -> "Small  |  480 x 640";
-            case MEDIUM -> "Medium |  600 x 800";
-            case LARGE -> "Large  |  750 x 1000";
+            case SMALL -> " Small  |  480 x 640";
+            case MEDIUM -> " Medium |  600 x 800";
+            case LARGE -> " Large  |  750 x 1000";
         }));
         styleComboBox(color);
         color.setRenderer(new ValueRenderer<GameSettings.ColorBlindMode>(value -> switch (value) {
-            case OFF -> "Off";
-            case RED_GREEN -> "Red / Green";
-            case BLUE_YELLOW -> "Blue / Yellow";
+            case OFF -> " Off";
+            case RED_GREEN -> " Red / Green";
+            case BLUE_YELLOW -> " Blue / Yellow";
         }));
+        styleComboBox(difficulty);
+        difficulty.setRenderer(new ValueRenderer<GameSettings.Difficulty>(value ->
+                " " + value.name().charAt(0) + value.name().substring(1).toLowerCase(java.util.Locale.ROOT)));
 
         JPanel form = new JPanel(new GridBagLayout());
         form.setBackground(PANEL_BACKGROUND);
@@ -91,6 +97,7 @@ public final class SettingsScreen extends JPanel implements Screen {
         int row = 0;
         addSettingRow(form, "WINDOW SIZE", size, row++);
         addSettingRow(form, "COLOR MODE", color, row++);
+        addSettingRow(form, "DIFFICULTY", difficulty, row++);
         for (GameAction action : GameAction.values()) {
             JTextField field = new JTextField();
             field.setEditable(false);
@@ -167,6 +174,7 @@ public final class SettingsScreen extends JPanel implements Screen {
     private void display(GameSettings settings) {
         size.setSelectedItem(settings.screenSize());
         color.setSelectedItem(settings.colorBlindMode());
+        difficulty.setSelectedItem(settings.difficulty());
         selectedKeys.clear();
         selectedKeys.putAll(settings.keyBindings().keys());
         keyFields.forEach((action, field) -> field.setText(KeyEvent.getKeyText(selectedKeys.get(action))));
@@ -175,7 +183,8 @@ public final class SettingsScreen extends JPanel implements Screen {
     private void saveSelected() {
         try {
             save(new GameSettings((GameSettings.ScreenSize) size.getSelectedItem(),
-                    (GameSettings.ColorBlindMode) color.getSelectedItem(), new KeyBindings(selectedKeys)));
+                    (GameSettings.ColorBlindMode) color.getSelectedItem(),
+                    (GameSettings.Difficulty) difficulty.getSelectedItem(), new KeyBindings(selectedKeys)));
         } catch (IllegalArgumentException invalid) {
             showMessage("Please assign a different key to every action.", "Invalid Key Bindings",
                     JOptionPane.WARNING_MESSAGE);
