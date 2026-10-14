@@ -65,6 +65,44 @@ class ScoreboardRepositoryTest {
     }
 
     @Test
+    void keepsIndependentTopTenRankingsForEachDifficulty() throws Exception {
+        ScoreboardRepository repository = repository();
+        for (int i = 0; i < 12; i++) {
+            repository.add("쉬움" + i, i, ScoreDifficulty.EASY);
+            repository.add("보통" + i, i + 100, ScoreDifficulty.NORMAL);
+            repository.add("어려움" + i, i + 200, ScoreDifficulty.HARD);
+        }
+
+        assertEquals(10, repository.load(ScoreDifficulty.EASY).size());
+        assertEquals(10, repository.load(ScoreDifficulty.NORMAL).size());
+        assertEquals(10, repository.load(ScoreDifficulty.HARD).size());
+        assertEquals(11, repository.load(ScoreDifficulty.EASY).getFirst().score());
+        assertEquals(111, repository.load(ScoreDifficulty.NORMAL).getFirst().score());
+        assertEquals(211, repository.load(ScoreDifficulty.HARD).getFirst().score());
+        assertEquals(30, repository.load().size());
+        assertFalse(repository.qualifies(1, ScoreDifficulty.EASY));
+        assertTrue(repository.qualifies(3, ScoreDifficulty.EASY));
+        assertTrue(repository.add("새로운 쉬움 기록", 3, ScoreDifficulty.EASY).isPresent());
+    }
+
+    @Test
+    void oldRecordsWithoutDifficultyAreLoadedAsNormal() throws Exception {
+        Path file = directory.resolve("scores.properties");
+        Files.writeString(file, """
+                version=1
+                count=1
+                record.0.id=00000000-0000-0000-0000-000000000001
+                record.0.name=Legacy
+                record.0.score=50
+                record.0.recordedAt=2026-01-01T00:00:00Z
+                """);
+
+        assertEquals(ScoreDifficulty.NORMAL, new ScoreboardRepository(file)
+                .load(ScoreDifficulty.NORMAL).getFirst().difficulty());
+        assertTrue(new ScoreboardRepository(file).load(ScoreDifficulty.EASY).isEmpty());
+    }
+
+    @Test
     void explicitResetPersistsAcrossInstances() throws Exception {
         repository().add("기록", 123);
         repository().reset();

@@ -2,13 +2,17 @@ package com.team.tetris.ui;
 
 import com.team.tetris.common.Screen;
 import com.team.tetris.scoreboard.ScoreRecord;
+import com.team.tetris.scoreboard.ScoreDifficulty;
 import com.team.tetris.scoreboard.ScoreboardRepository;
 
 import javax.swing.AbstractAction;
 import javax.swing.BorderFactory;
+import javax.swing.DefaultListCellRenderer;
 import javax.swing.JButton;
+import javax.swing.JComboBox;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
+import javax.swing.JList;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
@@ -44,7 +48,10 @@ public final class ScoreboardScreen extends JPanel implements Screen {
     private final CardLayout contentLayout = new CardLayout();
     private final JPanel content = new JPanel(contentLayout);
     private final JLabel status = new JLabel("", SwingConstants.CENTER);
+    private final JComboBox<ScoreDifficulty> difficulty =
+            new JComboBox<>(ScoreDifficulty.values());
     private UUID highlightedId;
+    private int loadGeneration;
 
     public ScoreboardScreen(ScreenRouter router, ScoreboardRepository repository) {
         this.router = Objects.requireNonNull(router, "router");
@@ -53,6 +60,27 @@ public final class ScoreboardScreen extends JPanel implements Screen {
         setBackground(BACKGROUND);
         setBorder(BorderFactory.createEmptyBorder(22, 24, 18, 24));
         add(createHeader(), BorderLayout.NORTH);
+        difficulty.setSelectedItem(ScoreDifficulty.NORMAL);
+        difficulty.setFont(new Font(Font.MONOSPACED, Font.BOLD, 15));
+        difficulty.setForeground(Color.WHITE);
+        difficulty.setBackground(new Color(30, 36, 46));
+        difficulty.setRenderer(new DefaultListCellRenderer() {
+            @Override
+            public Component getListCellRendererComponent(JList<?> list, Object value, int index,
+                                                          boolean selected, boolean focused) {
+                super.getListCellRendererComponent(list, value, index, selected, focused);
+                if (value instanceof ScoreDifficulty selectedDifficulty) {
+                    String label = selectedDifficulty.name();
+                    setText(label.charAt(0) + label.substring(1).toLowerCase(java.util.Locale.ROOT));
+                }
+                setFont(new Font(Font.MONOSPACED, Font.BOLD, 15));
+                setForeground(selected ? Color.BLACK : Color.WHITE);
+                setBackground(selected ? ACCENT : new Color(30, 36, 46));
+                setBorder(BorderFactory.createEmptyBorder(4, 8, 4, 8));
+                return this;
+            }
+        });
+        difficulty.addActionListener(event -> loadScores());
 
         configureTable();
         JScrollPane resultScroll = new JScrollPane(results);
@@ -99,19 +127,32 @@ public final class ScoreboardScreen extends JPanel implements Screen {
     @Override public JPanel getPanel() { return this; }
 
     @Override public void onShow() {
+        loadScores();
+    }
+
+    @Override public void onHide() {
+        loadGeneration++;
+        highlightedId = null;
+    }
+
+    private void loadScores() {
+        int generation = ++loadGeneration;
+        ScoreDifficulty selectedDifficulty = (ScoreDifficulty) difficulty.getSelectedItem();
+        if (selectedDifficulty == null) return;
         status.setText("LOADING SCORES...");
         contentLayout.show(content, "status");
         new SwingWorker<List<ScoreRecord>, Void>() {
             @Override protected List<ScoreRecord> doInBackground() throws Exception {
-                return repository.load();
+                return repository.load(selectedDifficulty);
             }
 
             @Override protected void done() {
+                if (generation != loadGeneration) return;
                 try {
                     List<ScoreRecord> records = get();
                     tableModel.setRecords(records);
                     if (records.isEmpty()) {
-                        status.setText("NO SCORES YET");
+                        status.setText("NO " + selectedDifficulty + " SCORES YET");
                         contentLayout.show(content, "status");
                     } else {
                         contentLayout.show(content, "table");
@@ -124,19 +165,21 @@ public final class ScoreboardScreen extends JPanel implements Screen {
         }.execute();
     }
 
-    @Override public void onHide() { highlightedId = null; }
-
     private JPanel createHeader() {
         JPanel header = new JPanel(new BorderLayout(0, 4));
         header.setBackground(BACKGROUND);
         JLabel title = new JLabel("LEADERBOARD", JLabel.CENTER);
         title.setForeground(Color.YELLOW);
         title.setFont(new Font(Font.MONOSPACED, Font.BOLD, 28));
-        JLabel subtitle = new JLabel("TOP SCORES", JLabel.CENTER);
+        JLabel subtitle = new JLabel("DIFFICULTY", JLabel.CENTER);
         subtitle.setForeground(MUTED);
         subtitle.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
         header.add(title, BorderLayout.CENTER);
-        header.add(subtitle, BorderLayout.SOUTH);
+        JPanel selector = new JPanel(new FlowLayout(FlowLayout.CENTER, 8, 4));
+        selector.setBackground(BACKGROUND);
+        selector.add(subtitle);
+        selector.add(difficulty);
+        header.add(selector, BorderLayout.SOUTH);
         return header;
     }
 

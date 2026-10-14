@@ -29,17 +29,30 @@ class SettingsRepositoryTest {
     void everyWindowSizeAndCustomKeysSurviveANewRepository(GameSettings.ScreenSize size) throws Exception {
         Path file = directory.resolve("nested/settings.properties");
         for (GameSettings.ColorBlindMode mode : GameSettings.ColorBlindMode.values()) {
-            GameSettings settings = GameSettings.defaults().withScreenSize(size).withColorBlindMode(mode)
-                    .withKeyBindings(KeyBindings.defaults().withKey(GameAction.MOVE_LEFT, KeyEvent.VK_A));
-            new SettingsRepository(file).save(settings);
-            GameSettings loaded = new SettingsRepository(file).load();
-            assertEquals(settings, loaded);
-            assertEquals(mode != GameSettings.ColorBlindMode.OFF, loaded.isColorBlindModeEnabled());
-            assertTrue(size.width() > 0 && size.height() > 0);
+            for (GameSettings.Difficulty difficulty : GameSettings.Difficulty.values()) {
+                GameSettings settings = GameSettings.defaults().withScreenSize(size).withColorBlindMode(mode)
+                        .withDifficulty(difficulty)
+                        .withKeyBindings(KeyBindings.defaults().withKey(GameAction.MOVE_LEFT, KeyEvent.VK_A));
+                new SettingsRepository(file).save(settings);
+                GameSettings loaded = new SettingsRepository(file).load();
+                assertEquals(settings, loaded);
+                assertEquals(mode != GameSettings.ColorBlindMode.OFF, loaded.isColorBlindModeEnabled());
+                assertTrue(size.width() > 0 && size.height() > 0);
+            }
         }
         try (var files = Files.list(file.getParent())) {
             assertEquals(1, files.count(), "Temporary files must be cleaned up");
         }
+    }
+
+    @Test
+    void legacySettingsWithoutDifficultyLoadAsNormal() throws Exception {
+        Path file = directory.resolve("settings.properties");
+        new SettingsRepository(file).save(GameSettings.defaults());
+        String legacy = Files.readString(file).replaceAll("(?m)^difficulty=.*\\R?", "");
+        Files.writeString(file, legacy);
+
+        assertEquals(GameSettings.Difficulty.NORMAL, new SettingsRepository(file).load().difficulty());
     }
 
     @Test
@@ -55,7 +68,7 @@ class SettingsRepositoryTest {
     void brokenFilesAreReportedAndPreserved() throws Exception {
         Path file = directory.resolve("settings.properties");
         for (String invalid : new String[]{"version=99\n", "version=2\n",
-                "version=1\nscreenSize=UNKNOWN\n", "bad=\\uXYZW"}) {
+                "version=1\nscreenSize=UNKNOWN\n", "version=1\ndifficulty=UNKNOWN\n", "bad=\\uXYZW"}) {
             Files.writeString(file, invalid);
             assertThrows(IOException.class, () -> new SettingsRepository(file).load());
             assertEquals(invalid, Files.readString(file));
