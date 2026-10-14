@@ -173,6 +173,7 @@ class BlockBoardDriverTest {
         driver.hardDrop();
         assertEquals(1, driver.lockAndClearLines().clearedLines(),
                 "L removes its row even when only two cells are occupied");
+        assertEquals(ItemType.LINE_DELETE, driver.lockedItem(), "The engine can see which item was locked");
         assertEquals(BoardSnapshot.EMPTY, board.cellAt(16, 4).map(TetrominoType::id)
                 .orElse(BoardSnapshot.EMPTY));
         assertEquals(TetrominoType.O, board.cellAt(17, 4).orElseThrow(),

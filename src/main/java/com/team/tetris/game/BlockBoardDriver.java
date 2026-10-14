@@ -12,10 +12,11 @@ import com.team.tetris.block.TetrominoType;
 import com.team.tetris.block.UniformTetrominoGenerator;
 import com.team.tetris.common.constants.GameConstants;
 import com.team.tetris.common.events.BoardSnapshot;
-import com.team.tetris.common.events.LineDeleteIds;
 import com.team.tetris.common.events.AnvilIds;
+import com.team.tetris.common.events.ItemCellIds;
 
 import java.util.ArrayDeque;
+import java.util.List;
 import java.util.Objects;
 import java.util.Random;
 import java.util.function.Supplier;
@@ -30,7 +31,9 @@ public final class BlockBoardDriver implements GameEngine.BoardDriver {
     private Tetromino current;
     private Anvil currentAnvil;
     private boolean anvilHorizontalLocked;
+    private ItemType currentItem = ItemType.NONE;
     private int currentItemIndex = -1;
+    private ItemType lockedItem = ItemType.NONE;
     private int clearedLines;
     private int pendingItems;
     private boolean itemMode;
@@ -46,8 +49,7 @@ public final class BlockBoardDriver implements GameEngine.BoardDriver {
     }
 
     public BlockBoardDriver(Board board, TetrominoGenerator generator, Random itemRandom) {
-        this(board, generator, itemRandom,
-                () -> itemRandom.nextInt(2) == 0 ? ItemType.LINE_DELETE : ItemType.ANVIL);
+        this(board, generator, itemRandom, uniformItems(itemRandom));
     }
 
     /** The selector chooses an item only after a ten-line milestone is earned. */
@@ -68,7 +70,9 @@ public final class BlockBoardDriver implements GameEngine.BoardDriver {
         current = null;
         currentAnvil = null;
         anvilHorizontalLocked = false;
+        currentItem = ItemType.NONE;
         currentItemIndex = -1;
+        lockedItem = ItemType.NONE;
         clearedLines = 0;
         pendingItems = 0;
         preview.clear();
@@ -94,6 +98,7 @@ public final class BlockBoardDriver implements GameEngine.BoardDriver {
         Tetromino candidate = spawnCandidate(next.type());
         if (!CollisionChecker.canPlace(board, candidate)) return false;
         current = candidate;
+        currentItem = next.item();
         currentItemIndex = next.itemIndex();
         return true;
     }
@@ -156,14 +161,18 @@ public final class BlockBoardDriver implements GameEngine.BoardDriver {
             }
             currentAnvil = null;
             anvilHorizontalLocked = false;
+            lockedItem = ItemType.ANVIL;
             return new GameEngine.LockResult(0, false);
         }
         Tetromino landed = requireCurrent();
         if (!board.tryPlace(landed)) {
             throw new IllegalStateException("A valid falling block could not be locked");
         }
-        int forcedRow = currentItemIndex < 0 ? -1 : landed.cells().get(currentItemIndex).row();
+        int forcedRow = currentItem == ItemType.LINE_DELETE
+                ? landed.cells().get(currentItemIndex).row() : -1;
+        lockedItem = currentItem;
         current = null;
+        currentItem = ItemType.NONE;
         currentItemIndex = -1;
         int removed = board.clearLinesIncluding(forcedRow);
         if (itemMode) {
@@ -180,6 +189,11 @@ public final class BlockBoardDriver implements GameEngine.BoardDriver {
     }
 
     @Override
+    public ItemType lockedItem() {
+        return lockedItem;
+    }
+
+    @Override
     public BoardSnapshot snapshot() {
         int[][] cells = new int[board.rows()][board.cols()];
         for (int row = 0; row < board.rows(); row++) {
@@ -193,7 +207,7 @@ public final class BlockBoardDriver implements GameEngine.BoardDriver {
             for (int index = 0; index < occupied.size(); index++) {
                 Cell cell = occupied.get(index);
                 cells[cell.row()][cell.col()] = index == currentItemIndex
-                        ? LineDeleteIds.boardCell(current.type().id()) : current.type().id();
+                        ? ItemCellIds.boardCell(currentItem.id(), current.type().id()) : current.type().id();
             }
         }
         if (currentAnvil != null) {
@@ -204,11 +218,10 @@ public final class BlockBoardDriver implements GameEngine.BoardDriver {
 
     @Override
     public int[] nextBlockTypes() {
-        return preview.stream().mapToInt(next -> switch (next.item()) {
-            case NONE -> next.type().id();
-            case LINE_DELETE -> LineDeleteIds.preview(next.type().id(), next.itemIndex());
-            case ANVIL -> AnvilIds.ANVIL_ID;
-        }).toArray();
+        return preview.stream().mapToInt(next -> next.item() == ItemType.ANVIL ? AnvilIds.ANVIL_ID
+                : next.item().isAttachedToBlock()
+                        ? ItemCellIds.preview(next.item().id(), next.type().id(), next.itemIndex())
+                        : next.type().id()).toArray();
     }
 
     private Tetromino spawnCandidate(TetrominoType type) {
@@ -230,10 +243,16 @@ public final class BlockBoardDriver implements GameEngine.BoardDriver {
             }
             TetrominoType type = item == ItemType.ANVIL ? null
                     : Objects.requireNonNull(generator.next(), "next block type");
-            int itemIndex = item == ItemType.LINE_DELETE ? itemRandom.nextInt(4) : -1;
+            int itemIndex = item.isAttachedToBlock() ? itemRandom.nextInt(4) : -1;
             preview.addLast(new QueuedBlock(type, item, itemIndex));
             if (earnedItem) pendingItems--;
         }
+    }
+
+    /** Every earnable item has the same chance; adding an ItemType value extends the choice. */
+    private static Supplier<ItemType> uniformItems(Random itemRandom) {
+        List<ItemType> items = ItemType.earnable();
+        return () -> items.get(itemRandom.nextInt(items.size()));
     }
 
     private boolean canPlaceAnvil(Anvil candidate) {

@@ -6,11 +6,12 @@ import com.team.tetris.block.Tetromino;
 import com.team.tetris.block.TetrominoType;
 import com.team.tetris.common.events.AnvilIds;
 import com.team.tetris.common.events.BoardSnapshot;
+import com.team.tetris.common.events.ItemCellIds;
 import com.team.tetris.common.events.GameEventListener;
 import com.team.tetris.common.events.LineDeleteIds;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import javax.swing.SwingUtilities;
 import java.util.Arrays;
@@ -149,15 +150,19 @@ class AnvilDriverTest {
     }
 
     @ParameterizedTest
-    @ValueSource(ints = {0, 1})
-    void realDefaultSelectorCanGenerateEitherRequiredItem(int choice) {
+    @EnumSource(value = ItemType.class, names = "NONE", mode = EnumSource.Mode.EXCLUDE)
+    void realDefaultSelectorCanGenerateEveryEarnableItem(ItemType item) {
         Board board = new Board();
+        int itemCount = ItemType.earnable().size();
         Random fixedChoice = new Random() {
-            @Override public int nextInt(int bound) { return bound == 2 ? choice : 3; }
+            @Override public int nextInt(int bound) {
+                return bound == itemCount ? ItemType.earnable().indexOf(item) : 3;
+            }
         };
         BlockBoardDriver driver = new BlockBoardDriver(board, () -> TetrominoType.O, fixedChoice);
         earnTenAndQueueItem(driver, board);
-        int expected = choice == 0 ? LineDeleteIds.preview(TetrominoType.O.id(), 3) : AnvilIds.ANVIL_ID;
+        int expected = item == ItemType.ANVIL ? AnvilIds.ANVIL_ID
+                : ItemCellIds.preview(item.id(), TetrominoType.O.id(), 3);
         assertArrayEquals(new int[]{expected}, driver.nextBlockTypes());
     }
 

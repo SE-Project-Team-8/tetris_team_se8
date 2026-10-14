@@ -30,6 +30,8 @@ public final class GameEngine implements AutoCloseable {
         default boolean awardsDropPoints() { return true; }
         /** Lock once and clear full rows; report overflow above the board as topOut. */
         LockResult lockAndClearLines();
+        /** Item carried by the piece fixed by the latest lockAndClearLines(); NONE for regular pieces. */
+        default ItemType lockedItem() { return ItemType.NONE; }
         /** Composed 20 x 10 board; EMPTY = -1; falling piece is included. */
         BoardSnapshot snapshot();
         /** Preview block IDs use the block/UI team's agreed 0..6 mapping. */
