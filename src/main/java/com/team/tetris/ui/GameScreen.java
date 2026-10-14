@@ -359,6 +359,16 @@ public class GameScreen extends JPanel implements Screen {
         g2d.setColor(Color.WHITE);
         g2d.setFont(new Font(Font.MONOSPACED, Font.BOLD, 20));
         g2d.drawString(String.valueOf(engine.getLevel()), x, levelY + 29);
+
+        int difficultyY = levelY + 62;
+        g2d.setColor(new Color(190, 198, 208));
+        g2d.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 14));
+        g2d.drawString("DIFFICULTY", x, difficultyY);
+        g2d.setColor(Color.WHITE);
+        g2d.drawString(engine.getDifficulty().label(), x, difficultyY + 24);
+        g2d.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 12));
+        g2d.drawString("Line score " + engine.getDifficulty().lineScorePercent() + "%", x, difficultyY + 45);
+        g2d.drawString("+1 pts/sec", x, difficultyY + 62);
     }
 
     private void drawPreview(Graphics2D g2d, int blockId, int x, int y, int width, int height) {

@@ -9,6 +9,7 @@ import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
 
 import com.team.tetris.block.ColorScheme;
+import com.team.tetris.common.Difficulty;
 import com.team.tetris.common.events.BoardSnapshot;
 import com.team.tetris.common.events.GameEventListener;
 import com.team.tetris.game.BlockBoardDriver;
@@ -40,12 +41,13 @@ public final class Main {
         private GameSettings settings = loadSettings();
         private final ScreenRouter router = new ScreenRouter(settings.screenSize());
         private final ForwardingListener listener = new ForwardingListener();
-        private final GameEngine engine = new GameEngine(new BlockBoardDriver(), listener);
+        private final GameEngine engine = new GameEngine(new BlockBoardDriver(), listener, () -> settings.difficulty());
         private final GameScreen gameScreen = new GameScreen(router, engine, settings.keyBindings(), this::onGameOver);
         private final GameOverScreen gameOverScreen = new GameOverScreen(router);
         private final NameInputScreen nameInputScreen = new NameInputScreen(router, this::saveScore);
         private final ScoreboardScreen scoreboardScreen = new ScoreboardScreen(router, scoreboardRepository);
         private int finalScore;
+        private Difficulty finalDifficulty = Difficulty.NORMAL;
 
         private Application() {
             listener.setDelegate(gameScreen.eventListener());
@@ -100,6 +102,7 @@ public final class Main {
 
         private void onGameOver(int score) {
             finalScore = score;
+            finalDifficulty = engine.getDifficulty();
             int level = engine.getLevel();
             int lines = engine.getClearedLines();
             // Avoid changing screens from inside the engine's notification stack.
@@ -130,9 +133,11 @@ public final class Main {
         }
 
         private void saveScore(String name) {
+            int scoreToSave = finalScore;
+            Difficulty difficultyToSave = finalDifficulty;
             new SwingWorker<Optional<ScoreRecord>, Void>() {
                 @Override protected Optional<ScoreRecord> doInBackground() throws Exception {
-                    return scoreboardRepository.add(name, finalScore);
+                    return scoreboardRepository.add(name, scoreToSave, difficultyToSave);
                 }
 
                 @Override protected void done() {

@@ -1,6 +1,7 @@
 package com.team.tetris.scoreboard;
 
 import org.junit.jupiter.api.Test;
+import com.team.tetris.common.Difficulty;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
@@ -14,6 +15,36 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class ScoreboardRepositoryTest {
     @TempDir Path directory;
+
+    @Test
+    void difficultyRoundTripsAndLegacyScoresKeepTheirIdsWhenUpgraded() throws Exception {
+        Path file = directory.resolve("scores.properties");
+        ScoreboardRepository repository = repository();
+        ScoreRecord first = repository.add("기존 기록", 100).orElseThrow();
+        String legacy = Files.readString(file).replace("version=2", "version=1")
+                .replaceAll("(?m)^record\\.\\d+\\.difficulty=.*\\R?", "");
+        Files.writeString(file, legacy);
+        assertEquals(first, repository.load().getFirst());
+        assertEquals(legacy, Files.readString(file));
+        ScoreRecord hard = repository.add("어려움", 200, Difficulty.HARD).orElseThrow();
+        ScoreRecord easy = repository.add("쉬움", 150, Difficulty.EASY).orElseThrow();
+        assertEquals(List.of(hard, easy, first), repository().load());
+        assertTrue(Files.readString(file).contains("version=2"));
+        assertEquals(Difficulty.NORMAL, repository().load().getLast().difficulty());
+    }
+
+    @Test
+    void modernRecordsCannotSilentlyLoseDifficulty() throws Exception {
+        Path file = directory.resolve("scores.properties");
+        repository().add("기록", 100, Difficulty.HARD);
+        String valid = Files.readString(file);
+        for (String invalid : new String[]{valid.replace("difficulty=HARD", "difficulty=UNKNOWN"),
+                valid.replaceAll("(?m)^record\\.\\d+\\.difficulty=.*\\R?", "")}) {
+            Files.writeString(file, invalid);
+            assertThrows(IOException.class, () -> repository().load());
+            assertEquals(invalid, Files.readString(file));
+        }
+    }
 
     @Test
     void emptyBoardQualifiesEvenForAZeroScore() throws Exception {
@@ -75,7 +106,7 @@ class ScoreboardRepositoryTest {
     @Test
     void corruptDataDoesNotGetSilentlyOverwrittenByAddingAScore() throws Exception {
         Path file = directory.resolve("scores.properties");
-        for (String invalid : new String[]{"version=2\ncount=0", "version=1\ncount=-1",
+        for (String invalid : new String[]{"version=3\ncount=0", "version=1\ncount=-1",
                 "version=1\ncount=20", "version=1\ncount=no", "missing=version", "bad=\\uXXXX"}) {
             Files.writeString(file, invalid);
             assertThrows(IOException.class, () -> repository().load());

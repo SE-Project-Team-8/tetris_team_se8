@@ -2,6 +2,7 @@ package com.team.tetris.scoreboard;
 
 import com.team.tetris.common.constants.GameConstants;
 import com.team.tetris.common.persistence.PropertiesFile;
+import com.team.tetris.common.Difficulty;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -42,7 +43,7 @@ public final class ScoreboardRepository {
         Properties properties = PropertiesFile.read(file);
         if (properties.isEmpty()) return List.of();
         try {
-            PropertiesFile.requireVersion(properties);
+            int version = PropertiesFile.requireVersion(properties, 1, 2);
             int count = Integer.parseInt(PropertiesFile.required(properties, "count"));
             if (count < 0 || count > properties.size() / 4) {
                 throw new IllegalArgumentException("Invalid score count");
@@ -55,7 +56,9 @@ public final class ScoreboardRepository {
                         UUID.fromString(PropertiesFile.required(properties, prefix + "id")),
                         PropertiesFile.required(properties, prefix + "name"),
                         Integer.parseInt(PropertiesFile.required(properties, prefix + "score")),
-                        Instant.parse(PropertiesFile.required(properties, prefix + "recordedAt")));
+                        Instant.parse(PropertiesFile.required(properties, prefix + "recordedAt")),
+                        version == 1 ? Difficulty.NORMAL
+                                : Difficulty.valueOf(PropertiesFile.required(properties, prefix + "difficulty")));
                 if (!ids.add(record.id())) throw new IllegalArgumentException("Duplicate record ID");
                 records.add(record);
             }
@@ -74,7 +77,11 @@ public final class ScoreboardRepository {
 
     /** Save only a qualifying result. The returned ID can be used for UI highlighting. */
     public synchronized Optional<ScoreRecord> add(String name, int score) throws IOException {
-        ScoreRecord record = new ScoreRecord(name, score);
+        return add(name, score, Difficulty.NORMAL);
+    }
+
+    public synchronized Optional<ScoreRecord> add(String name, int score, Difficulty difficulty) throws IOException {
+        ScoreRecord record = new ScoreRecord(name, score, difficulty);
         List<ScoreRecord> records = new ArrayList<>(load());
         if (records.size() == capacity && score <= records.getLast().score()) return Optional.empty();
         records.add(record);
@@ -89,7 +96,7 @@ public final class ScoreboardRepository {
 
     private void save(List<ScoreRecord> records) throws IOException {
         Properties properties = new Properties();
-        properties.setProperty("version", "1");
+        properties.setProperty("version", "2");
         properties.setProperty("count", Integer.toString(records.size()));
         for (int i = 0; i < records.size(); i++) {
             ScoreRecord record = records.get(i);
@@ -98,6 +105,7 @@ public final class ScoreboardRepository {
             properties.setProperty(prefix + "name", record.name());
             properties.setProperty(prefix + "score", Integer.toString(record.score()));
             properties.setProperty(prefix + "recordedAt", record.recordedAt().toString());
+            properties.setProperty(prefix + "difficulty", record.difficulty().name());
         }
         PropertiesFile.write(file, properties);
     }

@@ -52,8 +52,12 @@ public final class PropertiesFile {
     }
 
     public static void requireVersion(Properties properties) {
-        if (!"1".equals(required(properties, "version"))) {
-            throw new IllegalArgumentException("Unsupported data version");
-        }
+        requireVersion(properties, 1);
+    }
+
+    public static int requireVersion(Properties properties, int... supported) {
+        int version = Integer.parseInt(required(properties, "version"));
+        for (int accepted : supported) if (version == accepted) return version;
+        throw new IllegalArgumentException("Unsupported data version: " + version);
     }
 }
