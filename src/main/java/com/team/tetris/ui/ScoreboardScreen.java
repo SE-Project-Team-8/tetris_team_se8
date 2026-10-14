@@ -166,12 +166,15 @@ public final class ScoreboardScreen extends JPanel implements Screen {
 
         results.getColumnModel().getColumn(0).setPreferredWidth(76);
         results.getColumnModel().getColumn(0).setMaxWidth(88);
-        results.getColumnModel().getColumn(1).setPreferredWidth(240);
-        results.getColumnModel().getColumn(2).setPreferredWidth(116);
+        results.getColumnModel().getColumn(1).setPreferredWidth(160);
+        results.getColumnModel().getColumn(2).setPreferredWidth(110);
+        results.getColumnModel().getColumn(3).setPreferredWidth(100);
         results.getColumnModel().getColumn(0).setCellRenderer(new ScoreCellRenderer(SwingConstants.CENTER));
         results.getColumnModel().getColumn(1).setCellRenderer(new ScoreCellRenderer(SwingConstants.LEFT));
-        results.getColumnModel().getColumn(2).setCellRenderer(new ScoreCellRenderer(SwingConstants.RIGHT));
-        results.getColumnModel().getColumn(2).setHeaderRenderer(new HeaderRenderer(SwingConstants.RIGHT));
+        results.getColumnModel().getColumn(2).setCellRenderer(new ScoreCellRenderer(SwingConstants.CENTER));
+        results.getColumnModel().getColumn(3).setCellRenderer(new ScoreCellRenderer(SwingConstants.RIGHT));
+        results.getColumnModel().getColumn(2).setHeaderRenderer(new HeaderRenderer(SwingConstants.CENTER));
+        results.getColumnModel().getColumn(3).setHeaderRenderer(new HeaderRenderer(SwingConstants.RIGHT));
         results.getColumnModel().getColumn(0).setHeaderRenderer(new HeaderRenderer(SwingConstants.CENTER));
         results.getColumnModel().getColumn(1).setHeaderRenderer(new HeaderRenderer(SwingConstants.LEFT));
     }
@@ -192,7 +195,7 @@ public final class ScoreboardScreen extends JPanel implements Screen {
                     : row % 2 == 0 ? PANEL_BACKGROUND : ROW_ALTERNATE);
             setForeground(highlighted ? ACCENT : column == 0 ? MUTED : Color.WHITE);
             setFont(new Font(Font.MONOSPACED, highlighted ? Font.BOLD : Font.PLAIN, 15));
-            setHorizontalAlignment(column == 0 ? SwingConstants.CENTER
+            setHorizontalAlignment(column == 0 || column == 2 ? SwingConstants.CENTER
                     : column == 1 ? SwingConstants.LEFT : SwingConstants.RIGHT);
             setBorder(BorderFactory.createEmptyBorder(0, 14, 0, 14));
             if (column == 0) {
@@ -216,8 +219,8 @@ public final class ScoreboardScreen extends JPanel implements Screen {
             super.getTableCellRendererComponent(table, value, false, false, row, column);
             setForeground(ACCENT);
             setBackground(new Color(27, 33, 44));
-            setFont(new Font(Font.MONOSPACED, Font.BOLD, 15));
-            setHorizontalAlignment(column == 0 ? SwingConstants.CENTER
+            setFont(new Font(Font.MONOSPACED, Font.BOLD, column == 2 ? 12 : 15));
+            setHorizontalAlignment(column == 0 || column == 2 ? SwingConstants.CENTER
                     : column == 1 ? SwingConstants.LEFT : SwingConstants.RIGHT);
             setBorder(BorderFactory.createEmptyBorder(0, 14, 0, 14));
             return this;
@@ -225,7 +228,7 @@ public final class ScoreboardScreen extends JPanel implements Screen {
     }
 
     private static final class ScoreTableModel extends AbstractTableModel {
-        private static final String[] COLUMNS = {"RANK", "PLAYER", "SCORE"};
+        private static final String[] COLUMNS = {"RANK", "PLAYER", "DIFFICULTY", "SCORE"};
         private List<ScoreRecord> records = List.of();
 
         private void setRecords(List<ScoreRecord> records) {
@@ -247,7 +250,8 @@ public final class ScoreboardScreen extends JPanel implements Screen {
             return switch (column) {
                 case 0 -> row + 1;
                 case 1 -> record.name();
-                case 2 -> record.score();
+                case 2 -> record.difficulty().label();
+                case 3 -> record.score();
                 default -> throw new IndexOutOfBoundsException("Unknown scoreboard column: " + column);
             };
         }

@@ -2,6 +2,7 @@ package com.team.tetris.game;
 
 import com.team.tetris.common.events.BoardSnapshot;
 import com.team.tetris.common.events.GameEventListener;
+import com.team.tetris.common.Difficulty;
 import com.team.tetris.settings.KeyBindings;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -28,7 +29,8 @@ class GameEngineTest {
         board = new FakeBoard();
         timer = new ManualTimer();
         events = new Events();
-        engine = new GameEngine(board, events, new ScoreCalculator(), timer);
+        engine = new GameEngine(board, events, new ScoreCalculator(), new DefaultSpeedPolicy(),
+                timer, new ManualTimer(), () -> Difficulty.NORMAL);
     }
 
     @Test
@@ -274,7 +276,8 @@ class GameEngineTest {
         };
         SpeedPolicy customSpeed = (blocks, lines) ->
                 new SpeedPolicy.Speed(1 + blocks, 600 - blocks * 20);
-        engine = new GameEngine(board, events, customScore, customSpeed, timer);
+        engine = new GameEngine(board, events, customScore, customSpeed, timer,
+                new ManualTimer(), () -> Difficulty.NORMAL);
 
         edt(() -> {
             engine.start();
@@ -299,9 +302,9 @@ class GameEngineTest {
         AtomicLong firstDrop = new AtomicLong();
         AtomicLong started = new AtomicLong();
         GameEngine realEngine = new GameEngine(board, new Events() {
-            @Override public void onScoreChanged(int score) {
-                super.onScoreChanged(score);
-                if (score > 0 && firstDrop.compareAndSet(0, System.nanoTime())) dropped.countDown();
+            @Override public void onBoardUpdated(BoardSnapshot snapshot) {
+                super.onBoardUpdated(snapshot);
+                if (board.downCalls > 0 && firstDrop.compareAndSet(0, System.nanoTime())) dropped.countDown();
             }
         });
         try {

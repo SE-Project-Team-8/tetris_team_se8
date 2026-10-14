@@ -1,6 +1,7 @@
 package com.team.tetris.settings;
 
 import com.team.tetris.common.persistence.PropertiesFile;
+import com.team.tetris.common.Difficulty;
 import com.team.tetris.game.GameAction;
 
 import java.io.IOException;
@@ -25,7 +26,7 @@ public final class SettingsRepository {
         Properties properties = PropertiesFile.read(file);
         if (properties.isEmpty()) return GameSettings.defaults();
         try {
-            PropertiesFile.requireVersion(properties);
+            int version = PropertiesFile.requireVersion(properties, 1, 2);
             EnumMap<GameAction, Integer> keys = new EnumMap<>(GameAction.class);
             for (GameAction action : GameAction.values()) {
                 keys.put(action, Integer.parseInt(PropertiesFile.required(properties, "key." + action.name())));
@@ -33,7 +34,8 @@ public final class SettingsRepository {
             return new GameSettings(
                     GameSettings.ScreenSize.valueOf(PropertiesFile.required(properties, "screenSize")),
                     GameSettings.ColorBlindMode.valueOf(PropertiesFile.required(properties, "colorBlindMode")),
-                    new KeyBindings(keys));
+                    new KeyBindings(keys), version == 1 ? Difficulty.NORMAL
+                            : Difficulty.valueOf(PropertiesFile.required(properties, "difficulty")));
         } catch (IllegalArgumentException invalid) {
             throw new IOException("Invalid settings: " + file, invalid);
         }
@@ -42,7 +44,8 @@ public final class SettingsRepository {
     public synchronized void save(GameSettings settings) throws IOException {
         Objects.requireNonNull(settings, "settings");
         Properties properties = new Properties();
-        properties.setProperty("version", "1");
+        properties.setProperty("version", "2");
+        properties.setProperty("difficulty", settings.difficulty().name());
         properties.setProperty("screenSize", settings.screenSize().name());
         properties.setProperty("colorBlindMode", settings.colorBlindMode().name());
         settings.keyBindings().keys().forEach((action, key) ->
