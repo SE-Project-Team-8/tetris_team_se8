@@ -10,6 +10,7 @@ import java.awt.event.ActionEvent;
 import java.awt.event.KeyEvent;
 import java.util.Arrays;
 import java.util.Locale;
+import java.util.List;
 import java.util.Objects;
 import java.util.function.IntConsumer;
 
@@ -20,12 +21,16 @@ import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
 
 import com.team.tetris.block.ColorScheme;
+import com.team.tetris.block.Anvil;
+import com.team.tetris.block.Cell;
 import com.team.tetris.block.Rotation;
 import com.team.tetris.block.Tetromino;
 import com.team.tetris.block.TetrominoType;
 import com.team.tetris.common.Screen;
 import com.team.tetris.common.constants.GameConstants;
 import com.team.tetris.common.events.BoardSnapshot;
+import com.team.tetris.common.events.LineDeleteIds;
+import com.team.tetris.common.events.AnvilIds;
 import com.team.tetris.common.events.GameEventListener;
 import com.team.tetris.game.GameAction;
 import com.team.tetris.game.GameEngine;
@@ -303,11 +308,22 @@ public class GameScreen extends JPanel implements Screen {
         for (int row = 0; row < board.length; row++) {
             for (int col = 0; col < board[row].length; col++) {
                 int blockId = board[row][col];
+                if (blockId == AnvilIds.ANVIL_ID) {
+                    int cellX = x + col * cellSize;
+                    int cellY = y + row * cellSize;
+                    drawBlockCell(g2d, cellX, cellY, cellSize, TetrominoType.J, colorScheme);
+                    drawItemLetter(g2d, cellX, cellY, cellSize, "W");
+                    continue;
+                }
                 if (blockId != BoardSnapshot.EMPTY) {
-                    TetrominoType type = typeFromId(blockId);
+                    boolean itemCell = LineDeleteIds.isItemCell(blockId);
+                    TetrominoType type = typeFromId(itemCell ? LineDeleteIds.boardType(blockId) : blockId);
                     if (type != null) {
-                        drawBlockCell(g2d, x + col * cellSize, y + row * cellSize,
+                        int cellX = x + col * cellSize;
+                        int cellY = y + row * cellSize;
+                        drawBlockCell(g2d, cellX, cellY,
                                 cellSize, type, colorScheme);
+                        if (itemCell) drawItemLetter(g2d, cellX, cellY, cellSize, "L");
                     }
                 }
             }
@@ -362,17 +378,29 @@ public class GameScreen extends JPanel implements Screen {
     }
 
     private void drawPreview(Graphics2D g2d, int blockId, int x, int y, int width, int height) {
-        TetrominoType type = typeFromId(blockId);
+        if (blockId == AnvilIds.ANVIL_ID) {
+            drawPreviewShape(g2d, new Anvil(0, 0).cells(), TetrominoType.J,
+                    -1, true, x, y, width, height);
+            return;
+        }
+        boolean item = LineDeleteIds.isItemPreview(blockId);
+        TetrominoType type = typeFromId(item ? LineDeleteIds.previewType(blockId) : blockId);
         if (type == null) {
             return;
         }
 
         // 각 블록의 회전 격자에는 빈 테두리가 있을 수 있으므로 실제 점유 셀 범위만 찾아 중앙에 맞춘다.
         Tetromino piece = new Tetromino(type, Rotation.SPAWN, 0, 0);
-        int minRow = piece.cells().stream().mapToInt(cell -> cell.row()).min().orElse(0);
-        int maxRow = piece.cells().stream().mapToInt(cell -> cell.row()).max().orElse(0);
-        int minCol = piece.cells().stream().mapToInt(cell -> cell.col()).min().orElse(0);
-        int maxCol = piece.cells().stream().mapToInt(cell -> cell.col()).max().orElse(0);
+        drawPreviewShape(g2d, piece.cells(), type,
+                item ? LineDeleteIds.previewCellIndex(blockId) : -1, false, x, y, width, height);
+    }
+
+    private void drawPreviewShape(Graphics2D g2d, List<Cell> occupied, TetrominoType type,
+            int itemIndex, boolean anvil, int x, int y, int width, int height) {
+        int minRow = occupied.stream().mapToInt(Cell::row).min().orElse(0);
+        int maxRow = occupied.stream().mapToInt(Cell::row).max().orElse(0);
+        int minCol = occupied.stream().mapToInt(Cell::col).min().orElse(0);
+        int maxCol = occupied.stream().mapToInt(Cell::col).max().orElse(0);
         int previewCellSize = Math.min(16, Math.min(
                 (width - 20) / (maxCol - minCol + 1),
                 (height - 12) / (maxRow - minRow + 1)));
@@ -381,11 +409,29 @@ public class GameScreen extends JPanel implements Screen {
         int shapeX = x + (width - shapeWidth) / 2;
         int shapeY = y + (height - shapeHeight) / 2;
 
-        for (var cell : piece.cells()) {
+        for (int index = 0; index < occupied.size(); index++) {
+            var cell = occupied.get(index);
             int cellX = shapeX + (cell.col() - minCol) * previewCellSize;
             int cellY = shapeY + (cell.row() - minRow) * previewCellSize;
             drawBlockCell(g2d, cellX, cellY, previewCellSize, type, colorScheme);
+            if (anvil || index == itemIndex) {
+                drawItemLetter(g2d, cellX, cellY, previewCellSize, anvil ? "W" : "L");
+            }
         }
+    }
+
+    private static void drawItemLetter(Graphics2D g2d, int x, int y, int size, String letter) {
+        g2d.setFont(new Font(Font.MONOSPACED, Font.BOLD, Math.max(12, size * 2 / 3)));
+        FontMetrics metrics = g2d.getFontMetrics();
+        int letterX = x + (size - metrics.stringWidth(letter)) / 2;
+        int letterY = y + (size - metrics.getHeight()) / 2 + metrics.getAscent();
+        g2d.setColor(Color.BLACK);
+        g2d.drawString(letter, letterX - 1, letterY);
+        g2d.drawString(letter, letterX + 1, letterY);
+        g2d.drawString(letter, letterX, letterY - 1);
+        g2d.drawString(letter, letterX, letterY + 1);
+        g2d.setColor(Color.WHITE);
+        g2d.drawString(letter, letterX, letterY);
     }
 
     private static void drawBlockCell(Graphics2D g2d, int x, int y, int size,

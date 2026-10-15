@@ -26,8 +26,12 @@ public final class GameEngine implements AutoCloseable {
         boolean rotateClockwise();
         /** Move to the last legal row, return actual distance; do not lock/spawn. */
         int hardDrop();
+        /** Weights award neither gravity/soft-drop nor hard-drop points. */
+        default boolean awardsDropPoints() { return true; }
         /** Lock once and clear full rows; report overflow above the board as topOut. */
         LockResult lockAndClearLines();
+        /** Item carried by the piece fixed by the latest lockAndClearLines(); NONE for regular pieces. */
+        default ItemType lockedItem() { return ItemType.NONE; }
         /** Composed 20 x 10 board; EMPTY = -1; falling piece is included. */
         BoardSnapshot snapshot();
         /** Preview block IDs use the block/UI team's agreed 0..6 mapping. */
@@ -164,7 +168,9 @@ public final class GameEngine implements AutoCloseable {
     }
 
     private boolean hardDrop() {
-        award(scoring.dropPoints(board.hardDrop(), getLevel()));
+        boolean awardsPoints = board.awardsDropPoints();
+        int distance = board.hardDrop();
+        if (awardsPoints) award(scoring.dropPoints(distance, getLevel()));
         lockAndAdvance();
         return true;
     }
@@ -188,7 +194,7 @@ public final class GameEngine implements AutoCloseable {
 
     private boolean dropOneCell() {
         if (board.moveDown()) {
-            award(scoring.dropPoints(1, getLevel()));
+            if (board.awardsDropPoints()) award(scoring.dropPoints(1, getLevel()));
             publishBoard();
         } else {
             lockAndAdvance();
