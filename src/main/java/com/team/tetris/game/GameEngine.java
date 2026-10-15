@@ -13,6 +13,10 @@ import java.util.Objects;
  * this class. See docs/person2-integration.md for the block adapter contract.
  */
 public final class GameEngine implements AutoCloseable {
+    /** Fever item: every point earned while it lasts is doubled. */
+    public static final int FEVER_SECONDS = 10;
+    public static final int FEVER_MULTIPLIER = 2;
+
     /** BlockBoardDriver adapts the block package without adding a game dependency to it. */
     public interface BoardDriver {
         /** Empty the board and preview; do not spawn a block. */
@@ -26,8 +30,12 @@ public final class GameEngine implements AutoCloseable {
         boolean rotateClockwise();
         /** Move to the last legal row, return actual distance; do not lock/spawn. */
         int hardDrop();
+        /** Weights award neither gravity/soft-drop nor hard-drop points. */
+        default boolean awardsDropPoints() { return true; }
         /** Lock once and clear full rows; report overflow above the board as topOut. */
         LockResult lockAndClearLines();
+        /** Item carried by the piece fixed by the latest lockAndClearLines(); NONE for regular pieces. */
+        default ItemType lockedItem() { return ItemType.NONE; }
         /** Composed 20 x 10 board; EMPTY = -1; falling piece is included. */
         BoardSnapshot snapshot();
         /** Preview block IDs use the block/UI team's agreed 0..6 mapping. */
@@ -70,12 +78,15 @@ public final class GameEngine implements AutoCloseable {
     private final ScoringPolicy scoring;
     private final SpeedPolicy speedPolicy;
     private final DropTimer timer;
+    private final DropTimer feverTimer;
     private GameState state = GameState.READY;
     private int score;
     private SpeedPolicy.Speed speed;
     private int generatedBlocks;
     private int clearedLines;
     private long timerGeneration;
+    private int feverSeconds;
+    private long feverGeneration;
 
     public GameEngine(BoardDriver board, GameEventListener listener) {
         this(board, listener, new ScoreCalculator(), new DefaultSpeedPolicy(), new SwingDropTimer());
@@ -87,12 +98,19 @@ public final class GameEngine implements AutoCloseable {
 
     public GameEngine(BoardDriver board, GameEventListener listener, ScoringPolicy scoring,
                       SpeedPolicy speedPolicy, DropTimer timer) {
+        this(board, listener, scoring, speedPolicy, timer, new SwingDropTimer());
+    }
+
+    /** The fever timer ticks once per second while a fever item is active. */
+    public GameEngine(BoardDriver board, GameEventListener listener, ScoringPolicy scoring,
+                      SpeedPolicy speedPolicy, DropTimer timer, DropTimer feverTimer) {
         this.board = Objects.requireNonNull(board, "board");
         this.listener = Objects.requireNonNull(listener, "listener");
         this.scoring = Objects.requireNonNull(scoring, "scoring");
         this.speedPolicy = Objects.requireNonNull(speedPolicy, "speedPolicy");
         this.speed = Objects.requireNonNull(speedPolicy.calculate(0, 0), "speed");
         this.timer = Objects.requireNonNull(timer, "timer");
+        this.feverTimer = Objects.requireNonNull(feverTimer, "feverTimer");
     }
 
     /** Start a fresh game. Resume a paused game with resume(), not start(). */
@@ -101,6 +119,7 @@ public final class GameEngine implements AutoCloseable {
         if (state == GameState.RUNNING || state == GameState.PAUSED) return false;
         cancelTimer();
         board.reset();
+        setFeverSeconds(0);
         score = 0;
         generatedBlocks = 0;
         clearedLines = 0;
@@ -133,6 +152,7 @@ public final class GameEngine implements AutoCloseable {
         if (state != GameState.PAUSED) return false;
         transition(GameState.RUNNING);
         scheduleTimer();
+        if (feverSeconds > 0) scheduleFeverTimer();
         listener.onPauseStateChanged(false);
         return true;
     }
@@ -164,7 +184,9 @@ public final class GameEngine implements AutoCloseable {
     }
 
     private boolean hardDrop() {
-        award(scoring.dropPoints(board.hardDrop(), getLevel()));
+        boolean awardsPoints = board.awardsDropPoints();
+        int distance = board.hardDrop();
+        if (awardsPoints) award(scoring.dropPoints(distance, getLevel()));
         lockAndAdvance();
         return true;
     }
@@ -174,6 +196,8 @@ public final class GameEngine implements AutoCloseable {
     public int getLevel() { return speed.level(); }
     public int getGeneratedBlocks() { return generatedBlocks; }
     public int getClearedLines() { return clearedLines; }
+    /** Remaining fever time in seconds; 0 when no fever is active. */
+    public int getFeverSeconds() { return feverSeconds; }
 
     public int getDropIntervalMillis() {
         return speed.dropIntervalMillis();
@@ -188,7 +212,7 @@ public final class GameEngine implements AutoCloseable {
 
     private boolean dropOneCell() {
         if (board.moveDown()) {
-            award(scoring.dropPoints(1, getLevel()));
+            if (board.awardsDropPoints()) award(scoring.dropPoints(1, getLevel()));
             publishBoard();
         } else {
             lockAndAdvance();
@@ -200,6 +224,8 @@ public final class GameEngine implements AutoCloseable {
         LockResult result = Objects.requireNonNull(board.lockAndClearLines(), "lock result");
         award(scoring.lineClearPoints(result.clearedLines(), getLevel()));
         clearedLines = addCount(clearedLines, result.clearedLines());
+        // Item effects start after the locked piece's own points are awarded.
+        activateItem(Objects.requireNonNull(board.lockedItem(), "locked item"));
         if (result.topOut()) {
             gameOver();
             return;
@@ -211,6 +237,14 @@ public final class GameEngine implements AutoCloseable {
         scheduleTimer();
         publishBoard();
         publishPreview();
+    }
+
+    private void activateItem(ItemType item) {
+        if (item == ItemType.FEVER) {
+            // A second fever refreshes the countdown to ten seconds instead of stacking.
+            setFeverSeconds(FEVER_SECONDS);
+            scheduleFeverTimer();
+        }
     }
 
     private boolean spawn() {
@@ -237,6 +271,7 @@ public final class GameEngine implements AutoCloseable {
 
     private void award(int points) {
         if (points == 0) return;
+        if (feverSeconds > 0) points = (int) Math.min(Integer.MAX_VALUE, (long) points * FEVER_MULTIPLIER);
         int updated = scoring.add(score, points);
         if (updated != score) {
             score = updated;
@@ -270,7 +305,29 @@ public final class GameEngine implements AutoCloseable {
 
     private void cancelTimer() {
         timerGeneration++;
+        feverGeneration++;
         timer.stop();
+        feverTimer.stop();
+    }
+
+    /** Independent from gravity: spawning a block never restarts the fever countdown. */
+    private void scheduleFeverTimer() {
+        long generation = ++feverGeneration;
+        feverTimer.start(1000, () -> {
+            requireEdt();
+            if (generation != feverGeneration || state != GameState.RUNNING) return;
+            setFeverSeconds(feverSeconds - 1);
+            if (feverSeconds == 0) {
+                feverGeneration++;
+                feverTimer.stop();
+            }
+        });
+    }
+
+    private void setFeverSeconds(int seconds) {
+        if (seconds == feverSeconds) return;
+        feverSeconds = seconds;
+        listener.onFeverChanged(seconds);
     }
 
     private void transition(GameState next) {

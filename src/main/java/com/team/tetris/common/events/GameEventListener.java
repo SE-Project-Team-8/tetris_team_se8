@@ -12,4 +12,7 @@ public interface GameEventListener {
     void onPauseStateChanged(boolean paused);
 
     void onGameOver(int score);
+
+    /** Remaining seconds of the fever item's double score; 0 when the fever ends. */
+    default void onFeverChanged(int remainingSeconds) { }
 }
