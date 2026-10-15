@@ -26,8 +26,12 @@ public final class GameEngine implements AutoCloseable {
         boolean rotateClockwise();
         /** Move to the last legal row, return actual distance; do not lock/spawn. */
         int hardDrop();
+        /** Weights award neither gravity/soft-drop nor hard-drop points. */
+        default boolean awardsDropPoints() { return true; }
         /** Lock once and clear full rows; report overflow above the board as topOut. */
         LockResult lockAndClearLines();
+        /** Item carried by the piece fixed by the latest lockAndClearLines(); NONE for regular pieces. */
+        default ItemType lockedItem() { return ItemType.NONE; }
         /** Composed 20 x 10 board; EMPTY = -1; falling piece is included. */
         BoardSnapshot snapshot();
         /** Preview block IDs use the block/UI team's agreed 0..6 mapping. */
@@ -76,6 +80,7 @@ public final class GameEngine implements AutoCloseable {
     private int generatedBlocks;
     private int clearedLines;
     private long timerGeneration;
+    private int slowdownSteps;
 
     public GameEngine(BoardDriver board, GameEventListener listener) {
         this(board, listener, new ScoreCalculator(), new DefaultSpeedPolicy(), new SwingDropTimer());
@@ -104,6 +109,7 @@ public final class GameEngine implements AutoCloseable {
         score = 0;
         generatedBlocks = 0;
         clearedLines = 0;
+        slowdownSteps = 0;
         updateSpeed();
         transition(GameState.RUNNING);
         listener.onPauseStateChanged(false);
@@ -164,7 +170,9 @@ public final class GameEngine implements AutoCloseable {
     }
 
     private boolean hardDrop() {
-        award(scoring.dropPoints(board.hardDrop(), getLevel()));
+        boolean awardsPoints = board.awardsDropPoints();
+        int distance = board.hardDrop();
+        if (awardsPoints) award(scoring.dropPoints(distance, getLevel()));
         lockAndAdvance();
         return true;
     }
@@ -188,7 +196,7 @@ public final class GameEngine implements AutoCloseable {
 
     private boolean dropOneCell() {
         if (board.moveDown()) {
-            award(scoring.dropPoints(1, getLevel()));
+            if (board.awardsDropPoints()) award(scoring.dropPoints(1, getLevel()));
             publishBoard();
         } else {
             lockAndAdvance();
@@ -200,6 +208,8 @@ public final class GameEngine implements AutoCloseable {
         LockResult result = Objects.requireNonNull(board.lockAndClearLines(), "lock result");
         award(scoring.lineClearPoints(result.clearedLines(), getLevel()));
         clearedLines = addCount(clearedLines, result.clearedLines());
+        // Item effects start after the locked piece's own points are awarded.
+        activateItem(Objects.requireNonNull(board.lockedItem(), "locked item"));
         if (result.topOut()) {
             gameOver();
             return;
@@ -213,6 +223,14 @@ public final class GameEngine implements AutoCloseable {
         publishPreview();
     }
 
+    private void activateItem(ItemType item) {
+        if (item == ItemType.SLOW_DOWN && getLevel() > 1) {
+            // Level 1 has nothing to lower, so the item is not saved for a later level-up.
+            slowdownSteps++;
+            updateSpeed();
+        }
+    }
+
     private boolean spawn() {
         if (!board.spawnNextBlock()) return false;
         generatedBlocks = addCount(generatedBlocks, 1);
@@ -221,7 +239,8 @@ public final class GameEngine implements AutoCloseable {
     }
 
     private void updateSpeed() {
-        speed = Objects.requireNonNull(speedPolicy.calculate(generatedBlocks, clearedLines), "speed");
+        speed = Objects.requireNonNull(
+                speedPolicy.calculate(generatedBlocks, clearedLines, slowdownSteps), "speed");
     }
 
     private static int addCount(int count, int increment) {

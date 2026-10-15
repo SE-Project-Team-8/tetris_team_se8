@@ -7,10 +7,12 @@ import com.team.tetris.block.TetrominoGenerator;
 import com.team.tetris.block.TetrominoType;
 import com.team.tetris.common.events.BoardSnapshot;
 import com.team.tetris.common.events.GameEventListener;
+import com.team.tetris.common.events.LineDeleteIds;
 import org.junit.jupiter.api.Test;
 
 import javax.swing.SwingUtilities;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.Random;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -137,6 +139,94 @@ class BlockBoardDriverTest {
             assertEquals(TetrominoType.O.id(), listener.board.cells()[19][4]);
             assertEquals(TetrominoType.O.id(), listener.board.cells()[0][4]);
             assertEquals(2, engine.getGeneratedBlocks());
+            engine.close();
+        });
+    }
+
+    @Test
+    void itemAppearsAfterTenClearedLinesAndDeletesItsPartialRow() {
+        Board board = new Board();
+        Random chooseThirdCell = new Random() {
+            @Override public int nextInt(int bound) { return 2; }
+        };
+        BlockBoardDriver driver = new BlockBoardDriver(board, sequence(TetrominoType.O),
+                chooseThirdCell, () -> ItemType.LINE_DELETE);
+        driver.setItemMode(true);
+        driver.reset();
+        for (int round = 0; round < 5; round++) {
+            assertTrue(driver.spawnNextBlock());
+            for (int col : new int[]{0, 2, 6, 8}) {
+                assertTrue(board.tryPlace(new Tetromino(TetrominoType.O, Rotation.SPAWN, 18, col)));
+            }
+            driver.hardDrop();
+            assertEquals(2, driver.lockAndClearLines().clearedLines());
+        }
+        assertArrayEquals(new int[]{TetrominoType.O.id()}, driver.nextBlockTypes());
+        assertTrue(driver.spawnNextBlock());
+        assertArrayEquals(new int[]{LineDeleteIds.preview(TetrominoType.O.id(), 2)},
+                driver.nextBlockTypes());
+        driver.hardDrop();
+        assertEquals(0, driver.lockAndClearLines().clearedLines());
+
+        assertTrue(driver.spawnNextBlock());
+        assertEquals(LineDeleteIds.boardCell(TetrominoType.O.id()), driver.snapshot().cells()[1][4]);
+        driver.hardDrop();
+        assertEquals(1, driver.lockAndClearLines().clearedLines(),
+                "L removes its row even when only two cells are occupied");
+        assertEquals(ItemType.LINE_DELETE, driver.lockedItem(), "The engine can see which item was locked");
+        assertEquals(BoardSnapshot.EMPTY, board.cellAt(16, 4).map(TetrominoType::id)
+                .orElse(BoardSnapshot.EMPTY));
+        assertEquals(TetrominoType.O, board.cellAt(17, 4).orElseThrow(),
+                "The row above the deleted row falls down");
+    }
+
+    @Test
+    void normalModeNeverAddsAnItemAfterTenLines() {
+        Board board = new Board();
+        BlockBoardDriver driver = new BlockBoardDriver(board, sequence(TetrominoType.O));
+        driver.reset();
+        for (int round = 0; round < 5; round++) {
+            assertTrue(driver.spawnNextBlock());
+            for (int col : new int[]{0, 2, 6, 8}) {
+                assertTrue(board.tryPlace(new Tetromino(TetrominoType.O, Rotation.SPAWN, 18, col)));
+            }
+            driver.hardDrop();
+            assertEquals(2, driver.lockAndClearLines().clearedLines());
+        }
+        assertTrue(driver.spawnNextBlock());
+        assertArrayEquals(new int[]{TetrominoType.O.id()}, driver.nextBlockTypes());
+    }
+
+    @Test
+    void itemLineUsesTheOrdinaryLineScoringRule() throws Exception {
+        Board board = new Board();
+        BlockBoardDriver driver = new BlockBoardDriver(board, sequence(TetrominoType.O), new Random() {
+            @Override public int nextInt(int bound) { return 2; }
+        }, () -> ItemType.LINE_DELETE);
+        driver.setItemMode(true);
+        Scores listener = new Scores();
+        GameEngine.DropTimer timer = new GameEngine.DropTimer() {
+            public void start(int intervalMillis, Runnable tick) { }
+            public void stop() { }
+        };
+        GameEngine engine = new GameEngine(driver, listener, new ScoreCalculator(), timer);
+        SwingUtilities.invokeAndWait(() -> {
+            assertTrue(engine.start());
+            for (int round = 0; round < 5; round++) {
+                for (int col : new int[]{0, 2, 6, 8}) {
+                    assertTrue(board.tryPlace(new Tetromino(TetrominoType.O, Rotation.SPAWN, 18, col)));
+                }
+                assertTrue(engine.handle(GameAction.HARD_DROP));
+            }
+            assertEquals(10, engine.getClearedLines());
+            assertTrue(engine.handle(GameAction.HARD_DROP));
+            int scoreBeforeItem = engine.getScore();
+            int level = engine.getLevel();
+            assertTrue(engine.handle(GameAction.HARD_DROP));
+            assertEquals(11, engine.getClearedLines());
+            assertEquals(new ScoreCalculator().dropPoints(16, level)
+                    + new ScoreCalculator().lineClearPoints(1, level),
+                    engine.getScore() - scoreBeforeItem);
             engine.close();
         });
     }
