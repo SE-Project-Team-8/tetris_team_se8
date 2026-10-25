@@ -1,5 +1,6 @@
 package com.team.tetris.ui;
 
+import com.team.tetris.common.Difficulty;
 import com.team.tetris.common.Screen;
 import com.team.tetris.scoreboard.ScoreRecord;
 import com.team.tetris.scoreboard.ScoreboardRepository;
@@ -24,6 +25,8 @@ import java.awt.Color;
 import java.awt.Component;
 import java.awt.FlowLayout;
 import java.awt.Font;
+import java.awt.FontMetrics;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -36,6 +39,10 @@ public final class ScoreboardScreen extends JPanel implements Screen {
     private static final Color HIGHLIGHT_BACKGROUND = new Color(0, 65, 75);
     private static final Color ACCENT = Color.CYAN;
     private static final Color MUTED = new Color(155, 165, 180);
+    private static final int CELL_PADDING = 6;
+    private static final Font BODY_FONT = new Font(Font.MONOSPACED, Font.BOLD, 15);
+    private static final Font HEADER_FONT = new Font(Font.MONOSPACED, Font.BOLD, 15);
+    private static final Font NARROW_HEADER_FONT = new Font(Font.MONOSPACED, Font.BOLD, 12);
 
     private final ScreenRouter router;
     private final ScoreboardRepository repository;
@@ -164,19 +171,49 @@ public final class ScoreboardScreen extends JPanel implements Screen {
         header.setFont(new Font(Font.MONOSPACED, Font.BOLD, 15));
         header.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, new Color(55, 70, 88)));
 
-        results.getColumnModel().getColumn(0).setPreferredWidth(76);
-        results.getColumnModel().getColumn(0).setMaxWidth(88);
-        results.getColumnModel().getColumn(1).setPreferredWidth(160);
-        results.getColumnModel().getColumn(2).setPreferredWidth(110);
-        results.getColumnModel().getColumn(3).setPreferredWidth(100);
-        results.getColumnModel().getColumn(0).setCellRenderer(new ScoreCellRenderer(SwingConstants.CENTER));
-        results.getColumnModel().getColumn(1).setCellRenderer(new ScoreCellRenderer(SwingConstants.LEFT));
-        results.getColumnModel().getColumn(2).setCellRenderer(new ScoreCellRenderer(SwingConstants.CENTER));
-        results.getColumnModel().getColumn(3).setCellRenderer(new ScoreCellRenderer(SwingConstants.RIGHT));
-        results.getColumnModel().getColumn(2).setHeaderRenderer(new HeaderRenderer(SwingConstants.CENTER));
-        results.getColumnModel().getColumn(3).setHeaderRenderer(new HeaderRenderer(SwingConstants.RIGHT));
-        results.getColumnModel().getColumn(0).setHeaderRenderer(new HeaderRenderer(SwingConstants.CENTER));
-        results.getColumnModel().getColumn(1).setHeaderRenderer(new HeaderRenderer(SwingConstants.LEFT));
+        for (int column = 0; column < tableModel.getColumnCount(); column++) {
+            int alignment = alignmentOf(column);
+            var tableColumn = results.getColumnModel().getColumn(column);
+            tableColumn.setCellRenderer(new ScoreCellRenderer(alignment));
+            tableColumn.setHeaderRenderer(new HeaderRenderer(alignment));
+            if (column == ScoreTableModel.PLAYER) {
+                // 이름 열이 남는 폭을 모두 받고, 좁은 창(480px)에서는 이 열만 줄어든다.
+                tableColumn.setMinWidth(60);
+                tableColumn.setPreferredWidth(400);
+            } else {
+                int width = fittedWidth(column);
+                tableColumn.setMinWidth(width);
+                tableColumn.setPreferredWidth(width);
+                tableColumn.setMaxWidth(width + 40);
+            }
+        }
+    }
+
+    /** 머리글과 가장 긴 값이 잘리지 않는 폭. 좁은 창에서도 DIFFICULTY·SCORE가 보이게 한다. */
+    private int fittedWidth(int column) {
+        List<String> values = switch (column) {
+            case ScoreTableModel.DIFFICULTY -> Arrays.stream(Difficulty.values()).map(Difficulty::label).toList();
+            case ScoreTableModel.SCORE -> List.of("999999");
+            default -> List.of("▶ 10");
+        };
+        FontMetrics body = results.getFontMetrics(BODY_FONT);
+        FontMetrics header = results.getFontMetrics(headerFontOf(column));
+        int widest = header.stringWidth(tableModel.getColumnName(column));
+        for (String value : values) widest = Math.max(widest, body.stringWidth(value));
+        return widest + CELL_PADDING * 2 + 2;
+    }
+
+    private static Font headerFontOf(int column) {
+        return column == ScoreTableModel.DIFFICULTY ? NARROW_HEADER_FONT : HEADER_FONT;
+    }
+
+    /** RANK·DIFFICULTY는 가운데, PLAYER는 왼쪽, SCORE는 오른쪽 정렬이다. */
+    private static int alignmentOf(int column) {
+        return switch (column) {
+            case ScoreTableModel.PLAYER -> SwingConstants.LEFT;
+            case ScoreTableModel.SCORE -> SwingConstants.RIGHT;
+            default -> SwingConstants.CENTER;
+        };
     }
 
     private final class ScoreCellRenderer extends DefaultTableCellRenderer {
@@ -195,9 +232,8 @@ public final class ScoreboardScreen extends JPanel implements Screen {
                     : row % 2 == 0 ? PANEL_BACKGROUND : ROW_ALTERNATE);
             setForeground(highlighted ? ACCENT : column == 0 ? MUTED : Color.WHITE);
             setFont(new Font(Font.MONOSPACED, highlighted ? Font.BOLD : Font.PLAIN, 15));
-            setHorizontalAlignment(column == 0 || column == 2 ? SwingConstants.CENTER
-                    : column == 1 ? SwingConstants.LEFT : SwingConstants.RIGHT);
-            setBorder(BorderFactory.createEmptyBorder(0, 14, 0, 14));
+            setHorizontalAlignment(alignmentOf(column));
+            setBorder(BorderFactory.createEmptyBorder(0, CELL_PADDING, 0, CELL_PADDING));
             if (column == 0) {
                 setText((highlighted ? "▶ " : "") + (row + 1));
             }
@@ -219,15 +255,17 @@ public final class ScoreboardScreen extends JPanel implements Screen {
             super.getTableCellRendererComponent(table, value, false, false, row, column);
             setForeground(ACCENT);
             setBackground(new Color(27, 33, 44));
-            setFont(new Font(Font.MONOSPACED, Font.BOLD, column == 2 ? 12 : 15));
-            setHorizontalAlignment(column == 0 || column == 2 ? SwingConstants.CENTER
-                    : column == 1 ? SwingConstants.LEFT : SwingConstants.RIGHT);
-            setBorder(BorderFactory.createEmptyBorder(0, 14, 0, 14));
+            setFont(headerFontOf(column));
+            setHorizontalAlignment(alignmentOf(column));
+            setBorder(BorderFactory.createEmptyBorder(0, CELL_PADDING, 0, CELL_PADDING));
             return this;
         }
     }
 
     private static final class ScoreTableModel extends AbstractTableModel {
+        private static final int PLAYER = 1;
+        private static final int DIFFICULTY = 2;
+        private static final int SCORE = 3;
         private static final String[] COLUMNS = {"RANK", "PLAYER", "DIFFICULTY", "SCORE"};
         private List<ScoreRecord> records = List.of();
 
@@ -249,9 +287,9 @@ public final class ScoreboardScreen extends JPanel implements Screen {
             ScoreRecord record = records.get(row);
             return switch (column) {
                 case 0 -> row + 1;
-                case 1 -> record.name();
-                case 2 -> record.difficulty().label();
-                case 3 -> record.score();
+                case PLAYER -> record.name();
+                case DIFFICULTY -> record.difficulty().label();
+                case SCORE -> record.score();
                 default -> throw new IndexOutOfBoundsException("Unknown scoreboard column: " + column);
             };
         }
