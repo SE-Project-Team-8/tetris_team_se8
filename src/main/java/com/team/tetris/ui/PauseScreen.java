@@ -57,6 +57,9 @@ public class PauseScreen extends JPanel implements Screen {
             @Override
             public void keyPressed(KeyEvent e) {
                 handleKeyPress(e.getKeyCode());
+                // 일시정지 화면에서 처리한 키가 아래에 남아 있는 게임 화면의 키 바인딩으로 넘어가지 않게 한다.
+                // 예: P가 아닌 키로 바꾼 일시정지 키가 재개 직후 다시 일시정지를 거는 문제.
+                e.consume();
             }
         });
     }

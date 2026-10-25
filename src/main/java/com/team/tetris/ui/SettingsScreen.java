@@ -119,6 +119,8 @@ public final class SettingsScreen extends JPanel implements Screen {
                         if (entry.getKey() != action && entry.getValue() == keyCode) {
                             showMessage("That key is already in use.", "Key Conflict",
                                     JOptionPane.WARNING_MESSAGE);
+                            // 충돌한 키(예: ESC)가 설정 화면의 단축키로 넘어가 화면을 닫지 않게 한다.
+                            event.consume();
                             return;
                         }
                     }
