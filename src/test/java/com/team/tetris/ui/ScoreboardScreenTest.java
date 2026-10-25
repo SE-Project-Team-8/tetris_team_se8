@@ -1,6 +1,7 @@
 package com.team.tetris.ui;
 
 import com.team.tetris.common.Difficulty;
+import com.team.tetris.common.GameMode;
 import com.team.tetris.scoreboard.ScoreRecord;
 import com.team.tetris.scoreboard.ScoreboardRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -29,12 +30,12 @@ class ScoreboardScreenTest {
         assumeFalse(GraphicsEnvironment.isHeadless(), "ScreenRouter is a window");
     }
 
-    /** 요구사항 2.1: 각 기록이 어느 난이도의 점수인지 가장 작은 창에서도 잘리지 않고 보인다. */
+    /** 요구사항 2.1·4.1: 각 기록이 어느 모드·난이도의 점수인지 가장 작은 창에서도 잘리지 않고 보인다. */
     @Test
-    void tableShowsDifficultyAndSixDigitScoresWithoutCuttingThemOffInTheSmallestWindow() throws Exception {
+    void tableShowsModeDifficultyAndSixDigitScoresWithoutCuttingThemOffInTheSmallestWindow() throws Exception {
         ScoreboardRepository repository = new ScoreboardRepository(directory.resolve("scores.properties"));
-        ScoreRecord best = repository.add("FirstPlayer", 999999, Difficulty.HARD).orElseThrow();
-        repository.add("SecondPlayer", 200, Difficulty.EASY);
+        ScoreRecord best = repository.add("ItemPlayer", 999999, Difficulty.HARD, GameMode.ITEM).orElseThrow();
+        repository.add("NormalPlayer", 200, Difficulty.EASY, GameMode.NORMAL);
         ScreenRouter[] router = new ScreenRouter[1];
         ScoreboardScreen[] screen = new ScoreboardScreen[1];
         edt(() -> {
@@ -51,11 +52,11 @@ class ScoreboardScreenTest {
             try {
                 List<String> headers = new ArrayList<>();
                 for (int column = 0; column < table.getColumnCount(); column++) headers.add(table.getColumnName(column));
-                assertEquals(List.of("RANK", "PLAYER", "DIFFICULTY", "SCORE"), headers);
-                assertEquals(List.of(1, "FirstPlayer", "Hard", 999999), row(table, 0));
-                assertEquals(List.of(2, "SecondPlayer", "Easy", 200), row(table, 1));
+                assertEquals(List.of("RANK", "PLAYER", "MODE", "DIFFICULTY", "SCORE"), headers);
+                assertEquals(List.of(1, "ItemPlayer", "Item", "Hard", 999999), row(table, 0));
+                assertEquals(List.of(2, "NormalPlayer", "Normal", "Easy", 200), row(table, 1));
 
-                for (int column : new int[]{2, 3}) {
+                for (int column : new int[]{2, 3, 4}) {
                     var tableColumn = table.getColumnModel().getColumn(column);
                     Component cell = table.prepareRenderer(table.getCellRenderer(0, column), 0, column);
                     Component header = tableColumn.getHeaderRenderer().getTableCellRendererComponent(

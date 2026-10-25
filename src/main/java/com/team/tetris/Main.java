@@ -11,6 +11,7 @@ import javax.swing.SwingWorker;
 
 import com.team.tetris.block.ColorScheme;
 import com.team.tetris.common.Difficulty;
+import com.team.tetris.common.GameMode;
 import com.team.tetris.common.events.BoardSnapshot;
 import com.team.tetris.common.events.GameEventListener;
 import com.team.tetris.game.BlockBoardDriver;
@@ -52,6 +53,8 @@ public final class Main {
         private int bestScoreLoadGeneration;
         private int bestScore = -1;
         private Difficulty finalDifficulty = Difficulty.NORMAL;
+        private GameMode currentMode = GameMode.NORMAL;
+        private GameMode finalMode = GameMode.NORMAL;
 
         private Application() {
             listener.setDelegate(gameScreen.eventListener());
@@ -112,6 +115,7 @@ public final class Main {
         }
 
         private void startGame(boolean itemMode) {
+            currentMode = itemMode ? GameMode.ITEM : GameMode.NORMAL;
             boardDriver.setItemMode(itemMode);
             gameScreen.startNewGame();
         }
@@ -145,6 +149,7 @@ public final class Main {
         private void onGameOver(int score) {
             finalScore = score;
             finalDifficulty = engine.getDifficulty();
+            finalMode = currentMode;
             int level = engine.getLevel();
             int lines = engine.getClearedLines();
             // Avoid changing screens from inside the engine's notification stack.
@@ -177,9 +182,10 @@ public final class Main {
         private void saveScore(String name) {
             int scoreToSave = finalScore;
             Difficulty difficultyToSave = finalDifficulty;
+            GameMode modeToSave = finalMode;
             new SwingWorker<Optional<ScoreRecord>, Void>() {
                 @Override protected Optional<ScoreRecord> doInBackground() throws Exception {
-                    return scoreboardRepository.add(name, scoreToSave, difficultyToSave);
+                    return scoreboardRepository.add(name, scoreToSave, difficultyToSave, modeToSave);
                 }
 
                 @Override protected void done() {

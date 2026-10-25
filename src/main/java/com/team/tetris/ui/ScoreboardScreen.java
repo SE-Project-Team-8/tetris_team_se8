@@ -1,6 +1,7 @@
 package com.team.tetris.ui;
 
 import com.team.tetris.common.Difficulty;
+import com.team.tetris.common.GameMode;
 import com.team.tetris.common.Screen;
 import com.team.tetris.scoreboard.ScoreRecord;
 import com.team.tetris.scoreboard.ScoreboardRepository;
@@ -189,9 +190,10 @@ public final class ScoreboardScreen extends JPanel implements Screen {
         }
     }
 
-    /** 머리글과 가장 긴 값이 잘리지 않는 폭. 좁은 창에서도 DIFFICULTY·SCORE가 보이게 한다. */
+    /** 머리글과 가장 긴 값이 잘리지 않는 폭. 좁은 창에서도 MODE·DIFFICULTY·SCORE가 보이게 한다. */
     private int fittedWidth(int column) {
         List<String> values = switch (column) {
+            case ScoreTableModel.MODE -> Arrays.stream(GameMode.values()).map(GameMode::label).toList();
             case ScoreTableModel.DIFFICULTY -> Arrays.stream(Difficulty.values()).map(Difficulty::label).toList();
             case ScoreTableModel.SCORE -> List.of("999999");
             default -> List.of("▶ 10");
@@ -204,10 +206,11 @@ public final class ScoreboardScreen extends JPanel implements Screen {
     }
 
     private static Font headerFontOf(int column) {
-        return column == ScoreTableModel.DIFFICULTY ? NARROW_HEADER_FONT : HEADER_FONT;
+        return column == ScoreTableModel.MODE || column == ScoreTableModel.DIFFICULTY
+                ? NARROW_HEADER_FONT : HEADER_FONT;
     }
 
-    /** RANK·DIFFICULTY는 가운데, PLAYER는 왼쪽, SCORE는 오른쪽 정렬이다. */
+    /** RANK·MODE·DIFFICULTY는 가운데, PLAYER는 왼쪽, SCORE는 오른쪽 정렬이다. */
     private static int alignmentOf(int column) {
         return switch (column) {
             case ScoreTableModel.PLAYER -> SwingConstants.LEFT;
@@ -264,9 +267,10 @@ public final class ScoreboardScreen extends JPanel implements Screen {
 
     private static final class ScoreTableModel extends AbstractTableModel {
         private static final int PLAYER = 1;
-        private static final int DIFFICULTY = 2;
-        private static final int SCORE = 3;
-        private static final String[] COLUMNS = {"RANK", "PLAYER", "DIFFICULTY", "SCORE"};
+        private static final int MODE = 2;
+        private static final int DIFFICULTY = 3;
+        private static final int SCORE = 4;
+        private static final String[] COLUMNS = {"RANK", "PLAYER", "MODE", "DIFFICULTY", "SCORE"};
         private List<ScoreRecord> records = List.of();
 
         private void setRecords(List<ScoreRecord> records) {
@@ -288,6 +292,7 @@ public final class ScoreboardScreen extends JPanel implements Screen {
             return switch (column) {
                 case 0 -> row + 1;
                 case PLAYER -> record.name();
+                case MODE -> record.mode().label();
                 case DIFFICULTY -> record.difficulty().label();
                 case SCORE -> record.score();
                 default -> throw new IndexOutOfBoundsException("Unknown scoreboard column: " + column);

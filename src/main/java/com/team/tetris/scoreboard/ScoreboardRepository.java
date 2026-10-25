@@ -3,6 +3,7 @@ package com.team.tetris.scoreboard;
 import com.team.tetris.common.constants.GameConstants;
 import com.team.tetris.common.persistence.PropertiesFile;
 import com.team.tetris.common.Difficulty;
+import com.team.tetris.common.GameMode;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -17,8 +18,13 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.UUID;
 
-/** Share one repository per application. Equal scores keep earlier entries first. */
+/**
+ * Share one repository per application. Equal scores keep earlier entries first.
+ * File versions: 1 = no difficulty, 2 = difficulty, 3 = difficulty and mode. Older records load
+ * as NORMAL difficulty and NORMAL mode and are rewritten as version 3 on the next save.
+ */
 public final class ScoreboardRepository {
+    private static final int VERSION = 3;
     private static final Comparator<ScoreRecord> SCORE_ORDER = Comparator.comparingInt(ScoreRecord::score).reversed();
     private final Path file;
     private final int capacity;
@@ -43,7 +49,7 @@ public final class ScoreboardRepository {
         Properties properties = PropertiesFile.read(file);
         if (properties.isEmpty()) return List.of();
         try {
-            int version = PropertiesFile.requireVersion(properties, 1, 2);
+            int version = PropertiesFile.requireVersion(properties, 1, 2, VERSION);
             int count = Integer.parseInt(PropertiesFile.required(properties, "count"));
             if (count < 0 || count > properties.size() / 4) {
                 throw new IllegalArgumentException("Invalid score count");
@@ -58,7 +64,9 @@ public final class ScoreboardRepository {
                         Integer.parseInt(PropertiesFile.required(properties, prefix + "score")),
                         Instant.parse(PropertiesFile.required(properties, prefix + "recordedAt")),
                         version == 1 ? Difficulty.NORMAL
-                                : Difficulty.valueOf(PropertiesFile.required(properties, prefix + "difficulty")));
+                                : Difficulty.valueOf(PropertiesFile.required(properties, prefix + "difficulty")),
+                        version < VERSION ? GameMode.NORMAL
+                                : GameMode.valueOf(PropertiesFile.required(properties, prefix + "mode")));
                 if (!ids.add(record.id())) throw new IllegalArgumentException("Duplicate record ID");
                 records.add(record);
             }
@@ -81,7 +89,12 @@ public final class ScoreboardRepository {
     }
 
     public synchronized Optional<ScoreRecord> add(String name, int score, Difficulty difficulty) throws IOException {
-        ScoreRecord record = new ScoreRecord(name, score, difficulty);
+        return add(name, score, difficulty, GameMode.NORMAL);
+    }
+
+    public synchronized Optional<ScoreRecord> add(String name, int score, Difficulty difficulty, GameMode mode)
+            throws IOException {
+        ScoreRecord record = new ScoreRecord(name, score, difficulty, mode);
         List<ScoreRecord> records = new ArrayList<>(load());
         if (records.size() == capacity && score <= records.getLast().score()) return Optional.empty();
         records.add(record);
@@ -96,7 +109,7 @@ public final class ScoreboardRepository {
 
     private void save(List<ScoreRecord> records) throws IOException {
         Properties properties = new Properties();
-        properties.setProperty("version", "2");
+        properties.setProperty("version", Integer.toString(VERSION));
         properties.setProperty("count", Integer.toString(records.size()));
         for (int i = 0; i < records.size(); i++) {
             ScoreRecord record = records.get(i);
@@ -106,6 +119,7 @@ public final class ScoreboardRepository {
             properties.setProperty(prefix + "score", Integer.toString(record.score()));
             properties.setProperty(prefix + "recordedAt", record.recordedAt().toString());
             properties.setProperty(prefix + "difficulty", record.difficulty().name());
+            properties.setProperty(prefix + "mode", record.mode().name());
         }
         PropertiesFile.write(file, properties);
     }
