@@ -1,9 +1,12 @@
 package com.team.tetris.settings;
 
+import com.team.tetris.common.Difficulty;
+
 import java.util.Objects;
 
 /** Persisted preferences. Window sizes never change the 20 x 10 board dimensions. */
-public record GameSettings(ScreenSize screenSize, ColorBlindMode colorBlindMode, KeyBindings keyBindings) {
+public record GameSettings(ScreenSize screenSize, ColorBlindMode colorBlindMode, KeyBindings keyBindings,
+                           Difficulty difficulty) {
     public enum ScreenSize {
         SMALL(480, 640), MEDIUM(600, 800), LARGE(750, 1000);
 
@@ -25,6 +28,11 @@ public record GameSettings(ScreenSize screenSize, ColorBlindMode colorBlindMode,
         Objects.requireNonNull(screenSize, "screenSize");
         Objects.requireNonNull(colorBlindMode, "colorBlindMode");
         Objects.requireNonNull(keyBindings, "keyBindings");
+        Objects.requireNonNull(difficulty, "difficulty");
+    }
+
+    public GameSettings(ScreenSize screenSize, ColorBlindMode colorBlindMode, KeyBindings keyBindings) {
+        this(screenSize, colorBlindMode, keyBindings, Difficulty.NORMAL);
     }
 
     public static GameSettings defaults() {
@@ -34,14 +42,18 @@ public record GameSettings(ScreenSize screenSize, ColorBlindMode colorBlindMode,
     public boolean isColorBlindModeEnabled() { return colorBlindMode != ColorBlindMode.OFF; }
 
     public GameSettings withScreenSize(ScreenSize size) {
-        return new GameSettings(size, colorBlindMode, keyBindings);
+        return new GameSettings(size, colorBlindMode, keyBindings, difficulty);
     }
 
     public GameSettings withColorBlindMode(ColorBlindMode mode) {
-        return new GameSettings(screenSize, mode, keyBindings);
+        return new GameSettings(screenSize, mode, keyBindings, difficulty);
     }
 
     public GameSettings withKeyBindings(KeyBindings bindings) {
-        return new GameSettings(screenSize, colorBlindMode, bindings);
+        return new GameSettings(screenSize, colorBlindMode, bindings, difficulty);
+    }
+
+    public GameSettings withDifficulty(Difficulty difficulty) {
+        return new GameSettings(screenSize, colorBlindMode, keyBindings, difficulty);
     }
 }

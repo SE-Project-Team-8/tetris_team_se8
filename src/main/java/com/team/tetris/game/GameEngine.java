@@ -2,11 +2,13 @@ package com.team.tetris.game;
 
 import com.team.tetris.common.events.BoardSnapshot;
 import com.team.tetris.common.events.GameEventListener;
+import com.team.tetris.common.Difficulty;
 
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
 import java.util.List;
 import java.util.Objects;
+import java.util.function.Supplier;
 
 /**
  * Game coordinator. Invoke lifecycle/input methods on the Swing event dispatch thread
@@ -14,8 +16,11 @@ import java.util.Objects;
  * this class. See docs/person2-integration.md for the block adapter contract.
  */
 public final class GameEngine implements AutoCloseable {
+    private static final int SURVIVAL_POINTS_PER_SECOND = 1;
     /** BlockBoardDriver adapts the block package without adding a game dependency to it. */
     public interface BoardDriver {
+        /** Configure the next game before reset() fills the preview. */
+        default void configureDifficulty(Difficulty difficulty) { }
         /** Empty the board and preview; do not spawn a block. */
         void reset();
         /** Consume the preview and spawn one piece; false means blocked spawn. */
@@ -93,15 +98,24 @@ public final class GameEngine implements AutoCloseable {
     private final ScoringPolicy scoring;
     private final SpeedPolicy speedPolicy;
     private final DropTimer timer;
+    private final DropTimer survivalTimer;
+    private final Supplier<Difficulty> difficultySource;
+    private Difficulty difficulty = Difficulty.NORMAL;
     private GameState state = GameState.READY;
     private int score;
     private SpeedPolicy.Speed speed;
     private int generatedBlocks;
     private int clearedLines;
     private long timerGeneration;
+    private long survivalGeneration;
 
     public GameEngine(BoardDriver board, GameEventListener listener) {
-        this(board, listener, new ScoreCalculator(), new DefaultSpeedPolicy(), new SwingDropTimer());
+        this(board, listener, () -> Difficulty.NORMAL);
+    }
+
+    public GameEngine(BoardDriver board, GameEventListener listener, Supplier<Difficulty> difficultySource) {
+        this(board, listener, new ScoreCalculator(), new DefaultSpeedPolicy(), new SwingDropTimer(),
+                new SwingDropTimer(), difficultySource);
     }
 
     public GameEngine(BoardDriver board, GameEventListener listener, ScoringPolicy scoring, DropTimer timer) {
@@ -110,12 +124,20 @@ public final class GameEngine implements AutoCloseable {
 
     public GameEngine(BoardDriver board, GameEventListener listener, ScoringPolicy scoring,
                       SpeedPolicy speedPolicy, DropTimer timer) {
+        this(board, listener, scoring, speedPolicy, timer, new SwingDropTimer(), () -> Difficulty.NORMAL);
+    }
+
+    public GameEngine(BoardDriver board, GameEventListener listener, ScoringPolicy scoring,
+                      SpeedPolicy speedPolicy, DropTimer timer, DropTimer survivalTimer,
+                      Supplier<Difficulty> difficultySource) {
         this.board = Objects.requireNonNull(board, "board");
         this.listener = Objects.requireNonNull(listener, "listener");
         this.scoring = Objects.requireNonNull(scoring, "scoring");
         this.speedPolicy = Objects.requireNonNull(speedPolicy, "speedPolicy");
         this.speed = Objects.requireNonNull(speedPolicy.calculate(0, 0), "speed");
         this.timer = Objects.requireNonNull(timer, "timer");
+        this.survivalTimer = Objects.requireNonNull(survivalTimer, "survivalTimer");
+        this.difficultySource = Objects.requireNonNull(difficultySource, "difficultySource");
     }
 
     /** Start a fresh game. Resume a paused game with resume(), not start(). */
@@ -123,6 +145,8 @@ public final class GameEngine implements AutoCloseable {
         requireEdt();
         if (state == GameState.RUNNING || state == GameState.PAUSED) return false;
         cancelTimer();
+        difficulty = Objects.requireNonNull(difficultySource.get(), "difficulty");
+        board.configureDifficulty(difficulty);
         board.reset();
         score = 0;
         generatedBlocks = 0;
@@ -136,6 +160,7 @@ public final class GameEngine implements AutoCloseable {
             return true;
         }
         scheduleTimer();
+        scheduleSurvivalTimer();
         publishBoard();
         publishPreview();
         return true;
@@ -156,6 +181,7 @@ public final class GameEngine implements AutoCloseable {
         if (state != GameState.PAUSED) return false;
         transition(GameState.RUNNING);
         scheduleTimer();
+        scheduleSurvivalTimer();
         listener.onPauseStateChanged(false);
         return true;
     }
@@ -199,6 +225,7 @@ public final class GameEngine implements AutoCloseable {
     public int getLevel() { return speed.level(); }
     public int getGeneratedBlocks() { return generatedBlocks; }
     public int getClearedLines() { return clearedLines; }
+    public Difficulty getDifficulty() { return difficulty; }
 
     public int getDropIntervalMillis() {
         return speed.dropIntervalMillis();
@@ -226,7 +253,7 @@ public final class GameEngine implements AutoCloseable {
         if (!result.clearedRows().isEmpty()) {
             listener.onLinesCleared(result.clearedRows(), result.boardBeforeClear());
         }
-        award(scoring.lineClearPoints(result.clearedLines(), getLevel()));
+        award(scoring.lineClearPoints(result.clearedLines(), getLevel(), difficulty));
         clearedLines = addCount(clearedLines, result.clearedLines());
         if (result.topOut()) {
             gameOver();
@@ -249,7 +276,7 @@ public final class GameEngine implements AutoCloseable {
     }
 
     private void updateSpeed() {
-        speed = Objects.requireNonNull(speedPolicy.calculate(generatedBlocks, clearedLines), "speed");
+        speed = Objects.requireNonNull(speedPolicy.calculate(generatedBlocks, clearedLines, difficulty), "speed");
     }
 
     private static int addCount(int count, int increment) {
@@ -299,7 +326,20 @@ public final class GameEngine implements AutoCloseable {
 
     private void cancelTimer() {
         timerGeneration++;
+        survivalGeneration++;
         timer.stop();
+        survivalTimer.stop();
+    }
+
+    /** Independent from gravity: spawning a new block never restarts the scoring interval. */
+    private void scheduleSurvivalTimer() {
+        long generation = ++survivalGeneration;
+        survivalTimer.start(1000, () -> {
+            requireEdt();
+            if (generation == survivalGeneration && state == GameState.RUNNING) {
+                award(SURVIVAL_POINTS_PER_SECOND);
+            }
+        });
     }
 
     private void transition(GameState next) {

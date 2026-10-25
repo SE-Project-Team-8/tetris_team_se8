@@ -9,7 +9,8 @@ import com.team.tetris.block.Rotation;
 import com.team.tetris.block.Tetromino;
 import com.team.tetris.block.TetrominoGenerator;
 import com.team.tetris.block.TetrominoType;
-import com.team.tetris.block.UniformTetrominoGenerator;
+import com.team.tetris.block.WeightedTetrominoGenerator;
+import com.team.tetris.common.Difficulty;
 import com.team.tetris.common.constants.GameConstants;
 import com.team.tetris.common.events.BoardSnapshot;
 import com.team.tetris.common.events.LineDeleteIds;
@@ -40,7 +41,13 @@ public final class BlockBoardDriver implements GameEngine.BoardDriver {
     private record QueuedBlock(TetrominoType type, ItemType item, int itemIndex) { }
 
     public BlockBoardDriver() {
-        this(new Board(), new UniformTetrominoGenerator(new Random()));
+        this(new Board(), new WeightedTetrominoGenerator(new Random(), Difficulty.NORMAL));
+    }
+
+    @Override
+    public void configureDifficulty(Difficulty difficulty) {
+        Objects.requireNonNull(difficulty, "difficulty");
+        if (generator instanceof WeightedTetrominoGenerator weighted) weighted.setDifficulty(difficulty);
     }
 
     public BlockBoardDriver(Board board, TetrominoGenerator generator) {
