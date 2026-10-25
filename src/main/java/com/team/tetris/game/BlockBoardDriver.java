@@ -11,6 +11,7 @@ import com.team.tetris.block.TetrominoType;
 import com.team.tetris.block.UniformTetrominoGenerator;
 import com.team.tetris.common.constants.GameConstants;
 import com.team.tetris.common.events.BoardSnapshot;
+import com.team.tetris.common.events.LineDeleteIds;
 
 import java.util.ArrayDeque;
 import java.util.Objects;
@@ -20,16 +21,28 @@ import java.util.Random;
 public final class BlockBoardDriver implements GameEngine.BoardDriver {
     private final Board board;
     private final TetrominoGenerator generator;
-    private final ArrayDeque<TetrominoType> preview = new ArrayDeque<>();
+    private final ArrayDeque<QueuedBlock> preview = new ArrayDeque<>();
+    private final Random itemRandom;
     private Tetromino current;
+    private int currentItemIndex = -1;
+    private int clearedLines;
+    private int pendingItems;
+    private boolean itemMode;
+
+    private record QueuedBlock(TetrominoType type, int itemIndex) { }
 
     public BlockBoardDriver() {
         this(new Board(), new UniformTetrominoGenerator(new Random()));
     }
 
     public BlockBoardDriver(Board board, TetrominoGenerator generator) {
+        this(board, generator, new Random());
+    }
+
+    public BlockBoardDriver(Board board, TetrominoGenerator generator, Random itemRandom) {
         this.board = Objects.requireNonNull(board, "board");
         this.generator = Objects.requireNonNull(generator, "generator");
+        this.itemRandom = Objects.requireNonNull(itemRandom, "itemRandom");
         if (board.rows() != GameConstants.BOARD_ROWS || board.cols() != GameConstants.BOARD_COLS) {
             throw new IllegalArgumentException("Game board must be 20 rows by 10 columns");
         }
@@ -39,6 +52,9 @@ public final class BlockBoardDriver implements GameEngine.BoardDriver {
     public void reset() {
         board.clear();
         current = null;
+        currentItemIndex = -1;
+        clearedLines = 0;
+        pendingItems = 0;
         preview.clear();
         fillPreview();
     }
@@ -47,11 +63,12 @@ public final class BlockBoardDriver implements GameEngine.BoardDriver {
     public boolean spawnNextBlock() {
         if (current != null) throw new IllegalStateException("The current block must be locked first");
         if (preview.isEmpty()) throw new IllegalStateException("Reset the board before spawning");
-        TetrominoType type = preview.removeFirst();
+        QueuedBlock next = preview.removeFirst();
         fillPreview();
-        Tetromino candidate = spawnCandidate(type);
+        Tetromino candidate = spawnCandidate(next.type());
         if (!CollisionChecker.canPlace(board, candidate)) return false;
         current = candidate;
+        currentItemIndex = next.itemIndex();
         return true;
     }
 
@@ -84,6 +101,11 @@ public final class BlockBoardDriver implements GameEngine.BoardDriver {
         return correction != 0 && adopt(rotated.moveBy(0, correction));
     }
 
+    /** Select the rules for the next game. */
+    public void setItemMode(boolean itemMode) {
+        this.itemMode = itemMode;
+    }
+
     @Override
     public int hardDrop() {
         int distance = DropCalculator.dropDistance(board, requireCurrent());
@@ -97,8 +119,16 @@ public final class BlockBoardDriver implements GameEngine.BoardDriver {
         if (!board.tryPlace(landed)) {
             throw new IllegalStateException("A valid falling block could not be locked");
         }
+        int forcedRow = currentItemIndex < 0 ? -1 : landed.cells().get(currentItemIndex).row();
         current = null;
-        return new GameEngine.LockResult(board.clearFullLines(), false);
+        currentItemIndex = -1;
+        int removed = board.clearLinesIncluding(forcedRow);
+        if (itemMode) {
+            int previousMilestones = clearedLines / 10;
+            clearedLines += removed;
+            pendingItems += clearedLines / 10 - previousMilestones;
+        }
+        return new GameEngine.LockResult(removed, false);
     }
 
     @Override
@@ -111,8 +141,11 @@ public final class BlockBoardDriver implements GameEngine.BoardDriver {
             }
         }
         if (current != null) {
-            for (Cell cell : current.cells()) {
-                cells[cell.row()][cell.col()] = current.type().id();
+            var occupied = current.cells();
+            for (int index = 0; index < occupied.size(); index++) {
+                Cell cell = occupied.get(index);
+                cells[cell.row()][cell.col()] = index == currentItemIndex
+                        ? LineDeleteIds.boardCell(current.type().id()) : current.type().id();
             }
         }
         return new BoardSnapshot(cells);
@@ -120,7 +153,8 @@ public final class BlockBoardDriver implements GameEngine.BoardDriver {
 
     @Override
     public int[] nextBlockTypes() {
-        return preview.stream().mapToInt(TetrominoType::id).toArray();
+        return preview.stream().mapToInt(next -> next.itemIndex() < 0
+                ? next.type().id() : LineDeleteIds.preview(next.type().id(), next.itemIndex())).toArray();
     }
 
     private Tetromino spawnCandidate(TetrominoType type) {
@@ -135,7 +169,10 @@ public final class BlockBoardDriver implements GameEngine.BoardDriver {
 
     private void fillPreview() {
         while (preview.size() < GameConstants.NEXT_QUEUE_SIZE) {
-            preview.addLast(Objects.requireNonNull(generator.next(), "next block type"));
+            TetrominoType type = Objects.requireNonNull(generator.next(), "next block type");
+            int itemIndex = itemMode && pendingItems > 0 ? itemRandom.nextInt(4) : -1;
+            if (itemIndex >= 0) pendingItems--;
+            preview.addLast(new QueuedBlock(type, itemIndex));
         }
     }
 
