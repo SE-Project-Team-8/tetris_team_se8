@@ -51,6 +51,7 @@ public final class SettingsScreen extends JPanel implements Screen {
     private final ScoreboardRepository scoreboardRepository;
     private final Supplier<GameSettings> currentSettings;
     private final Consumer<GameSettings> settingsUpdated;
+    private final Runnable scoresReset;
     private final JComboBox<GameSettings.ScreenSize> size =
             new JComboBox<>(GameSettings.ScreenSize.values());
     private final JComboBox<GameSettings.ColorBlindMode> color =
@@ -61,12 +62,13 @@ public final class SettingsScreen extends JPanel implements Screen {
 
     public SettingsScreen(ScreenRouter router, SettingsRepository settingsRepository,
                           ScoreboardRepository scoreboardRepository, Supplier<GameSettings> currentSettings,
-                          Consumer<GameSettings> settingsUpdated) {
+                          Consumer<GameSettings> settingsUpdated, Runnable scoresReset) {
         this.router = Objects.requireNonNull(router, "router");
         this.settingsRepository = Objects.requireNonNull(settingsRepository, "settingsRepository");
         this.scoreboardRepository = Objects.requireNonNull(scoreboardRepository, "scoreboardRepository");
         this.currentSettings = Objects.requireNonNull(currentSettings, "currentSettings");
         this.settingsUpdated = Objects.requireNonNull(settingsUpdated, "settingsUpdated");
+        this.scoresReset = Objects.requireNonNull(scoresReset, "scoresReset");
         setLayout(new BorderLayout(16, 16));
         setBackground(BACKGROUND);
         setBorder(BorderFactory.createEmptyBorder(22, 24, 18, 24));
@@ -243,6 +245,7 @@ public final class SettingsScreen extends JPanel implements Screen {
             @Override protected void done() {
                 try {
                     get();
+                    scoresReset.run();
                     showMessage("Scores reset.", "Scores Reset", JOptionPane.INFORMATION_MESSAGE);
                 } catch (Exception failure) {
                     showMessage("Could not reset scores. Please retry.", "Scoreboard Error",

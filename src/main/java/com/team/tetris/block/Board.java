@@ -6,6 +6,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.TreeSet;
 
 /**
  * 고정된 블록 셀을 소유하는 보드. 현재 낙하 블록·점수·타이머는 엔진이 소유한다.
@@ -86,6 +87,26 @@ public final class Board implements BoardView {
     }
 
     /**
+     * Crush specified cells without shifting any row. Validate the entire request first.
+     * Duplicate/empty positions do not increase the removed-cell count; no scoring occurs here.
+     */
+    public int eraseCells(List<Cell> positions) {
+        List<Cell> checked = List.copyOf(Objects.requireNonNull(positions, "positions"));
+        for (Cell cell : checked) {
+            Objects.checkIndex(cell.row(), rows);
+            Objects.checkIndex(cell.col(), cols);
+        }
+        int removed = 0;
+        for (Cell cell : checked) {
+            if (cells[cell.row()][cell.col()] != null) {
+                cells[cell.row()][cell.col()] = null;
+                removed++;
+            }
+        }
+        return removed;
+    }
+
+    /**
      * 완성 행을 한 번에 제거하고 생존 행의 상대적 순서를 유지하며 아래로 압축한다.
      *
      * 새 배열을 완성한 후 참조를 교체해 부분 압축 상태를 남기지 않는다.
@@ -95,25 +116,50 @@ public final class Board implements BoardView {
      * @return 삭제한 행 수. 완성 행이 없으면 0
      */
     public int clearFullLines() {
-        List<Integer> fullRows = LineClearer.findFullRows(this);
-        if (fullRows.isEmpty()) {
-            return 0;
+        return clearLinesIncludingAndGetRows(-1).size();
+    }
+
+    /**
+     * 완성 행을 삭제하고 삭제 전 보드에서의 행 번호를 위에서 아래 순서로 반환한다.
+     *
+     * @return 삭제한 행 번호의 불변 목록
+     */
+    public List<Integer> clearFullLinesAndGetRows() {
+        return clearLinesIncludingAndGetRows(-1);
+    }
+
+    /** 완성된 행과 아이템이 지정한 행을 중복 없이 함께 제거한다. -1은 지정 행 없음. */
+    public int clearLinesIncluding(int forcedRow) {
+        return clearLinesIncludingAndGetRows(forcedRow).size();
+    }
+
+    /**
+     * 완성된 행과 아이템이 지정한 행을 중복 없이 함께 제거하고, 삭제 전 보드에서의 행 번호를
+     * 위에서 아래 순서로 반환한다. -1은 지정 행 없음.
+     *
+     * @return 삭제한 행 번호의 불변 목록
+     */
+    public List<Integer> clearLinesIncludingAndGetRows(int forcedRow) {
+        if (forcedRow < -1 || forcedRow >= rows) {
+            throw new IndexOutOfBoundsException("Invalid row: " + forcedRow);
+        }
+        TreeSet<Integer> rowsToClear = new TreeSet<>(LineClearer.findFullRows(this));
+        if (forcedRow >= 0) rowsToClear.add(forcedRow);
+        if (rowsToClear.isEmpty()) {
+            return List.of();
         }
 
         TetrominoType[][] compacted = new TetrominoType[rows][cols];
-        int nextFull = fullRows.size() - 1;
         int destination = rows - 1;
         for (int source = rows - 1; source >= 0; source--) {
-            if (nextFull >= 0 && source == fullRows.get(nextFull)) {
-                nextFull--;
-            } else {
+            if (!rowsToClear.contains(source)) {
                 // 행 참조를 재사용하지 않아 이후 한 행의 변경이 다른 행에 전파되지 않는다.
                 System.arraycopy(cells[source], 0, compacted[destination], 0, cols);
                 destination--;
             }
         }
         cells = compacted;
-        return fullRows.size();
+        return List.copyOf(rowsToClear);
     }
 
     /**

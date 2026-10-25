@@ -1,5 +1,6 @@
 package com.team.tetris.ui;
 
+import java.awt.AlphaComposite;
 import java.awt.Color;
 import java.awt.Font;
 import java.awt.FontMetrics;
@@ -9,7 +10,9 @@ import java.awt.RenderingHints;
 import java.awt.event.ActionEvent;
 import java.awt.event.KeyEvent;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Locale;
+import java.util.List;
 import java.util.Objects;
 import java.util.function.IntConsumer;
 
@@ -18,14 +21,19 @@ import javax.swing.JComponent;
 import javax.swing.JPanel;
 import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
+import javax.swing.Timer;
 
 import com.team.tetris.block.ColorScheme;
+import com.team.tetris.block.Anvil;
+import com.team.tetris.block.Cell;
 import com.team.tetris.block.Rotation;
 import com.team.tetris.block.Tetromino;
 import com.team.tetris.block.TetrominoType;
 import com.team.tetris.common.Screen;
 import com.team.tetris.common.constants.GameConstants;
 import com.team.tetris.common.events.BoardSnapshot;
+import com.team.tetris.common.events.LineDeleteIds;
+import com.team.tetris.common.events.AnvilIds;
 import com.team.tetris.common.events.GameEventListener;
 import com.team.tetris.game.GameAction;
 import com.team.tetris.game.GameEngine;
@@ -42,8 +50,14 @@ public class GameScreen extends JPanel implements Screen {
     private static final int PANEL_GAP = 16;
     private static final int HEADER_HEIGHT = 40;
     private static final int FOOTER_HEIGHT = 36;
+    private static final int[] LINE_CLEAR_FLASH_ALPHA = {255, 70, 255, 0};
+    private static final int LINE_CLEAR_FLASH_INTERVAL_MS = 65;
+    private static final int BEST_SCORE_TICK_MS = 30;
+    private static final int BEST_SCORE_HOLD_MS = 500;
+    private static final int BEST_SCORE_FADE_MS = 1_500;
     private static final Color BACKGROUND = new Color(ColorScheme.standard().emptyRgb());
     private static final Color GRID_COLOR = new Color(255, 255, 255, 35);
+    private static final Color BEST_SCORE_COLOR = new Color(255, 211, 64);
 
     private final ScreenRouter router;
     private final GameEngine engine;
@@ -59,7 +73,71 @@ public class GameScreen extends JPanel implements Screen {
                 return;
             }
             onEdt(() -> {
-                board = cells;
+                if (lineClearAnimating) {
+                    pendingBoard = cells;
+                } else {
+                    board = cells;
+                }
+                repaint();
+            });
+        }
+
+        @Override
+        public void onLandingUpdated(BoardSnapshot fallingPiece, BoardSnapshot landingPiece) {
+            int[][] fallingCells = fallingPiece == null ? null : copyBoard(fallingPiece);
+            int[][] landingCells = landingPiece == null ? null : copyBoard(landingPiece);
+            if ((fallingPiece != null && fallingCells == null)
+                    || (landingPiece != null && landingCells == null)) {
+                return;
+            }
+            onEdt(() -> {
+                if (lineClearAnimating) {
+                    pendingFalling = fallingCells;
+                    pendingLanding = landingCells;
+                } else {
+                    falling = fallingCells;
+                    landing = landingCells;
+                }
+                repaint();
+            });
+        }
+
+        @Override
+        public void onLinesCleared(List<Integer> rows, BoardSnapshot boardBeforeClear) {
+            int[][] beforeClear = copyBoard(Objects.requireNonNull(boardBeforeClear, "boardBeforeClear"));
+            if (beforeClear == null) {
+                throw new IllegalArgumentException("Pre-clear board does not match the game board dimensions");
+            }
+            startLineClearAnimation(rows, beforeClear);
+        }
+
+        @Override
+        public void onLinesCleared(List<Integer> rows) {
+            startLineClearAnimation(rows, null);
+        }
+
+        private void startLineClearAnimation(List<Integer> rows, int[][] beforeClear) {
+            int[] copy = Objects.requireNonNull(rows, "rows").stream()
+                    .mapToInt(row -> Objects.requireNonNull(row, "row"))
+                    .toArray();
+            for (int row : copy) {
+                if (row < 0 || row >= GameConstants.BOARD_ROWS) {
+                    throw new IllegalArgumentException("Cleared row is outside the game board: " + row);
+                }
+            }
+            onEdt(() -> {
+                if (beforeClear != null) {
+                    board = beforeClear;
+                }
+                pendingBoard = null;
+                falling = null;
+                pendingFalling = null;
+                landing = null;
+                pendingLanding = null;
+                flashingRows = copy;
+                flashFrame = 0;
+                lineClearAnimating = true;
+                lineClearTimer.restart();
                 repaint();
             });
         }
@@ -68,6 +146,7 @@ public class GameScreen extends JPanel implements Screen {
         public void onScoreChanged(int updatedScore) {
             onEdt(() -> {
                 score = updatedScore;
+                updateBestScoreNotification();
                 repaint();
             });
         }
@@ -94,6 +173,7 @@ public class GameScreen extends JPanel implements Screen {
                 }
                 gameOver = true;
                 score = finalScore;
+                updateBestScoreNotification();
                 gameOverAction.accept(finalScore);
             });
         }
@@ -105,6 +185,65 @@ public class GameScreen extends JPanel implements Screen {
     private int score;
     private ColorScheme colorScheme = ColorScheme.standard();
     private boolean gameOver;
+    private int[] flashingRows = new int[0];
+    private int flashFrame;
+    private boolean lineClearAnimating;
+    private int bestScore = -1;
+    private boolean bestScoreNotificationShown;
+    private int bestScoreElapsedMs;
+    private int[][] pendingBoard;
+    private int[][] falling;
+    private int[][] pendingFalling;
+    private int[][] landing;
+    private int[][] pendingLanding;
+    private final Timer lineClearTimer = new Timer(LINE_CLEAR_FLASH_INTERVAL_MS, event -> advanceLineClearAnimation());
+    private final Timer bestScoreTimer = new Timer(BEST_SCORE_TICK_MS, event -> advanceBestScoreAnimation());
+
+    public void setBestScore(int bestScore) {
+        if (bestScore < -1) {
+            throw new IllegalArgumentException("bestScore must be non-negative or -1 when no score exists");
+        }
+        onEdt(() -> {
+            this.bestScore = bestScore;
+            updateBestScoreNotification();
+        });
+    }
+
+    private void updateBestScoreNotification() {
+        if (bestScore >= 0 && score > bestScore && !bestScoreNotificationShown) {
+            bestScoreNotificationShown = true;
+            bestScoreElapsedMs = 0;
+            bestScoreTimer.restart();
+            repaint();
+        }
+    }
+
+    private void advanceBestScoreAnimation() {
+        bestScoreElapsedMs += BEST_SCORE_TICK_MS;
+        if (bestScoreElapsedMs >= BEST_SCORE_HOLD_MS + BEST_SCORE_FADE_MS) {
+            bestScoreTimer.stop();
+        }
+        repaint();
+    }
+
+    private void advanceLineClearAnimation() {
+        if (flashFrame + 1 >= LINE_CLEAR_FLASH_ALPHA.length) {
+            flashingRows = new int[0];
+            lineClearAnimating = false;
+            if (pendingBoard != null) {
+                board = pendingBoard;
+                pendingBoard = null;
+            }
+            falling = pendingFalling;
+            pendingFalling = null;
+            landing = pendingLanding;
+            pendingLanding = null;
+            lineClearTimer.stop();
+        } else {
+            flashFrame++;
+        }
+        repaint();
+    }
 
     /**
         * @param router 화면 전환을 관리하는 라우터
@@ -214,6 +353,17 @@ public class GameScreen extends JPanel implements Screen {
 
     private void resetViewState() {
         // 새 게임 시작 시 이전 판에서 전달받은 표시 데이터만 초기화한다.
+        lineClearTimer.stop();
+        bestScoreTimer.stop();
+        flashingRows = new int[0];
+        lineClearAnimating = false;
+        bestScoreNotificationShown = false;
+        bestScoreElapsedMs = 0;
+        pendingBoard = null;
+        falling = null;
+        pendingFalling = null;
+        landing = null;
+        pendingLanding = null;
         board = emptyBoard();
         nextBlocks = new int[0];
         score = 0;
@@ -275,6 +425,7 @@ public class GameScreen extends JPanel implements Screen {
 
             drawBoard(g2d, boardX, boardY, cellSize);
             drawSidebar(g2d, sideX, HEADER_HEIGHT + PADDING, sideWidth);
+            drawBestScoreNotification(g2d, width, height);
 
             if (engine.getState() != GameState.PAUSED) {
                 g2d.setColor(new Color(185, 193, 204));
@@ -293,6 +444,30 @@ public class GameScreen extends JPanel implements Screen {
         }
     }
 
+    private void drawBestScoreNotification(Graphics2D g2d, int width, int height) {
+        if (!bestScoreNotificationShown
+                || bestScoreElapsedMs >= BEST_SCORE_HOLD_MS + BEST_SCORE_FADE_MS) {
+            return;
+        }
+
+        float alpha = 1f;
+        if (bestScoreElapsedMs > BEST_SCORE_HOLD_MS) {
+            alpha = 1f - (float) (bestScoreElapsedMs - BEST_SCORE_HOLD_MS) / BEST_SCORE_FADE_MS;
+        }
+        var originalComposite = g2d.getComposite();
+        g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, Math.max(0f, alpha)));
+        g2d.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 30));
+        String message = "Best Score!";
+        FontMetrics metrics = g2d.getFontMetrics();
+        int messageX = (width - metrics.stringWidth(message)) / 2;
+        int messageY = Math.max(HEADER_HEIGHT + 20, height / 5);
+        g2d.setColor(new Color(105, 65, 0));
+        g2d.drawString(message, messageX + 2, messageY + 2);
+        g2d.setColor(BEST_SCORE_COLOR);
+        g2d.drawString(message, messageX, messageY);
+        g2d.setComposite(originalComposite);
+    }
+
     private void drawBoard(Graphics2D g2d, int x, int y, int cellSize) {
         int width = cellSize * GameConstants.BOARD_COLS;
         int height = cellSize * GameConstants.BOARD_ROWS;
@@ -303,14 +478,39 @@ public class GameScreen extends JPanel implements Screen {
         for (int row = 0; row < board.length; row++) {
             for (int col = 0; col < board[row].length; col++) {
                 int blockId = board[row][col];
+                if (blockId == AnvilIds.ANVIL_ID) {
+                    int cellX = x + col * cellSize;
+                    int cellY = y + row * cellSize;
+                    drawBlockCell(g2d, cellX, cellY, cellSize, TetrominoType.J, colorScheme);
+                    drawItemLetter(g2d, cellX, cellY, cellSize, "W");
+                    continue;
+                }
                 if (blockId != BoardSnapshot.EMPTY) {
-                    TetrominoType type = typeFromId(blockId);
+                    boolean itemCell = LineDeleteIds.isItemCell(blockId);
+                    TetrominoType type = typeFromId(itemCell ? LineDeleteIds.boardType(blockId) : blockId);
                     if (type != null) {
-                        drawBlockCell(g2d, x + col * cellSize, y + row * cellSize,
+                        int cellX = x + col * cellSize;
+                        int cellY = y + row * cellSize;
+                        drawBlockCell(g2d, cellX, cellY,
                                 cellSize, type, colorScheme);
+                        if (itemCell) drawItemLetter(g2d, cellX, cellY, cellSize, "L");
                     }
                 }
             }
+        }
+
+        if (flashingRows.length > 0) {
+            int alpha = LINE_CLEAR_FLASH_ALPHA[flashFrame];
+            g2d.setComposite(AlphaComposite.SrcOver);
+            g2d.setColor(new Color(255, 255, 255, alpha));
+            for (int row : flashingRows) {
+                g2d.fillRect(x + 1, y + row * cellSize + 1,
+                        Math.max(1, width - 2), Math.max(1, cellSize - 2));
+            }
+        }
+
+        if (!lineClearAnimating && landing != null) {
+            drawLandingGhost(g2d, x, y, cellSize);
         }
 
         g2d.setColor(GRID_COLOR);
@@ -324,6 +524,24 @@ public class GameScreen extends JPanel implements Screen {
         }
         g2d.setColor(new Color(185, 193, 204));
         g2d.drawRect(x, y, width, height);
+    }
+
+    private void drawLandingGhost(Graphics2D g2d, int x, int y, int cellSize) {
+        for (int row = 0; row < landing.length; row++) {
+            for (int col = 0; col < landing[row].length; col++) {
+                TetrominoType type = typeFromId(landing[row][col]);
+                if (type == null) {
+                    continue;
+                }
+                Color blockColor = new Color(colorScheme.rgbOf(type));
+                int cellX = x + col * cellSize;
+                int cellY = y + row * cellSize;
+                g2d.setColor(new Color(blockColor.getRed(), blockColor.getGreen(), blockColor.getBlue(), 75));
+                g2d.fillRect(cellX + 2, cellY + 2, Math.max(1, cellSize - 4), Math.max(1, cellSize - 4));
+                g2d.setColor(new Color(255, 255, 255, 180));
+                g2d.drawRect(cellX + 2, cellY + 2, Math.max(1, cellSize - 4), Math.max(1, cellSize - 4));
+            }
+        }
     }
 
     private void drawSidebar(Graphics2D g2d, int x, int y, int width) {
@@ -372,17 +590,29 @@ public class GameScreen extends JPanel implements Screen {
     }
 
     private void drawPreview(Graphics2D g2d, int blockId, int x, int y, int width, int height) {
-        TetrominoType type = typeFromId(blockId);
+        if (blockId == AnvilIds.ANVIL_ID) {
+            drawPreviewShape(g2d, new Anvil(0, 0).cells(), TetrominoType.J,
+                    -1, true, x, y, width, height);
+            return;
+        }
+        boolean item = LineDeleteIds.isItemPreview(blockId);
+        TetrominoType type = typeFromId(item ? LineDeleteIds.previewType(blockId) : blockId);
         if (type == null) {
             return;
         }
 
         // 각 블록의 회전 격자에는 빈 테두리가 있을 수 있으므로 실제 점유 셀 범위만 찾아 중앙에 맞춘다.
         Tetromino piece = new Tetromino(type, Rotation.SPAWN, 0, 0);
-        int minRow = piece.cells().stream().mapToInt(cell -> cell.row()).min().orElse(0);
-        int maxRow = piece.cells().stream().mapToInt(cell -> cell.row()).max().orElse(0);
-        int minCol = piece.cells().stream().mapToInt(cell -> cell.col()).min().orElse(0);
-        int maxCol = piece.cells().stream().mapToInt(cell -> cell.col()).max().orElse(0);
+        drawPreviewShape(g2d, piece.cells(), type,
+                item ? LineDeleteIds.previewCellIndex(blockId) : -1, false, x, y, width, height);
+    }
+
+    private void drawPreviewShape(Graphics2D g2d, List<Cell> occupied, TetrominoType type,
+            int itemIndex, boolean anvil, int x, int y, int width, int height) {
+        int minRow = occupied.stream().mapToInt(Cell::row).min().orElse(0);
+        int maxRow = occupied.stream().mapToInt(Cell::row).max().orElse(0);
+        int minCol = occupied.stream().mapToInt(Cell::col).min().orElse(0);
+        int maxCol = occupied.stream().mapToInt(Cell::col).max().orElse(0);
         int previewCellSize = Math.min(16, Math.min(
                 (width - 20) / (maxCol - minCol + 1),
                 (height - 12) / (maxRow - minRow + 1)));
@@ -391,11 +621,29 @@ public class GameScreen extends JPanel implements Screen {
         int shapeX = x + (width - shapeWidth) / 2;
         int shapeY = y + (height - shapeHeight) / 2;
 
-        for (var cell : piece.cells()) {
+        for (int index = 0; index < occupied.size(); index++) {
+            var cell = occupied.get(index);
             int cellX = shapeX + (cell.col() - minCol) * previewCellSize;
             int cellY = shapeY + (cell.row() - minRow) * previewCellSize;
             drawBlockCell(g2d, cellX, cellY, previewCellSize, type, colorScheme);
+            if (anvil || index == itemIndex) {
+                drawItemLetter(g2d, cellX, cellY, previewCellSize, anvil ? "W" : "L");
+            }
         }
+    }
+
+    private static void drawItemLetter(Graphics2D g2d, int x, int y, int size, String letter) {
+        g2d.setFont(new Font(Font.MONOSPACED, Font.BOLD, Math.max(12, size * 2 / 3)));
+        FontMetrics metrics = g2d.getFontMetrics();
+        int letterX = x + (size - metrics.stringWidth(letter)) / 2;
+        int letterY = y + (size - metrics.getHeight()) / 2 + metrics.getAscent();
+        g2d.setColor(Color.BLACK);
+        g2d.drawString(letter, letterX - 1, letterY);
+        g2d.drawString(letter, letterX + 1, letterY);
+        g2d.drawString(letter, letterX, letterY - 1);
+        g2d.drawString(letter, letterX, letterY + 1);
+        g2d.setColor(Color.WHITE);
+        g2d.drawString(letter, letterX, letterY);
     }
 
     private static void drawBlockCell(Graphics2D g2d, int x, int y, int size,
