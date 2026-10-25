@@ -9,7 +9,7 @@ class DefaultSpeedPolicyTest {
     private final DefaultSpeedPolicy policy = new DefaultSpeedPolicy();
 
     @Test
-    void lineAccelerationVariesWhileInitialGravityAndBlockAccelerationRemainStable() {
+    void lineAndBlockAccelerationVaryWhileInitialGravityRemainsStable() {
         assertEquals(840, policy.calculate(0, 10, Difficulty.EASY).dropIntervalMillis());
         assertEquals(800, policy.calculate(0, 10, Difficulty.NORMAL).dropIntervalMillis());
         assertEquals(760, policy.calculate(0, 10, Difficulty.HARD).dropIntervalMillis());
@@ -20,10 +20,24 @@ class DefaultSpeedPolicyTest {
         assertEquals(100, policy.calculate(0, 60, Difficulty.EASY).dropIntervalMillis());
         for (Difficulty difficulty : Difficulty.values()) {
             assertEquals(new SpeedPolicy.Speed(1, 1000), policy.calculate(0, 0, difficulty));
-            assertEquals(900, policy.calculate(10, 0, difficulty).dropIntervalMillis());
             assertEquals(100, policy.calculate(Integer.MAX_VALUE, Integer.MAX_VALUE, difficulty).dropIntervalMillis());
         }
+        assertEquals(920, policy.calculate(10, 0, Difficulty.EASY).dropIntervalMillis());
+        assertEquals(900, policy.calculate(10, 0, Difficulty.NORMAL).dropIntervalMillis());
+        assertEquals(880, policy.calculate(10, 0, Difficulty.HARD).dropIntervalMillis());
         assertEquals(100, policy.calculate(0, Integer.MAX_VALUE, Difficulty.EASY).dropIntervalMillis());
+    }
+
+    @Test
+    void difficultiesStayApartWhenTheBlockCounterDecidesTheSpeed() {
+        // Clearing a line takes at least 2.5 blocks, so the block counter decides the speed in play.
+        // Before block steps used the difficulty, all three difficulties dropped every 700ms here.
+        assertEquals(760, policy.calculate(30, 10, Difficulty.EASY).dropIntervalMillis());
+        assertEquals(700, policy.calculate(30, 10, Difficulty.NORMAL).dropIntervalMillis());
+        assertEquals(640, policy.calculate(30, 10, Difficulty.HARD).dropIntervalMillis());
+        assertEquals(600, policy.calculate(50, 20, Difficulty.EASY).dropIntervalMillis());
+        assertEquals(500, policy.calculate(50, 20, Difficulty.NORMAL).dropIntervalMillis());
+        assertEquals(400, policy.calculate(50, 20, Difficulty.HARD).dropIntervalMillis());
     }
 
     @Test
