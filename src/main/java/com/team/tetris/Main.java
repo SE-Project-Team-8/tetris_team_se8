@@ -41,7 +41,8 @@ public final class Main {
         private GameSettings settings = loadSettings();
         private final ScreenRouter router = new ScreenRouter(settings.screenSize());
         private final ForwardingListener listener = new ForwardingListener();
-        private final GameEngine engine = new GameEngine(new BlockBoardDriver(), listener);
+        private final BlockBoardDriver boardDriver = new BlockBoardDriver();
+        private final GameEngine engine = new GameEngine(boardDriver, listener);
         private final GameScreen gameScreen = new GameScreen(router, engine, settings.keyBindings(), this::onGameOver);
         private final GameOverScreen gameOverScreen = new GameOverScreen(router);
         private final NameInputScreen nameInputScreen = new NameInputScreen(router, this::saveScore);
@@ -53,7 +54,8 @@ public final class Main {
         private Application() {
             listener.setDelegate(gameScreen.eventListener());
             applySettings(settings);
-            router.addScreen(ScreenRouter.MAIN_MENU, new MainMenuScreen(router));
+            router.addScreen(ScreenRouter.MAIN_MENU, new MainMenuScreen(router,
+                    () -> startGame(false), () -> startGame(true)));
             router.addScreen(ScreenRouter.GAME, gameScreen);
             router.addScreen(ScreenRouter.PAUSE,
                     new PauseScreen(router, engine, () -> settings.keyBindings()));
@@ -105,6 +107,11 @@ public final class Main {
             bestScoreLoadGeneration++;
             bestScore = -1;
             gameScreen.setBestScore(bestScore);
+        }
+
+        private void startGame(boolean itemMode) {
+            boardDriver.setItemMode(itemMode);
+            gameScreen.startNewGame();
         }
 
         private GameSettings loadSettings() {
