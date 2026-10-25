@@ -12,6 +12,25 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class BoardTest {
     @Test
+    void crushingCellsDoesNotCompactRowsOrCountDuplicates() {
+        Board board = new Board(4, 4);
+        assertTrue(board.tryPlace(new Tetromino(TetrominoType.O, Rotation.SPAWN, 1, 1)));
+        assertEquals(1, board.eraseCells(List.of(new Cell(1, 1), new Cell(1, 1), new Cell(0, 0))));
+        assertTrue(board.cellAt(1, 1).isEmpty());
+        assertEquals(TetrominoType.O, board.cellAt(2, 1).orElseThrow());
+        assertTrue(board.cellAt(3, 1).isEmpty(), "Crushing never shifts the rows above it");
+    }
+
+    @Test
+    void invalidCrushingRequestDoesNotPartiallyEraseTheBoard() {
+        Board board = new Board(4, 4);
+        assertTrue(board.tryPlace(new Tetromino(TetrominoType.O, Rotation.SPAWN, 1, 1)));
+        assertThrows(IndexOutOfBoundsException.class,
+                () -> board.eraseCells(List.of(new Cell(1, 1), new Cell(4, 0))));
+        assertEquals(TetrominoType.O, board.cellAt(1, 1).orElseThrow());
+    }
+
+    @Test
     void itemRowAndFullRowAreRemovedTogetherWithoutDoubleCounting() {
         Board board = new Board(4, 4);
         assertTrue(board.tryPlace(new Tetromino(TetrominoType.I, Rotation.SPAWN, 1, 0)));

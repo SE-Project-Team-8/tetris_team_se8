@@ -149,7 +149,8 @@ class BlockBoardDriverTest {
         Random chooseThirdCell = new Random() {
             @Override public int nextInt(int bound) { return 2; }
         };
-        BlockBoardDriver driver = new BlockBoardDriver(board, sequence(TetrominoType.O), chooseThirdCell);
+        BlockBoardDriver driver = new BlockBoardDriver(board, sequence(TetrominoType.O),
+                chooseThirdCell, () -> ItemType.LINE_DELETE);
         driver.setItemMode(true);
         driver.reset();
         for (int round = 0; round < 5; round++) {
@@ -200,7 +201,7 @@ class BlockBoardDriverTest {
         Board board = new Board();
         BlockBoardDriver driver = new BlockBoardDriver(board, sequence(TetrominoType.O), new Random() {
             @Override public int nextInt(int bound) { return 2; }
-        });
+        }, () -> ItemType.LINE_DELETE);
         driver.setItemMode(true);
         Scores listener = new Scores();
         GameEngine.DropTimer timer = new GameEngine.DropTimer() {

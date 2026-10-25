@@ -10,7 +10,7 @@ public final class LineDeleteIds {
     public static boolean isItemCell(int id) { return id >= 7 && id <= 13; }
     public static int boardType(int id) { return id - FIRST_ITEM_ID; }
     public static int preview(int typeId, int cellIndex) { return FIRST_ITEM_ID + typeId * 4 + cellIndex; }
-    public static boolean isItemPreview(int id) { return id >= FIRST_ITEM_ID; }
+    public static boolean isItemPreview(int id) { return id >= FIRST_ITEM_ID && id <= 34; }
     public static int previewType(int id) { return (id - FIRST_ITEM_ID) / 4; }
     public static int previewCellIndex(int id) { return (id - FIRST_ITEM_ID) % 4; }
 }
