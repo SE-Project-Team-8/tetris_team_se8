@@ -116,18 +116,37 @@ public final class Board implements BoardView {
      * @return 삭제한 행 수. 완성 행이 없으면 0
      */
     public int clearFullLines() {
-        return clearLinesIncluding(-1);
+        return clearLinesIncludingAndGetRows(-1).size();
+    }
+
+    /**
+     * 완성 행을 삭제하고 삭제 전 보드에서의 행 번호를 위에서 아래 순서로 반환한다.
+     *
+     * @return 삭제한 행 번호의 불변 목록
+     */
+    public List<Integer> clearFullLinesAndGetRows() {
+        return clearLinesIncludingAndGetRows(-1);
     }
 
     /** 완성된 행과 아이템이 지정한 행을 중복 없이 함께 제거한다. -1은 지정 행 없음. */
     public int clearLinesIncluding(int forcedRow) {
+        return clearLinesIncludingAndGetRows(forcedRow).size();
+    }
+
+    /**
+     * 완성된 행과 아이템이 지정한 행을 중복 없이 함께 제거하고, 삭제 전 보드에서의 행 번호를
+     * 위에서 아래 순서로 반환한다. -1은 지정 행 없음.
+     *
+     * @return 삭제한 행 번호의 불변 목록
+     */
+    public List<Integer> clearLinesIncludingAndGetRows(int forcedRow) {
         if (forcedRow < -1 || forcedRow >= rows) {
             throw new IndexOutOfBoundsException("Invalid row: " + forcedRow);
         }
         TreeSet<Integer> rowsToClear = new TreeSet<>(LineClearer.findFullRows(this));
         if (forcedRow >= 0) rowsToClear.add(forcedRow);
         if (rowsToClear.isEmpty()) {
-            return 0;
+            return List.of();
         }
 
         TetrominoType[][] compacted = new TetrominoType[rows][cols];
@@ -140,7 +159,7 @@ public final class Board implements BoardView {
             }
         }
         cells = compacted;
-        return rowsToClear.size();
+        return List.copyOf(rowsToClear);
     }
 
     /**

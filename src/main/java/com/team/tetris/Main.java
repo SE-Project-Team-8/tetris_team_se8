@@ -1,6 +1,7 @@
 package com.team.tetris;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -47,6 +48,8 @@ public final class Main {
         private final NameInputScreen nameInputScreen = new NameInputScreen(router, this::saveScore);
         private final ScoreboardScreen scoreboardScreen = new ScoreboardScreen(router, scoreboardRepository);
         private int finalScore;
+        private int bestScoreLoadGeneration;
+        private int bestScore = -1;
 
         private Application() {
             listener.setDelegate(gameScreen.eventListener());
@@ -60,7 +63,7 @@ public final class Main {
             router.addScreen(ScreenRouter.NAME_INPUT, nameInputScreen);
             router.addScreen(ScreenRouter.SETTINGS,
                     new SettingsScreen(router, settingsRepository, scoreboardRepository,
-                            () -> settings, this::applySettings));
+                            () -> settings, this::applySettings, this::onScoresReset));
             router.addScreen(ScreenRouter.SCOREBOARD, scoreboardScreen);
             router.addWindowListener(new java.awt.event.WindowAdapter() {
                 @Override public void windowClosing(java.awt.event.WindowEvent event) {
@@ -72,6 +75,38 @@ public final class Main {
         private void show() {
             router.setVisible(true);
             router.showScreen(ScreenRouter.MAIN_MENU);
+            refreshBestScore(true);
+        }
+
+        private void refreshBestScore(boolean showError) {
+            int generation = ++bestScoreLoadGeneration;
+            new SwingWorker<Integer, Void>() {
+                @Override protected Integer doInBackground() throws Exception {
+                    List<ScoreRecord> records = scoreboardRepository.load();
+                    return records.isEmpty() ? -1 : records.getFirst().score();
+                }
+
+                @Override protected void done() {
+                    if (generation != bestScoreLoadGeneration) {
+                        return;
+                    }
+                    try {
+                        bestScore = get();
+                        gameScreen.setBestScore(bestScore);
+                    } catch (Exception failure) {
+                        if (showError) {
+                            JOptionPane.showMessageDialog(router, "Could not load the best score.",
+                                    "Scoreboard error", JOptionPane.ERROR_MESSAGE);
+                        }
+                    }
+                }
+            }.execute();
+        }
+
+        private void onScoresReset() {
+            bestScoreLoadGeneration++;
+            bestScore = -1;
+            gameScreen.setBestScore(bestScore);
         }
 
         private void startGame(boolean itemMode) {
@@ -144,7 +179,11 @@ public final class Main {
 
                 @Override protected void done() {
                     try {
-                        scoreboardScreen.highlight(get().map(ScoreRecord::id).orElse(null));
+                        Optional<ScoreRecord> savedRecord = get();
+                        scoreboardScreen.highlight(savedRecord.map(ScoreRecord::id).orElse(null));
+                        if (savedRecord.isPresent()) {
+                            refreshBestScore(true);
+                        }
                         router.showScreen(ScreenRouter.SCOREBOARD);
                     } catch (Exception failure) {
                         nameInputScreen.showError("Could not save score. Check the name and retry.");
@@ -162,6 +201,13 @@ public final class Main {
         }
 
         @Override public void onBoardUpdated(BoardSnapshot snapshot) { delegate.onBoardUpdated(snapshot); }
+        @Override public void onLandingUpdated(BoardSnapshot falling, BoardSnapshot landing) {
+            delegate.onLandingUpdated(falling, landing);
+        }
+        @Override public void onLinesCleared(List<Integer> rows) { delegate.onLinesCleared(rows); }
+        @Override public void onLinesCleared(List<Integer> rows, BoardSnapshot snapshot) {
+            delegate.onLinesCleared(rows, snapshot);
+        }
         @Override public void onScoreChanged(int score) { delegate.onScoreChanged(score); }
         @Override public void onNextBlocksChanged(int[] types) { delegate.onNextBlocksChanged(types); }
         @Override public void onPauseStateChanged(boolean paused) { delegate.onPauseStateChanged(paused); }

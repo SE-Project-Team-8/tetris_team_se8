@@ -16,6 +16,8 @@ import com.team.tetris.common.events.LineDeleteIds;
 import com.team.tetris.common.events.AnvilIds;
 
 import java.util.ArrayDeque;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Objects;
 import java.util.Random;
 import java.util.function.Supplier;
@@ -165,13 +167,16 @@ public final class BlockBoardDriver implements GameEngine.BoardDriver {
         int forcedRow = currentItemIndex < 0 ? -1 : landed.cells().get(currentItemIndex).row();
         current = null;
         currentItemIndex = -1;
-        int removed = board.clearLinesIncluding(forcedRow);
+        BoardSnapshot boardBeforeClear = snapshot();
+        List<Integer> clearedRows = board.clearLinesIncludingAndGetRows(forcedRow);
+        int removed = clearedRows.size();
         if (itemMode) {
             int previousMilestones = clearedLines / 10;
             clearedLines += removed;
             pendingItems += clearedLines / 10 - previousMilestones;
         }
-        return new GameEngine.LockResult(removed, false);
+        return new GameEngine.LockResult(removed, false, clearedRows,
+                clearedRows.isEmpty() ? null : boardBeforeClear);
     }
 
     @Override
@@ -198,6 +203,31 @@ public final class BlockBoardDriver implements GameEngine.BoardDriver {
         }
         if (currentAnvil != null) {
             for (Cell cell : currentAnvil.cells()) cells[cell.row()][cell.col()] = AnvilIds.ANVIL_ID;
+        }
+        return new BoardSnapshot(cells);
+    }
+
+    @Override
+    public BoardSnapshot fallingSnapshot() {
+        return current == null ? null : pieceSnapshot(current);
+    }
+
+    @Override
+    public BoardSnapshot landingSnapshot() {
+        if (current == null) {
+            return null;
+        }
+        int distance = DropCalculator.dropDistance(board, current);
+        return distance > 0 ? pieceSnapshot(current.moveBy(distance, 0)) : null;
+    }
+
+    private BoardSnapshot pieceSnapshot(Tetromino piece) {
+        int[][] cells = new int[board.rows()][board.cols()];
+        for (int[] row : cells) {
+            Arrays.fill(row, BoardSnapshot.EMPTY);
+        }
+        for (Cell cell : piece.cells()) {
+            cells[cell.row()][cell.col()] = piece.type().id();
         }
         return new BoardSnapshot(cells);
     }

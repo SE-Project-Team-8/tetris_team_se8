@@ -44,6 +44,17 @@ class BoardTest {
     }
 
     @Test
+    void itemRowClearReportsRemovedRowsFromTopToBottom() {
+        Board board = new Board(4, 4);
+        assertTrue(board.tryPlace(new Tetromino(TetrominoType.I, Rotation.SPAWN, 1, 0)));
+        assertTrue(board.tryPlace(new Tetromino(TetrominoType.O, Rotation.SPAWN, 0, 0)));
+        assertEquals(List.of(1, 2), board.clearLinesIncludingAndGetRows(1));
+        assertEquals(List.of("....", "....", "OO..", "...."), BoardFixtures.picture(board));
+        assertEquals(List.of(), board.clearLinesIncludingAndGetRows(-1));
+        assertThrows(IndexOutOfBoundsException.class, () -> board.clearLinesIncludingAndGetRows(4));
+    }
+
+    @Test
     void defaultBoardHasRequiredDimensionsAndOnlyEmptyCells() {
         var board = new Board();
         assertEquals(20, board.rows());
