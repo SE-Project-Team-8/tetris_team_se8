@@ -3,6 +3,7 @@ package com.team.tetris.game;
 import com.team.tetris.common.events.BoardSnapshot;
 import com.team.tetris.common.events.GameEventListener;
 import com.team.tetris.common.Difficulty;
+import com.team.tetris.game.item.GameEffects;
 import com.team.tetris.game.item.Item;
 
 import javax.swing.SwingUtilities;
@@ -111,6 +112,10 @@ public final class GameEngine implements AutoCloseable {
     private int clearedLines;
     private long timerGeneration;
     private long survivalGeneration;
+    private final GameEffects effects = new ItemEffects();
+    private int scoreMultiplier = 1;
+    private int multiplierSeconds;
+    private int slowdownSteps;
 
     public GameEngine(BoardDriver board, GameEventListener listener) {
         this(board, listener, () -> Difficulty.NORMAL);
@@ -154,6 +159,9 @@ public final class GameEngine implements AutoCloseable {
         score = 0;
         generatedBlocks = 0;
         clearedLines = 0;
+        scoreMultiplier = 1;
+        multiplierSeconds = 0;
+        slowdownSteps = 0;
         updateSpeed();
         transition(GameState.RUNNING);
         listener.onPauseStateChanged(false);
@@ -229,6 +237,12 @@ public final class GameEngine implements AutoCloseable {
     public int getGeneratedBlocks() { return generatedBlocks; }
     public int getClearedLines() { return clearedLines; }
     public Difficulty getDifficulty() { return difficulty; }
+    /** 1 unless an item multiplies every point earned for a while. */
+    public int getScoreMultiplier() { return scoreMultiplier; }
+    /** Survival ticks left before the multiplier returns to 1; the UI can draw this countdown. */
+    public int getScoreMultiplierSeconds() { return multiplierSeconds; }
+    /** Levels removed by slow-down items in this game. */
+    public int getSlowdownSteps() { return slowdownSteps; }
 
     public int getDropIntervalMillis() {
         return speed.dropIntervalMillis();
@@ -258,6 +272,9 @@ public final class GameEngine implements AutoCloseable {
         }
         award(scoring.lineClearPoints(result.clearedLines(), getLevel(), difficulty));
         clearedLines = addCount(clearedLines, result.clearedLines());
+        // Item effects start after the locked piece's own points are awarded.
+        Item item = board.lockedItem();
+        if (item != null) item.onActivated(effects);
         if (result.topOut()) {
             gameOver();
             return;
@@ -279,7 +296,8 @@ public final class GameEngine implements AutoCloseable {
     }
 
     private void updateSpeed() {
-        speed = Objects.requireNonNull(speedPolicy.calculate(generatedBlocks, clearedLines, difficulty), "speed");
+        speed = Objects.requireNonNull(
+                speedPolicy.calculate(generatedBlocks, clearedLines, difficulty, slowdownSteps), "speed");
     }
 
     private static int addCount(int count, int increment) {
@@ -295,7 +313,7 @@ public final class GameEngine implements AutoCloseable {
 
     private void award(int points) {
         if (points == 0) return;
-        int updated = scoring.add(score, points);
+        int updated = scoring.add(score, (int) Math.min(Integer.MAX_VALUE, (long) points * scoreMultiplier));
         if (updated != score) {
             score = updated;
             listener.onScoreChanged(score);
@@ -341,8 +359,38 @@ public final class GameEngine implements AutoCloseable {
             requireEdt();
             if (generation == survivalGeneration && state == GameState.RUNNING) {
                 award(SURVIVAL_POINTS_PER_SECOND);
+                countDownMultiplier();
             }
         });
+    }
+
+    /** The survival tick only runs while RUNNING, so a paused game keeps its remaining seconds. */
+    private void countDownMultiplier() {
+        if (multiplierSeconds == 0) return;
+        if (--multiplierSeconds == 0) scoreMultiplier = 1;
+    }
+
+    /** The only engine state items can change; kept private so callers cannot cast the engine. */
+    private final class ItemEffects implements GameEffects {
+        @Override
+        public void scoreMultiplier(int multiplier, int seconds) {
+            if (multiplier < 1 || seconds < 1) {
+                throw new IllegalArgumentException("multiplier and seconds must be positive");
+            }
+            // A repeated item restarts the countdown instead of adding to it.
+            scoreMultiplier = multiplier;
+            multiplierSeconds = seconds;
+        }
+
+        @Override
+        public void lowerLevel(int steps) {
+            if (steps < 0) throw new IllegalArgumentException("steps must be non-negative");
+            // Level 1 has nothing to lower, so the item is not saved for a later level-up.
+            if (getLevel() > 1) {
+                slowdownSteps = addCount(slowdownSteps, steps);
+                updateSpeed();
+            }
+        }
     }
 
     private void transition(GameState next) {
