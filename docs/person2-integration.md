@@ -63,8 +63,8 @@ GameEngine engine = new GameEngine(new BlockBoardDriver(), listener,
 | 색맹 모드 설정 | OFF / RED_GREEN / BLUE_YELLOW 저장. 색상 적용은 block/UI에서 수행 |
 | 키 설정 | 좌/우/아래/회전/즉시 낙하/일시정지/종료, 중복키 금지 |
 | 기본 설정 복원 | `SettingsRepository.reset()`으로 저장까지 완료 |
-| 순위 영속화 및 초기화 | 기본 상위 10개, 설정 가능한 용량 ≥10, `ScoreboardRepository.reset()` |
-| 새 기록 이름 입력/강조 지원 | `qualifies(score)`, `add(name, score)`가 반환하는 기록의 UUID |
+| 순위 영속화 및 초기화 | 모드·난이도 조합마다 기본 상위 10개, 설정 가능한 용량 ≥10, `ScoreboardRepository.reset()` |
+| 새 기록 이름 입력/강조 지원 | `qualifies(score, difficulty, mode)`, `add(name, score, difficulty, mode)`가 반환하는 기록의 UUID |
 
 첫 블록도 생성 수에 포함한다. 새 블록 생성 이후 레벨을 갱신하므로 10번째 블록부터 레벨 2이다.
 낙하와 줄 삭제 점수는 그 동작을 수행한 레벨로 계산한다. 점수는 공용 이벤트의 `int` 범위를
@@ -143,10 +143,10 @@ Esc 게임 종료. 이동 키 반복 입력은 매번 처리한다. P/Esc는 UI�
 `onBoardUpdated`, `onScoreChanged`, `onNextBlocksChanged`로 표시를 갱신하고,
 `onPauseStateChanged`로 일시정지 화면을 전환한다. `onGameOver(finalScore)`에서는 다음을 진행한다.
 
-1. 조립부에서 `scoreboard.qualifies(finalScore)`를 확인한다. 디스크 오류는 사용자에게 알리고 재시도한다.
-2. 등재 가능하면 이름을 입력받고 `scoreboard.add(name, finalScore)`를 호출한다.
+1. 조립부에서 `scoreboard.qualifies(finalScore, difficulty, mode)`로 플레이한 모드·난이도 순위에 드는지 확인한다. 디스크 오류는 사용자에게 알리고 재시도한다.
+2. 등재 가능하면 이름을 입력받고 `scoreboard.add(name, finalScore, difficulty, mode)`를 호출한다.
 3. 반환된 `Optional<ScoreRecord>`가 있으면 `id()`를 보관한다.
-4. `scoreboard.load()`로 점수 내림차순 목록을 표시하고 같은 ID인 행을 강조한다.
+4. `ScoreboardScreen.select(mode, difficulty)`로 플레이한 순위를 고르고, `scoreboard.load(difficulty, mode)`의 점수 내림차순 목록에서 같은 ID인 행을 강조한다.
 5. 처리 후 시작 메뉴로 돌아가거나 프로그램을 종료한다.
 
 등재 조건: 빈자리가 있거나 최하위 점수보다 **엄격히 높은** 점수. 동점은 먼저 저장한 기록이
@@ -165,7 +165,7 @@ Esc 게임 종료. 이동 키 반복 입력은 매번 처리한다. P/Esc는 UI�
 | 3 | Esc | 플레이 중 Esc는 `QUIT`로 게임을 종료하고 메뉴로 간다. P는 일시정지·재개에 쓴다. 일시정지 메뉴의 종료도 `QUIT`이다. |
 | 4 | 키 설정 | UI는 저장된 `KeyBindings`로 키 코드를 `GameAction`에 매핑하고 설정 변경 시 바인딩을 다시 등록한다. |
 | 5 | 게임 오버 정보 | `onGameOver(score)`는 유지하고, 레벨·삭제 줄 수는 `GameEngine` getter로 조회한다. |
-| 6 | 순위권 판정 | 조립부가 `ScoreboardRepository.qualifies(score)`를 EDT 밖에서 호출한다. `IOException`이면 오류를 표시하고 재시도하도록 하며 임의로 탈락 처리하지 않는다. |
+| 6 | 순위권 판정 | 조립부가 `ScoreboardRepository.qualifies(score, difficulty, mode)`를 EDT 밖에서 호출한다. `IOException`이면 오류를 표시하고 재시도하도록 하며 임의로 탈락 처리하지 않는다. |
 | 7 | 창 크기 | 시작 시 `GameSettings.screenSize()`를 읽어 `ScreenRouter.updateWindowSize(width, height)`에 적용한다. |
 
 PR #5의 `GameEngine`과 PR #6의 화면은 `GameSession` 없이 연결한다.
@@ -182,7 +182,7 @@ PR #5의 `GameEngine`과 PR #6의 화면은 `GameSession` 없이 연결한다.
 | 게임 입력 | `KeyBindings.actionFor(keyCode).ifPresent(engine::handle)`; 설정을 바꾸면 Swing 키 바인딩도 다시 등록 |
 | Esc / P | 플레이 중 Esc는 `QUIT` → `STOPPED` 후 메뉴, P는 `PAUSE` 토글. 일시정지 메뉴의 종료는 `handle(QUIT)`, 재개는 `resume()` |
 | 게임 오버 | `onGameOver(score)`에서 `engine.getLevel()`과 `engine.getClearedLines()`를 읽어 결과 화면에 전달; 이벤트 시그니처는 유지 |
-| 순위권 판정 | 조립부가 `ScoreboardRepository.qualifies(score)`를 호출. `IOException`은 비순위권으로 취급하지 않고 오류 표시·재시도 제공 |
+| 순위권 판정 | 조립부가 `ScoreboardRepository.qualifies(score, difficulty, mode)`를 호출. `IOException`은 비순위권으로 취급하지 않고 오류 표시·재시도 제공 |
 | 창 크기 | 시작 시 저장된 `GameSettings.screenSize().width()/height()`를 `ScreenRouter.updateWindowSize`에 전달 |
 | 보드 | `new BlockBoardDriver()` 사용; `BoardDriver`를 UI가 직접 구현하거나 블록 상태를 중복 관리하지 않음 |
 

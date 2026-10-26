@@ -2,6 +2,7 @@ package com.team.tetris.scoreboard;
 
 import org.junit.jupiter.api.Test;
 import com.team.tetris.common.Difficulty;
+import com.team.tetris.common.GameMode;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
@@ -21,16 +22,64 @@ class ScoreboardRepositoryTest {
         Path file = directory.resolve("scores.properties");
         ScoreboardRepository repository = repository();
         ScoreRecord first = repository.add("기존 기록", 100).orElseThrow();
-        String legacy = Files.readString(file).replace("version=2", "version=1")
-                .replaceAll("(?m)^record\\.\\d+\\.difficulty=.*\\R?", "");
+        String legacy = Files.readString(file).replace("version=3", "version=1")
+                .replaceAll("(?m)^record\\.\\d+\\.(difficulty|mode)=.*\\R?", "");
         Files.writeString(file, legacy);
         assertEquals(first, repository.load().getFirst());
         assertEquals(legacy, Files.readString(file));
         ScoreRecord hard = repository.add("어려움", 200, Difficulty.HARD).orElseThrow();
         ScoreRecord easy = repository.add("쉬움", 150, Difficulty.EASY).orElseThrow();
         assertEquals(List.of(hard, easy, first), repository().load());
-        assertTrue(Files.readString(file).contains("version=2"));
+        assertTrue(Files.readString(file).contains("version=3"));
         assertEquals(Difficulty.NORMAL, repository().load().getLast().difficulty());
+    }
+
+    @Test
+    void modeRoundTripsSoNormalAndItemScoresStayDistinguishable() throws Exception {
+        ScoreboardRepository repository = repository();
+        ScoreRecord item = repository.add("아이템", 300, Difficulty.HARD, GameMode.ITEM).orElseThrow();
+        ScoreRecord normal = repository.add("일반", 200, Difficulty.EASY, GameMode.NORMAL).orElseThrow();
+        ScoreRecord defaulted = repository.add("기본", 100, Difficulty.NORMAL).orElseThrow();
+        List<ScoreRecord> loaded = repository().load();
+        assertEquals(List.of(item, normal, defaulted), loaded);
+        assertEquals(List.of(GameMode.ITEM, GameMode.NORMAL, GameMode.NORMAL),
+                loaded.stream().map(ScoreRecord::mode).toList());
+        assertEquals(Difficulty.HARD, loaded.getFirst().difficulty());
+    }
+
+    @Test
+    void versionTwoScoresAreReadAsNormalModeAndUpgradedOnTheNextSave() throws Exception {
+        Path file = directory.resolve("scores.properties");
+        ScoreboardRepository repository = repository();
+        ScoreRecord hard = repository.add("2차 기록", 100, Difficulty.HARD).orElseThrow();
+        String versionTwo = Files.readString(file).replace("version=3", "version=2")
+                .replaceAll("(?m)^record\\.\\d+\\.mode=.*\\R?", "");
+        Files.writeString(file, versionTwo);
+
+        ScoreRecord migrated = repository().load().getFirst();
+        assertEquals(hard, migrated);
+        assertEquals(GameMode.NORMAL, migrated.mode());
+        assertEquals(Difficulty.HARD, migrated.difficulty());
+        assertEquals(versionTwo, Files.readString(file), "Loading alone never rewrites the file");
+
+        repository.add("아이템", 50, Difficulty.NORMAL, GameMode.ITEM);
+        String upgraded = Files.readString(file);
+        assertTrue(upgraded.contains("version=3"));
+        assertTrue(upgraded.contains("mode=ITEM") && upgraded.contains("mode=NORMAL"));
+    }
+
+    @Test
+    void versionThreeRecordsCannotSilentlyLoseTheirMode() throws Exception {
+        Path file = directory.resolve("scores.properties");
+        repository().add("기록", 100, Difficulty.HARD, GameMode.ITEM);
+        String valid = Files.readString(file);
+        for (String invalid : new String[]{valid.replace("mode=ITEM", "mode=UNKNOWN"),
+                valid.replaceAll("(?m)^record\\.\\d+\\.mode=.*\\R?", ""),
+                valid.replace("version=3", "version=4")}) {
+            Files.writeString(file, invalid);
+            assertThrows(IOException.class, () -> repository().load());
+            assertEquals(invalid, Files.readString(file));
+        }
     }
 
     @Test
@@ -71,6 +120,37 @@ class ScoreboardRepositoryTest {
     }
 
     @Test
+    void highScoresOfOneDifficultyDoNotPushOutAnotherDifficultysRecords() throws Exception {
+        ScoreboardRepository repository = repository();
+        for (int i = 0; i < 10; i++) repository.add("어려움" + i, 1000 + i, Difficulty.HARD);
+        ScoreRecord easy = repository.add("쉬움", 10, Difficulty.EASY).orElseThrow();
+        ScoreRecord item = repository.add("아이템", 20, Difficulty.HARD, GameMode.ITEM).orElseThrow();
+        List<ScoreRecord> records = repository().load();
+        assertEquals(12, records.size());
+        assertTrue(records.contains(easy));
+        assertTrue(records.contains(item));
+    }
+
+    @Test
+    void eachModeAndDifficultyIsRankedSeparatelyWithItsOwnTopTen() throws Exception {
+        ScoreboardRepository repository = repository();
+        for (int i = 0; i < 12; i++) repository.add("일반" + i, i * 100, Difficulty.HARD, GameMode.NORMAL);
+        ScoreRecord item = repository.add("아이템", 50, Difficulty.HARD, GameMode.ITEM).orElseThrow();
+
+        List<ScoreRecord> normalHard = repository().load(Difficulty.HARD, GameMode.NORMAL);
+        assertEquals(10, normalHard.size());
+        for (int i = 0; i < 10; i++) assertEquals((11 - i) * 100, normalHard.get(i).score());
+        assertEquals(List.of(item), repository().load(Difficulty.HARD, GameMode.ITEM));
+        assertTrue(repository().load(Difficulty.EASY, GameMode.ITEM).isEmpty());
+
+        assertFalse(repository.qualifies(200, Difficulty.HARD, GameMode.NORMAL));
+        assertTrue(repository.qualifies(201, Difficulty.HARD, GameMode.NORMAL));
+        assertTrue(repository.qualifies(0, Difficulty.HARD, GameMode.ITEM));
+        assertTrue(repository.qualifies(0, Difficulty.NORMAL, GameMode.NORMAL));
+        assertTrue(repository.add("미달", 200, Difficulty.HARD, GameMode.NORMAL).isEmpty());
+    }
+
+    @Test
     void equalScoresKeepInsertionOrderAndDistinctIdsForHighlighting() throws Exception {
         ScoreboardRepository repository = repository();
         ScoreRecord first = repository.add("김테트리스", 123).orElseThrow();
@@ -106,7 +186,7 @@ class ScoreboardRepositoryTest {
     @Test
     void corruptDataDoesNotGetSilentlyOverwrittenByAddingAScore() throws Exception {
         Path file = directory.resolve("scores.properties");
-        for (String invalid : new String[]{"version=3\ncount=0", "version=1\ncount=-1",
+        for (String invalid : new String[]{"version=4\ncount=0", "version=1\ncount=-1",
                 "version=1\ncount=20", "version=1\ncount=no", "missing=version", "bad=\\uXXXX"}) {
             Files.writeString(file, invalid);
             assertThrows(IOException.class, () -> repository().load());
@@ -143,6 +223,9 @@ class ScoreboardRepositoryTest {
         assertThrows(IllegalArgumentException.class, () -> repository().qualifies(-1));
         assertThrows(NullPointerException.class, () -> new ScoreRecord(UUID.randomUUID(), "이름", 0, null));
         assertThrows(NullPointerException.class, () -> new ScoreRecord(null, "이름", 0, Instant.now()));
+        assertThrows(NullPointerException.class,
+                () -> new ScoreRecord(UUID.randomUUID(), "이름", 0, Instant.now(), Difficulty.NORMAL, null));
+        assertEquals(GameMode.NORMAL, new ScoreRecord("이름", 0, Difficulty.HARD).mode());
     }
 
     private ScoreboardRepository repository() {
