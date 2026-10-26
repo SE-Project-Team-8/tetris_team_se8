@@ -47,6 +47,7 @@ public final class ItemRegistry {
         return new ItemRegistry(List.of(
                 new LineDeleteItem(),
                 new AnvilItem(),
+                new BombItem(),
                 new FeverItem()));
     }
 
