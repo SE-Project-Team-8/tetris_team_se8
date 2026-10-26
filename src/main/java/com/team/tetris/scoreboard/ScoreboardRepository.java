@@ -11,8 +11,10 @@ import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
@@ -20,6 +22,8 @@ import java.util.UUID;
 
 /**
  * Share one repository per application. Equal scores keep earlier entries first.
+ * Each mode and difficulty pair is a separate ranking that keeps its own top entries, because
+ * difficulty and items change how scores are earned.
  * File versions: 1 = no difficulty, 2 = difficulty, 3 = difficulty and mode. Older records load
  * as NORMAL difficulty and NORMAL mode and are rewritten as version 3 on the next save.
  */
@@ -45,6 +49,7 @@ public final class ScoreboardRepository {
         this.capacity = capacity;
     }
 
+    /** Every ranking's entries together, highest score first. */
     public synchronized List<ScoreRecord> load() throws IOException {
         Properties properties = PropertiesFile.read(file);
         if (properties.isEmpty()) return List.of();
@@ -71,16 +76,25 @@ public final class ScoreboardRepository {
                 records.add(record);
             }
             records.sort(SCORE_ORDER);
-            return List.copyOf(records.subList(0, Math.min(capacity, records.size())));
+            return List.copyOf(keepTopOfEachRanking(records));
         } catch (IllegalArgumentException | DateTimeParseException invalid) {
             throw new IOException("Invalid scoreboard: " + file, invalid);
         }
     }
 
+    /** One ranking: only the records played in the given difficulty and mode, highest score first. */
+    public synchronized List<ScoreRecord> load(Difficulty difficulty, GameMode mode) throws IOException {
+        return ranking(load(), difficulty, mode);
+    }
+
     public synchronized boolean qualifies(int score) throws IOException {
+        return qualifies(score, Difficulty.NORMAL, GameMode.NORMAL);
+    }
+
+    public synchronized boolean qualifies(int score, Difficulty difficulty, GameMode mode) throws IOException {
         if (score < 0) throw new IllegalArgumentException("score must be non-negative");
-        List<ScoreRecord> records = load();
-        return records.size() < capacity || score > records.getLast().score();
+        List<ScoreRecord> ranking = load(difficulty, mode);
+        return ranking.size() < capacity || score > ranking.getLast().score();
     }
 
     /** Save only a qualifying result. The returned ID can be used for UI highlighting. */
@@ -96,15 +110,36 @@ public final class ScoreboardRepository {
             throws IOException {
         ScoreRecord record = new ScoreRecord(name, score, difficulty, mode);
         List<ScoreRecord> records = new ArrayList<>(load());
-        if (records.size() == capacity && score <= records.getLast().score()) return Optional.empty();
+        List<ScoreRecord> ranking = ranking(records, difficulty, mode);
+        if (ranking.size() == capacity && score <= ranking.getLast().score()) return Optional.empty();
         records.add(record);
         records.sort(SCORE_ORDER);
-        save(records.subList(0, Math.min(capacity, records.size())));
+        save(keepTopOfEachRanking(records));
         return Optional.of(record);
     }
 
     public synchronized void reset() throws IOException {
         save(List.of());
+    }
+
+    private static List<ScoreRecord> ranking(List<ScoreRecord> records, Difficulty difficulty, GameMode mode) {
+        Objects.requireNonNull(difficulty, "difficulty");
+        Objects.requireNonNull(mode, "mode");
+        return records.stream()
+                .filter(record -> record.difficulty() == difficulty && record.mode() == mode)
+                .toList();
+    }
+
+    /** Expects records sorted by score; keeps that order and each ranking's first {@code capacity} entries. */
+    private List<ScoreRecord> keepTopOfEachRanking(List<ScoreRecord> sorted) {
+        Map<List<Enum<?>>, Integer> kept = new HashMap<>();
+        List<ScoreRecord> result = new ArrayList<>();
+        for (ScoreRecord record : sorted) {
+            if (kept.merge(List.of(record.difficulty(), record.mode()), 1, Integer::sum) <= capacity) {
+                result.add(record);
+            }
+        }
+        return result;
     }
 
     private void save(List<ScoreRecord> records) throws IOException {

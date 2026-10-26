@@ -120,6 +120,37 @@ class ScoreboardRepositoryTest {
     }
 
     @Test
+    void highScoresOfOneDifficultyDoNotPushOutAnotherDifficultysRecords() throws Exception {
+        ScoreboardRepository repository = repository();
+        for (int i = 0; i < 10; i++) repository.add("어려움" + i, 1000 + i, Difficulty.HARD);
+        ScoreRecord easy = repository.add("쉬움", 10, Difficulty.EASY).orElseThrow();
+        ScoreRecord item = repository.add("아이템", 20, Difficulty.HARD, GameMode.ITEM).orElseThrow();
+        List<ScoreRecord> records = repository().load();
+        assertEquals(12, records.size());
+        assertTrue(records.contains(easy));
+        assertTrue(records.contains(item));
+    }
+
+    @Test
+    void eachModeAndDifficultyIsRankedSeparatelyWithItsOwnTopTen() throws Exception {
+        ScoreboardRepository repository = repository();
+        for (int i = 0; i < 12; i++) repository.add("일반" + i, i * 100, Difficulty.HARD, GameMode.NORMAL);
+        ScoreRecord item = repository.add("아이템", 50, Difficulty.HARD, GameMode.ITEM).orElseThrow();
+
+        List<ScoreRecord> normalHard = repository().load(Difficulty.HARD, GameMode.NORMAL);
+        assertEquals(10, normalHard.size());
+        for (int i = 0; i < 10; i++) assertEquals((11 - i) * 100, normalHard.get(i).score());
+        assertEquals(List.of(item), repository().load(Difficulty.HARD, GameMode.ITEM));
+        assertTrue(repository().load(Difficulty.EASY, GameMode.ITEM).isEmpty());
+
+        assertFalse(repository.qualifies(200, Difficulty.HARD, GameMode.NORMAL));
+        assertTrue(repository.qualifies(201, Difficulty.HARD, GameMode.NORMAL));
+        assertTrue(repository.qualifies(0, Difficulty.HARD, GameMode.ITEM));
+        assertTrue(repository.qualifies(0, Difficulty.NORMAL, GameMode.NORMAL));
+        assertTrue(repository.add("미달", 200, Difficulty.HARD, GameMode.NORMAL).isEmpty());
+    }
+
+    @Test
     void equalScoresKeepInsertionOrderAndDistinctIdsForHighlighting() throws Exception {
         ScoreboardRepository repository = repository();
         ScoreRecord first = repository.add("김테트리스", 123).orElseThrow();

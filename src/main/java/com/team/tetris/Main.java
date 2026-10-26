@@ -83,11 +83,14 @@ public final class Main {
             refreshBestScore(true);
         }
 
+        /** The best-score notice compares against the ranking of the mode and difficulty being played. */
         private void refreshBestScore(boolean showError) {
             int generation = ++bestScoreLoadGeneration;
+            Difficulty difficulty = settings.difficulty();
+            GameMode mode = currentMode;
             new SwingWorker<Integer, Void>() {
                 @Override protected Integer doInBackground() throws Exception {
-                    List<ScoreRecord> records = scoreboardRepository.load();
+                    List<ScoreRecord> records = scoreboardRepository.load(difficulty, mode);
                     return records.isEmpty() ? -1 : records.getFirst().score();
                 }
 
@@ -117,6 +120,9 @@ public final class Main {
         private void startGame(boolean itemMode) {
             currentMode = itemMode ? GameMode.ITEM : GameMode.NORMAL;
             boardDriver.setItemMode(itemMode);
+            // No notice until this ranking's best score is loaded; the previous game's may differ.
+            gameScreen.setBestScore(-1);
+            refreshBestScore(false);
             gameScreen.startNewGame();
         }
 
@@ -157,14 +163,18 @@ public final class Main {
         }
 
         private void checkRanking(int score, int level, int lines) {
+            Difficulty difficulty = finalDifficulty;
+            GameMode mode = finalMode;
             new SwingWorker<Boolean, Void>() {
                 @Override protected Boolean doInBackground() throws Exception {
-                    return scoreboardRepository.qualifies(score);
+                    return scoreboardRepository.qualifies(score, difficulty, mode);
                 }
 
                 @Override protected void done() {
                     try {
                         boolean qualifies = get();
+                        // Both "Enter name" and "View scoreboard" lead to the ranking just played.
+                        scoreboardScreen.select(mode, difficulty);
                         gameOverScreen.setGameResult(score, level, lines, qualifies);
                         router.showScreen(ScreenRouter.GAME_OVER);
                     } catch (Exception failure) {
