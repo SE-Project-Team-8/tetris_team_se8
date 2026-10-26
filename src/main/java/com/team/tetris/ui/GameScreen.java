@@ -8,6 +8,7 @@ import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.event.ActionEvent;
+import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
 import java.util.Arrays;
 import java.util.List;
@@ -45,6 +46,8 @@ import com.team.tetris.settings.KeyBindings;
  * 보드·점수·다음 블록의 실제 상태는 GameEngine이 소유한다.
  */
 public class GameScreen extends JPanel implements Screen {
+    /** Shift·Ctrl·Alt·Meta를 누른 모든 조합. 조작 키는 수정 키를 함께 누른 상태로도 연결한다. */
+    private static final int[] MODIFIER_COMBINATIONS = modifierCombinations();
     // 화면 크기와 관계없이 유지할 여백 및 상·하단 영역의 기준 크기다.
     private static final int PADDING = 16;
     private static final int PANEL_GAP = 16;
@@ -326,8 +329,12 @@ public class GameScreen extends JPanel implements Screen {
         getActionMap().clear();
         for (GameAction action : GameAction.values()) {
             int keyCode = bindings.keyFor(action);
-            bindKey(action.name(), KeyStroke.getKeyStroke(keyCode, 0), () ->
-                    keyBindings.actionFor(keyCode).ifPresent(this::handleAction));
+            // 수정 키(Shift 등)를 조작 키로 지정하면 그 키를 누를 때 자기 자신이 눌린 상태로 오고,
+            // 수정 키를 누른 채 다른 조작 키를 눌러도 동작해야 하므로 모든 조합에 같은 동작을 연결한다.
+            for (int modifiers : MODIFIER_COMBINATIONS) {
+                bindKey(action.name(), KeyStroke.getKeyStroke(keyCode, modifiers), () ->
+                        keyBindings.actionFor(keyCode).ifPresent(this::handleAction));
+            }
         }
         repaint();
     }
@@ -336,6 +343,18 @@ public class GameScreen extends JPanel implements Screen {
         if (!engine.handle(action)) return;
         if (action == GameAction.PAUSE) router.showScreen(ScreenRouter.PAUSE);
         if (action == GameAction.QUIT) router.showScreen(ScreenRouter.MAIN_MENU);
+    }
+
+    private static int[] modifierCombinations() {
+        int[] masks = {InputEvent.SHIFT_DOWN_MASK, InputEvent.CTRL_DOWN_MASK,
+                InputEvent.ALT_DOWN_MASK, InputEvent.META_DOWN_MASK};
+        int[] combinations = new int[1 << masks.length];
+        for (int combination = 0; combination < combinations.length; combination++) {
+            for (int bit = 0; bit < masks.length; bit++) {
+                if ((combination & (1 << bit)) != 0) combinations[combination] |= masks[bit];
+            }
+        }
+        return combinations;
     }
 
     private void bindKey(String name, KeyStroke keyStroke, Runnable command) {
