@@ -1,6 +1,7 @@
 /*
  * FeverItem(F) 테스트. 효과 요청(scoreMultiplier(2, 10))과 보드 무변경, 실제 BlockBoardDriver·GameEngine 경로의
- * F 칸 표시, 10초 동안 2배(F 블록 자신은 1배), 정확한 10초 시작점, 일시정지 중 정지, 재획득 갱신, 새 게임 종료를 검증한다.
+ * F 칸 표시, 10초 동안 2배(F 블록 자신은 1배), 정확한 10초 시작점, 일시정지 중 정지와 진행분 보존(연속 일시정지로
+ * 늘릴 수 없음), 재획득 갱신, 새 게임 종료를 검증한다.
  */
 package com.team.tetris.game.item;
 
@@ -153,6 +154,64 @@ class FeverItemTest {
     }
 
     @Test
+    void pauseKeepsThePartOfTheSecondAlreadyPlayed() throws Exception {
+        Board board = new Board();
+        SimulatedTimer survival = new SimulatedTimer();
+        GameEngine engine = engine(feverDriver(board), survival);
+        SwingUtilities.invokeAndWait(() -> {
+            try {
+                assertTrue(engine.start());
+                earnFeverBlock(engine, board);
+                assertTrue(engine.handle(GameAction.HARD_DROP));
+                survival.advance(300);
+                assertTrue(engine.pause());
+                survival.advance(5_000);
+                assertTrue(engine.resume());
+                assertEquals(700, survival.firstDelay, "Only the unplayed 700 ms remain before the next tick");
+                survival.advance(699);
+                assertEquals(FeverItem.SECONDS, engine.getScoreMultiplierSeconds());
+                survival.advance(1);
+                assertEquals(FeverItem.SECONDS - 1, engine.getScoreMultiplierSeconds());
+            } finally {
+                engine.close();
+            }
+        });
+    }
+
+    @Test
+    void pausingRightBeforeEveryTickCannotStretchTheFever() throws Exception {
+        Board board = new Board();
+        SimulatedTimer survival = new SimulatedTimer();
+        GameEngine engine = engine(feverDriver(board), survival);
+        SwingUtilities.invokeAndWait(() -> {
+            try {
+                assertTrue(engine.start());
+                earnFeverBlock(engine, board);
+                survival.advance(400); // lock part-way through a survival second
+                assertTrue(engine.handle(GameAction.HARD_DROP));
+                int scoreAtLock = engine.getScore();
+                for (int cycle = 0; cycle < 11; cycle++) { // 9.9 s of play, paused 0.9 s into every second
+                    survival.advance(900);
+                    assertTrue(engine.pause());
+                    survival.advance(5_000);
+                    assertTrue(engine.resume());
+                    assertEquals(FeverItem.MULTIPLIER, engine.getScoreMultiplier());
+                }
+                assertEquals(1, engine.getScoreMultiplierSeconds(), "Nine of the ten seconds were played");
+                survival.advance(99);
+                assertEquals(FeverItem.MULTIPLIER, engine.getScoreMultiplier());
+                survival.advance(1);
+                assertEquals(1, engine.getScoreMultiplier(), "The fever ends after exactly 10 s of play");
+                assertEquals(0, engine.getScoreMultiplierSeconds());
+                assertEquals(scoreAtLock + 10 * FeverItem.MULTIPLIER, engine.getScore(),
+                        "Every played second still earns its doubled survival point");
+            } finally {
+                engine.close();
+            }
+        });
+    }
+
+    @Test
     void anotherFeverRefreshesTheCountdownInsteadOfStacking() throws Exception {
         Board board = new Board();
         ManualTimer survival = new ManualTimer();
@@ -215,7 +274,7 @@ class FeverItemTest {
         assertEquals(expected, engine.getScore() - before);
     }
 
-    private static GameEngine engine(BlockBoardDriver driver, ManualTimer survival) {
+    private static GameEngine engine(BlockBoardDriver driver, GameEngine.DropTimer survival) {
         driver.setItemMode(true);
         return new GameEngine(driver, new Events(), SCORING, new DefaultSpeedPolicy(), new ManualTimer(),
                 survival, () -> Difficulty.NORMAL);
@@ -252,6 +311,49 @@ class FeverItemTest {
         void fire() {
             assertTrue(running, "A stopped Swing timer never fires");
             callback.run();
+        }
+    }
+
+    /** Survival timer on simulated time: ticks every interval of running time and keeps its progress while stopped. */
+    private static final class SimulatedTimer implements GameEngine.DropTimer {
+        long now;
+        long nextTick;
+        long stoppedAt;
+        int interval = 1;
+        int firstDelay;
+        boolean running;
+        Runnable callback;
+
+        public void start(int intervalMillis, Runnable tick) {
+            start(intervalMillis, intervalMillis, tick);
+        }
+
+        public void start(int initialDelayMillis, int intervalMillis, Runnable tick) {
+            interval = intervalMillis;
+            firstDelay = initialDelayMillis;
+            nextTick = now + initialDelayMillis;
+            running = true;
+            callback = tick;
+        }
+
+        public void stop() {
+            if (running) stoppedAt = now;
+            running = false;
+        }
+
+        public int elapsedMillis() {
+            long end = running ? now : stoppedAt;
+            return (int) Math.max(0, Math.min(interval - 1, end - (nextTick - interval)));
+        }
+
+        void advance(long millis) {
+            long target = now + millis;
+            while (running && nextTick <= target) {
+                now = nextTick;
+                nextTick += interval;
+                callback.run();
+            }
+            now = target;
         }
     }
 
