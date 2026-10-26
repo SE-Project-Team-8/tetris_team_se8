@@ -380,6 +380,9 @@ public final class GameEngine implements AutoCloseable {
             // A repeated item restarts the countdown instead of adding to it.
             scoreMultiplier = multiplier;
             multiplierSeconds = seconds;
+            // Realign the 1 s tick to this moment so the effect lasts exactly `seconds`, not seconds - 1 to
+            // seconds. Like resume(), this drops only the partial survival second in progress.
+            if (state == GameState.RUNNING) scheduleSurvivalTimer();
         }
 
         @Override
