@@ -13,8 +13,7 @@ import com.team.tetris.block.WeightedTetrominoGenerator;
 import com.team.tetris.common.Difficulty;
 import com.team.tetris.common.constants.GameConstants;
 import com.team.tetris.common.events.BoardSnapshot;
-import com.team.tetris.common.events.LineDeleteIds;
-import com.team.tetris.common.events.AnvilIds;
+import com.team.tetris.common.events.CellCodes;
 
 import java.util.ArrayDeque;
 import java.util.Arrays;
@@ -25,6 +24,7 @@ import java.util.function.Supplier;
 
 /** Adapts the block domain to the game engine; used on the Swing EDT. */
 public final class BlockBoardDriver implements GameEngine.BoardDriver {
+    private static final int ANVIL_CODE = CellCodes.cell(Anvil.PALETTE.id(), ItemType.ANVIL.symbol());
     private final Board board;
     private final TetrominoGenerator generator;
     private final ArrayDeque<QueuedBlock> preview = new ArrayDeque<>();
@@ -33,6 +33,7 @@ public final class BlockBoardDriver implements GameEngine.BoardDriver {
     private Tetromino current;
     private Anvil currentAnvil;
     private boolean anvilHorizontalLocked;
+    private ItemType currentItem = ItemType.NONE;
     private int currentItemIndex = -1;
     private int clearedLines;
     private int pendingItems;
@@ -77,6 +78,7 @@ public final class BlockBoardDriver implements GameEngine.BoardDriver {
         current = null;
         currentAnvil = null;
         anvilHorizontalLocked = false;
+        currentItem = ItemType.NONE;
         currentItemIndex = -1;
         clearedLines = 0;
         pendingItems = 0;
@@ -103,6 +105,7 @@ public final class BlockBoardDriver implements GameEngine.BoardDriver {
         Tetromino candidate = spawnCandidate(next.type());
         if (!CollisionChecker.canPlace(board, candidate)) return false;
         current = candidate;
+        currentItem = next.item();
         currentItemIndex = next.itemIndex();
         return true;
     }
@@ -173,6 +176,7 @@ public final class BlockBoardDriver implements GameEngine.BoardDriver {
         }
         int forcedRow = currentItemIndex < 0 ? -1 : landed.cells().get(currentItemIndex).row();
         current = null;
+        currentItem = ItemType.NONE;
         currentItemIndex = -1;
         BoardSnapshot boardBeforeClear = snapshot();
         List<Integer> clearedRows = board.clearLinesIncludingAndGetRows(forcedRow);
@@ -205,11 +209,11 @@ public final class BlockBoardDriver implements GameEngine.BoardDriver {
             for (int index = 0; index < occupied.size(); index++) {
                 Cell cell = occupied.get(index);
                 cells[cell.row()][cell.col()] = index == currentItemIndex
-                        ? LineDeleteIds.boardCell(current.type().id()) : current.type().id();
+                        ? CellCodes.cell(current.type().id(), currentItem.symbol()) : current.type().id();
             }
         }
         if (currentAnvil != null) {
-            for (Cell cell : currentAnvil.cells()) cells[cell.row()][cell.col()] = AnvilIds.ANVIL_ID;
+            for (Cell cell : currentAnvil.cells()) cells[cell.row()][cell.col()] = ANVIL_CODE;
         }
         return new BoardSnapshot(cells);
     }
@@ -243,8 +247,8 @@ public final class BlockBoardDriver implements GameEngine.BoardDriver {
     public int[] nextBlockTypes() {
         return preview.stream().mapToInt(next -> switch (next.item()) {
             case NONE -> next.type().id();
-            case LINE_DELETE -> LineDeleteIds.preview(next.type().id(), next.itemIndex());
-            case ANVIL -> AnvilIds.ANVIL_ID;
+            case LINE_DELETE -> CellCodes.preview(next.type().id(), next.item().symbol(), next.itemIndex());
+            case ANVIL -> ANVIL_CODE;
         }).toArray();
     }
 

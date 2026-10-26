@@ -4,10 +4,9 @@ import com.team.tetris.block.Board;
 import com.team.tetris.block.Rotation;
 import com.team.tetris.block.Tetromino;
 import com.team.tetris.block.TetrominoType;
-import com.team.tetris.common.events.AnvilIds;
 import com.team.tetris.common.events.BoardSnapshot;
+import com.team.tetris.common.events.CellCodes;
 import com.team.tetris.common.events.GameEventListener;
-import com.team.tetris.common.events.LineDeleteIds;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -20,17 +19,19 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.junit.jupiter.api.Assertions.*;
 
 class AnvilDriverTest {
+    private static final int W = CellCodes.cell(TetrominoType.J.id(), ItemType.ANVIL.symbol());
+
     @Test
     void earnedAnvilHasSixCellsAndFourCellWidthInPreviewAndBoard() {
         Board board = new Board();
         BlockBoardDriver driver = anvilDriver(board);
         spawnEarnedAnvil(driver, board);
-        assertArrayEquals(new int[]{-1, -1, -1, -1, 35, 35, -1, -1, -1, -1},
+        assertArrayEquals(new int[]{-1, -1, -1, -1, W, W, -1, -1, -1, -1},
                 driver.snapshot().cells()[0]);
-        assertArrayEquals(new int[]{-1, -1, -1, 35, 35, 35, 35, -1, -1, -1},
+        assertArrayEquals(new int[]{-1, -1, -1, W, W, W, W, -1, -1, -1},
                 driver.snapshot().cells()[1]);
         assertEquals(6, anvilCells(driver.snapshot()));
-        assertFalse(LineDeleteIds.isItemPreview(AnvilIds.ANVIL_ID));
+        assertEquals(CellCodes.NO_INDEX, CellCodes.itemCellIndex(W), "The weight is a whole-piece item");
         assertFalse(driver.awardsDropPoints());
     }
 
@@ -130,7 +131,7 @@ class AnvilDriverTest {
             assertEquals(2, driver.lockAndClearLines().clearedLines());
         }
         assertTrue(driver.spawnNextBlock());
-        assertTrue(LineDeleteIds.isItemPreview(driver.nextBlockTypes()[0]));
+        assertEquals(ItemType.LINE_DELETE.symbol(), CellCodes.symbol(driver.nextBlockTypes()[0]));
         assertEquals(2, selections.get());
     }
 
@@ -157,7 +158,8 @@ class AnvilDriverTest {
         };
         BlockBoardDriver driver = new BlockBoardDriver(board, () -> TetrominoType.O, fixedChoice);
         earnTenAndQueueItem(driver, board);
-        int expected = choice == 0 ? LineDeleteIds.preview(TetrominoType.O.id(), 3) : AnvilIds.ANVIL_ID;
+        int expected = choice == 0
+                ? CellCodes.preview(TetrominoType.O.id(), ItemType.LINE_DELETE.symbol(), 3) : W;
         assertArrayEquals(new int[]{expected}, driver.nextBlockTypes());
     }
 
@@ -189,7 +191,7 @@ class AnvilDriverTest {
                 fillTwoRowsExceptTheCenter(board);
                 engine.handle(GameAction.HARD_DROP);
             }
-            assertArrayEquals(new int[]{AnvilIds.ANVIL_ID}, driver.nextBlockTypes());
+            assertArrayEquals(new int[]{W}, driver.nextBlockTypes());
             engine.handle(GameAction.HARD_DROP); // The pre-existing regular preview falls first.
             assertEquals(6, anvilCells(driver.snapshot()));
             int scoreBeforeWeight = engine.getScore();
@@ -225,7 +227,7 @@ class AnvilDriverTest {
 
     private static void spawnEarnedAnvil(BlockBoardDriver driver, Board board) {
         earnTenAndQueueItem(driver, board);
-        assertArrayEquals(new int[]{AnvilIds.ANVIL_ID}, driver.nextBlockTypes());
+        assertArrayEquals(new int[]{W}, driver.nextBlockTypes());
         driver.hardDrop();
         assertEquals(0, driver.lockAndClearLines().clearedLines());
         board.clear(); // Isolate the fixture terrain without resetting earned game progress.
@@ -242,7 +244,7 @@ class AnvilDriverTest {
 
     private static long anvilCells(BoardSnapshot snapshot) {
         return Arrays.stream(snapshot.cells()).flatMapToInt(Arrays::stream)
-                .filter(cell -> cell == AnvilIds.ANVIL_ID).count();
+                .filter(cell -> cell == W).count();
     }
 
     private static final class ManualTimer implements GameEngine.DropTimer {

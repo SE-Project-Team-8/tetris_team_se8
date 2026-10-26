@@ -4,11 +4,12 @@ import com.team.tetris.block.Board;
 import com.team.tetris.block.TetrominoType;
 import com.team.tetris.common.Difficulty;
 import com.team.tetris.common.events.BoardSnapshot;
+import com.team.tetris.common.events.CellCodes;
 import com.team.tetris.common.events.GameEventListener;
-import com.team.tetris.common.events.LineDeleteIds;
 import com.team.tetris.game.BlockBoardDriver;
 import com.team.tetris.game.DefaultSpeedPolicy;
 import com.team.tetris.game.GameEngine;
+import com.team.tetris.game.ItemType;
 import com.team.tetris.game.ScoreCalculator;
 import com.team.tetris.settings.KeyBindings;
 import org.junit.jupiter.api.BeforeEach;
@@ -79,7 +80,7 @@ class GameScreenTest {
     void lineClearFlashesTheRowWhileTheNextPieceStaysVisible() throws Exception {
         int[][] before = board(Map.of());
         Arrays.fill(before[19], TetrominoType.O.id());
-        int lineDeleteCell = LineDeleteIds.boardCell(TetrominoType.T.id());
+        int lineDeleteCell = CellCodes.cell(TetrominoType.T.id(), ItemType.LINE_DELETE.symbol());
         int[][] after = board(Map.of(0, lineDeleteCell, 19, TetrominoType.T.id()));
         BoardSnapshot nextPiece = new BoardSnapshot(board(Map.of(0, TetrominoType.T.id())));
         Fixture[] holder = new Fixture[1];

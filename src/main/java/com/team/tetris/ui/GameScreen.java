@@ -35,12 +35,12 @@ import com.team.tetris.block.TetrominoType;
 import com.team.tetris.common.Screen;
 import com.team.tetris.common.constants.GameConstants;
 import com.team.tetris.common.events.BoardSnapshot;
-import com.team.tetris.common.events.LineDeleteIds;
-import com.team.tetris.common.events.AnvilIds;
+import com.team.tetris.common.events.CellCodes;
 import com.team.tetris.common.events.GameEventListener;
 import com.team.tetris.game.GameAction;
 import com.team.tetris.game.GameEngine;
 import com.team.tetris.game.GameState;
+import com.team.tetris.game.ItemType;
 import com.team.tetris.settings.KeyBindings;
 
 /**
@@ -519,7 +519,7 @@ public class GameScreen extends JPanel implements Screen {
 
         if (lineClearAnimating && pendingFalling != null) {
             // 깜빡이는 동안에도 엔진은 다음 블록을 움직이므로, 그 블록은 보이게 그린다.
-            // L 문자는 블록이 합쳐진 대기 중 보드에 있으므로 그 ID를 쓴다.
+            // 아이템 문자는 블록이 합쳐진 대기 중 보드의 셀 코드에 들어 있으므로 그 코드를 쓴다.
             for (int row = 0; row < pendingFalling.length; row++) {
                 for (int col = 0; col < pendingFalling[row].length; col++) {
                     if (pendingFalling[row][col] == BoardSnapshot.EMPTY) continue;
@@ -546,28 +546,23 @@ public class GameScreen extends JPanel implements Screen {
         g2d.drawRect(x, y, width, height);
     }
 
-    private void drawBoardCell(Graphics2D g2d, int blockId, int cellX, int cellY, int cellSize) {
-        if (blockId == AnvilIds.ANVIL_ID) {
-            drawBlockCell(g2d, cellX, cellY, cellSize, TetrominoType.J, colorScheme);
-            drawItemLetter(g2d, cellX, cellY, cellSize, "W");
-            return;
-        }
-        if (blockId == BoardSnapshot.EMPTY) {
-            return;
-        }
-        boolean itemCell = LineDeleteIds.isItemCell(blockId);
-        TetrominoType type = typeFromId(itemCell ? LineDeleteIds.boardType(blockId) : blockId);
+    private void drawBoardCell(Graphics2D g2d, int code, int cellX, int cellY, int cellSize) {
+        TetrominoType type = typeFromCode(code);
         if (type == null) {
             return;
         }
+        // 셀 코드는 색을 빌려 올 블록 종류와 아이템 문자를 함께 담는다. 아이템 종류별 분기는 두지 않는다.
         drawBlockCell(g2d, cellX, cellY, cellSize, type, colorScheme);
-        if (itemCell) drawItemLetter(g2d, cellX, cellY, cellSize, "L");
+        char symbol = CellCodes.symbol(code);
+        if (symbol != CellCodes.NO_SYMBOL) {
+            drawItemLetter(g2d, cellX, cellY, cellSize, String.valueOf(symbol));
+        }
     }
 
     private void drawLandingGhost(Graphics2D g2d, int x, int y, int cellSize) {
         for (int row = 0; row < landing.length; row++) {
             for (int col = 0; col < landing[row].length; col++) {
-                TetrominoType type = typeFromId(landing[row][col]);
+                TetrominoType type = typeFromCode(landing[row][col]);
                 // 착지 위치가 낙하 중인 블록과 겹치는 칸은 블록 위에 테두리를 덧그리지 않는다.
                 if (type == null || board[row][col] != BoardSnapshot.EMPTY) {
                     continue;
@@ -628,26 +623,32 @@ public class GameScreen extends JPanel implements Screen {
         g2d.drawString("+1 pts/sec", x, difficultyY + 62);
     }
 
-    private void drawPreview(Graphics2D g2d, int blockId, int x, int y, int width, int height) {
-        if (blockId == AnvilIds.ANVIL_ID) {
-            drawPreviewShape(g2d, new Anvil(0, 0).cells(), TetrominoType.J,
-                    -1, true, x, y, width, height);
-            return;
-        }
-        boolean item = LineDeleteIds.isItemPreview(blockId);
-        TetrominoType type = typeFromId(item ? LineDeleteIds.previewType(blockId) : blockId);
+    private void drawPreview(Graphics2D g2d, int code, int x, int y, int width, int height) {
+        TetrominoType type = typeFromCode(code);
         if (type == null) {
             return;
         }
-
-        // 각 블록의 회전 격자에는 빈 테두리가 있을 수 있으므로 실제 점유 셀 범위만 찾아 중앙에 맞춘다.
-        Tetromino piece = new Tetromino(type, Rotation.SPAWN, 0, 0);
-        drawPreviewShape(g2d, piece.cells(), type,
-                item ? LineDeleteIds.previewCellIndex(blockId) : -1, false, x, y, width, height);
+        char symbol = CellCodes.symbol(code);
+        int itemIndex = CellCodes.itemCellIndex(code);
+        // 문자가 있는데 붙은 칸 번호가 없으면 블록 전체가 아이템인 블록형이다.
+        boolean wholePieceItem = symbol != CellCodes.NO_SYMBOL && itemIndex == CellCodes.NO_INDEX;
+        List<Cell> occupied = wholePieceItem
+                ? standaloneItemShape(symbol)
+                : new Tetromino(type, Rotation.SPAWN, 0, 0).cells();
+        drawPreviewShape(g2d, occupied, type, symbol, itemIndex, x, y, width, height);
     }
 
+    private static List<Cell> standaloneItemShape(char symbol) {
+        if (symbol == ItemType.ANVIL.symbol()) return new Anvil(0, 0).cells();
+        return List.of(new Cell(0, 0));
+    }
+
+    /**
+     * 실제 점유 셀 범위만 찾아 영역 중앙에 맞춰 그린다. 각 블록의 회전 격자에는 빈 테두리가 있을 수 있다.
+     * {@code symbol}이 있으면 {@code itemIndex} 칸에, 칸 번호가 없으면 모든 칸에 문자를 얹는다.
+     */
     private void drawPreviewShape(Graphics2D g2d, List<Cell> occupied, TetrominoType type,
-            int itemIndex, boolean anvil, int x, int y, int width, int height) {
+            char symbol, int itemIndex, int x, int y, int width, int height) {
         int minRow = occupied.stream().mapToInt(Cell::row).min().orElse(0);
         int maxRow = occupied.stream().mapToInt(Cell::row).max().orElse(0);
         int minCol = occupied.stream().mapToInt(Cell::col).min().orElse(0);
@@ -665,8 +666,10 @@ public class GameScreen extends JPanel implements Screen {
             int cellX = shapeX + (cell.col() - minCol) * previewCellSize;
             int cellY = shapeY + (cell.row() - minRow) * previewCellSize;
             drawBlockCell(g2d, cellX, cellY, previewCellSize, type, colorScheme);
-            if (anvil || index == itemIndex) {
-                drawItemLetter(g2d, cellX, cellY, previewCellSize, anvil ? "W" : "L");
+            boolean lettered = symbol != CellCodes.NO_SYMBOL
+                    && (itemIndex == CellCodes.NO_INDEX || index == itemIndex);
+            if (lettered) {
+                drawItemLetter(g2d, cellX, cellY, previewCellSize, String.valueOf(symbol));
             }
         }
     }
@@ -694,13 +697,12 @@ public class GameScreen extends JPanel implements Screen {
         g2d.drawRect(x + 1, y + 1, Math.max(1, size - 2), Math.max(1, size - 2));
     }
 
-    private static TetrominoType typeFromId(int blockId) {
-        try {
-            return TetrominoType.fromId(blockId);
-        } catch (IllegalArgumentException exception) {
-            // 잘못된 ID 하나 때문에 전체 화면 그리기가 중단되지 않도록 해당 셀만 생략한다.
+    /** 빈칸이나 규칙에 없는 코드는 null. 잘못된 코드 하나 때문에 전체 화면 그리기가 중단되지 않게 한다. */
+    private static TetrominoType typeFromCode(int code) {
+        if (!CellCodes.isValid(code)) {
             return null;
         }
+        return TetrominoType.fromId(CellCodes.baseType(code));
     }
 
     private String keyText(GameAction action) {
