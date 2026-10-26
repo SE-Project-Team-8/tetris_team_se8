@@ -250,6 +250,9 @@ class BlockBoardDriverTest {
                 assertTrue(engine.handle(GameAction.HARD_DROP));
             }
             assertEquals(10, engine.getClearedLines());
+            // Requirement 4.2: the item must be shown in the NEXT area, not skip it and spawn unannounced.
+            assertEquals(CellCodes.preview(TetrominoType.O.id(), LineDeleteItem.SYMBOL, 2), listener.next[0],
+                    "the screen's NEXT preview shows the earned item right after the tenth line");
             assertTrue(engine.handle(GameAction.HARD_DROP));
             int scoreBeforeItem = engine.getScore();
             int level = engine.getLevel();
@@ -270,9 +273,10 @@ class BlockBoardDriverTest {
     private static final class Scores implements GameEventListener {
         BoardSnapshot board;
         int score;
+        int[] next = new int[0];
         public void onBoardUpdated(BoardSnapshot snapshot) { board = snapshot; }
         public void onScoreChanged(int value) { score = value; }
-        public void onNextBlocksChanged(int[] types) { }
+        public void onNextBlocksChanged(int[] types) { next = types; }
         public void onPauseStateChanged(boolean paused) { }
         public void onGameOver(int finalScore) { }
     }
