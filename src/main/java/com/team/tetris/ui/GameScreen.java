@@ -503,25 +503,7 @@ public class GameScreen extends JPanel implements Screen {
         // 스냅샷의 숫자 ID를 종류로 바꿔 팔레트 색상과 블록 식별 문자를 함께 그린다.
         for (int row = 0; row < board.length; row++) {
             for (int col = 0; col < board[row].length; col++) {
-                int blockId = board[row][col];
-                if (blockId == AnvilIds.ANVIL_ID) {
-                    int cellX = x + col * cellSize;
-                    int cellY = y + row * cellSize;
-                    drawBlockCell(g2d, cellX, cellY, cellSize, TetrominoType.J, colorScheme);
-                    drawItemLetter(g2d, cellX, cellY, cellSize, "W");
-                    continue;
-                }
-                if (blockId != BoardSnapshot.EMPTY) {
-                    boolean itemCell = LineDeleteIds.isItemCell(blockId);
-                    TetrominoType type = typeFromId(itemCell ? LineDeleteIds.boardType(blockId) : blockId);
-                    if (type != null) {
-                        int cellX = x + col * cellSize;
-                        int cellY = y + row * cellSize;
-                        drawBlockCell(g2d, cellX, cellY,
-                                cellSize, type, colorScheme);
-                        if (itemCell) drawItemLetter(g2d, cellX, cellY, cellSize, "L");
-                    }
-                }
+                drawBoardCell(g2d, board[row][col], x + col * cellSize, y + row * cellSize, cellSize);
             }
         }
 
@@ -532,6 +514,18 @@ public class GameScreen extends JPanel implements Screen {
             for (int row : flashingRows) {
                 g2d.fillRect(x + 1, y + row * cellSize + 1,
                         Math.max(1, width - 2), Math.max(1, cellSize - 2));
+            }
+        }
+
+        if (lineClearAnimating && pendingFalling != null) {
+            // 깜빡이는 동안에도 엔진은 다음 블록을 움직이므로, 그 블록은 보이게 그린다.
+            // L 문자는 블록이 합쳐진 대기 중 보드에 있으므로 그 ID를 쓴다.
+            for (int row = 0; row < pendingFalling.length; row++) {
+                for (int col = 0; col < pendingFalling[row].length; col++) {
+                    if (pendingFalling[row][col] == BoardSnapshot.EMPTY) continue;
+                    int blockId = pendingBoard != null ? pendingBoard[row][col] : pendingFalling[row][col];
+                    drawBoardCell(g2d, blockId, x + col * cellSize, y + row * cellSize, cellSize);
+                }
             }
         }
 
@@ -552,11 +546,30 @@ public class GameScreen extends JPanel implements Screen {
         g2d.drawRect(x, y, width, height);
     }
 
+    private void drawBoardCell(Graphics2D g2d, int blockId, int cellX, int cellY, int cellSize) {
+        if (blockId == AnvilIds.ANVIL_ID) {
+            drawBlockCell(g2d, cellX, cellY, cellSize, TetrominoType.J, colorScheme);
+            drawItemLetter(g2d, cellX, cellY, cellSize, "W");
+            return;
+        }
+        if (blockId == BoardSnapshot.EMPTY) {
+            return;
+        }
+        boolean itemCell = LineDeleteIds.isItemCell(blockId);
+        TetrominoType type = typeFromId(itemCell ? LineDeleteIds.boardType(blockId) : blockId);
+        if (type == null) {
+            return;
+        }
+        drawBlockCell(g2d, cellX, cellY, cellSize, type, colorScheme);
+        if (itemCell) drawItemLetter(g2d, cellX, cellY, cellSize, "L");
+    }
+
     private void drawLandingGhost(Graphics2D g2d, int x, int y, int cellSize) {
         for (int row = 0; row < landing.length; row++) {
             for (int col = 0; col < landing[row].length; col++) {
                 TetrominoType type = typeFromId(landing[row][col]);
-                if (type == null) {
+                // 착지 위치가 낙하 중인 블록과 겹치는 칸은 블록 위에 테두리를 덧그리지 않는다.
+                if (type == null || board[row][col] != BoardSnapshot.EMPTY) {
                     continue;
                 }
                 Color blockColor = new Color(colorScheme.rgbOf(type));
