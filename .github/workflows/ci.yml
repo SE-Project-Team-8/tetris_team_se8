@@ -17,3 +17,30 @@ jobs:
           java-version: '21'
       - name: Build and test
         run: .\gradlew.bat build
+      - name: Package Windows app image
+        run: .\gradlew.bat packageWindows
+      - name: Upload Windows app image
+        uses: actions/upload-artifact@v4
+        with:
+          name: tetris-windows-app
+          path: build/package/windows/Tetris/
+          if-no-files-found: error
+
+  macos-package:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Temurin JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Build and package macOS disk image
+        run: ./gradlew clean build packageMacOS
+      - name: Upload macOS disk image
+        uses: actions/upload-artifact@v4
+        with:
+          name: tetris-macos-dmg
+          path: build/package/macos/*.dmg
+          if-no-files-found: error

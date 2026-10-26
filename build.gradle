@@ -5,7 +5,7 @@ plugins {
 }
 
 group = 'com.team.tetris'
-version = '0.1.0'
+version = '1.0.0'
 
 java {
     toolchain {
@@ -27,6 +27,68 @@ application {
     mainClass = 'com.team.tetris.Main'
 }
 
+tasks.register('packageWindows', Exec) {
+    group = 'distribution'
+    description = 'Creates a Windows app-image with a bundled Java runtime.'
+    dependsOn tasks.named('jar')
+
+    def appImageDirectory = layout.buildDirectory.dir('package/windows')
+    outputs.dir(appImageDirectory)
+    inputs.file(layout.projectDirectory.file('src/main/resources/tetris.ico'))
+
+    doFirst {
+        if (!System.getProperty('os.name').toLowerCase(Locale.ROOT).contains('windows')) {
+            throw new GradleException('packageWindows must run on Windows with the Java 21 toolchain.')
+        }
+
+        delete(appImageDirectory.get().asFile)
+        def launcher = javaToolchains.launcherFor {
+            languageVersion = JavaLanguageVersion.of(21)
+        }.get()
+        executable new File(launcher.metadata.installationPath.asFile, 'bin/jpackage.exe')
+        args '--type', 'app-image',
+                '--name', 'Tetris',
+                '--input', tasks.named('jar').get().archiveFile.get().asFile.parent,
+                '--main-jar', tasks.named('jar').get().archiveFile.get().asFile.name,
+                '--main-class', application.mainClass.get(),
+                '--dest', appImageDirectory.get().asFile.absolutePath,
+                '--icon', layout.projectDirectory.file('src/main/resources/tetris.ico').asFile.absolutePath,
+                '--app-version', project.version.toString(),
+                '--vendor', 'SE-Project-Team-8'
+    }
+}
+
+tasks.register('packageMacOS', Exec) {
+    group = 'distribution'
+    description = 'Creates a macOS disk image with a bundled Java runtime.'
+    dependsOn tasks.named('jar')
+
+    def packageDirectory = layout.buildDirectory.dir('package/macos')
+    outputs.dir(packageDirectory)
+    inputs.file(layout.projectDirectory.file('src/main/resources/tetris.icns'))
+
+    doFirst {
+        if (!System.getProperty('os.name').toLowerCase(Locale.ROOT).contains('mac')) {
+            throw new GradleException('packageMacOS must run on macOS with the Java 21 toolchain.')
+        }
+
+        delete(packageDirectory.get().asFile)
+        def launcher = javaToolchains.launcherFor {
+            languageVersion = JavaLanguageVersion.of(21)
+        }.get()
+        executable new File(launcher.metadata.installationPath.asFile, 'bin/jpackage')
+        args '--type', 'dmg',
+                '--name', 'Tetris',
+                '--input', tasks.named('jar').get().archiveFile.get().asFile.parent,
+                '--main-jar', tasks.named('jar').get().archiveFile.get().asFile.name,
+                '--main-class', application.mainClass.get(),
+                '--dest', packageDirectory.get().asFile.absolutePath,
+                '--icon', layout.projectDirectory.file('src/main/resources/tetris.icns').asFile.absolutePath,
+                '--app-version', project.version.toString(),
+                '--vendor', 'SE-Project-Team-8'
+    }
+}
+
 // Source files stay UTF-8 even when the Gradle JVM uses the native Windows charset.
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
@@ -46,6 +108,7 @@ jacocoTestReport {
 }
 
 jacocoTestCoverageVerification {
+    dependsOn tasks.named('test')
     violationRules {
         rule {
             limit {
@@ -55,5 +118,9 @@ jacocoTestCoverageVerification {
             }
         }
     }
-    enabled = false // TODO(D): 중간 시점에 활성화
+    enabled = true
+}
+
+tasks.named('check') {
+    dependsOn tasks.named('jacocoTestCoverageVerification')
 }
