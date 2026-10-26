@@ -10,7 +10,6 @@ public final class DefaultSpeedPolicy implements SpeedPolicy {
     public static final int BLOCKS_PER_LEVEL = 10;
     public static final int LINES_PER_LEVEL = 10;
     public static final int MAX_LEVEL = 10;
-    public static final int MIN_DROP_INTERVAL_MS = 100;
 
     @Override
     public Speed calculate(int generatedBlocks, int clearedLines) {
@@ -29,7 +28,7 @@ public final class DefaultSpeedPolicy implements SpeedPolicy {
         // Block steps almost always outweigh line steps in play, so both carry the difficulty.
         int reduction = Math.max(blockSteps * difficulty.blockSpeedStepMillis(),
                 lineSteps * difficulty.lineSpeedStepMillis());
-        int interval = Math.max(MIN_DROP_INTERVAL_MS,
+        int interval = Math.max(difficulty.minDropIntervalMillis(),
                 (int) GameConstants.INITIAL_DROP_INTERVAL_MS - reduction);
         return new Speed(level, interval);
     }

@@ -16,16 +16,31 @@ class DefaultSpeedPolicyTest {
         assertEquals(680, policy.calculate(0, 20, Difficulty.EASY).dropIntervalMillis());
         assertEquals(600, policy.calculate(0, 20, Difficulty.NORMAL).dropIntervalMillis());
         assertEquals(520, policy.calculate(0, 20, Difficulty.HARD).dropIntervalMillis());
-        assertEquals(100, policy.calculate(0, 40, Difficulty.HARD).dropIntervalMillis());
-        assertEquals(100, policy.calculate(0, 60, Difficulty.EASY).dropIntervalMillis());
+        assertEquals(80, policy.calculate(0, 40, Difficulty.HARD).dropIntervalMillis());
+        assertEquals(120, policy.calculate(0, 60, Difficulty.EASY).dropIntervalMillis());
         for (Difficulty difficulty : Difficulty.values()) {
             assertEquals(new SpeedPolicy.Speed(1, 1000), policy.calculate(0, 0, difficulty));
-            assertEquals(100, policy.calculate(Integer.MAX_VALUE, Integer.MAX_VALUE, difficulty).dropIntervalMillis());
+            int floor = switch (difficulty) {
+                case EASY -> 120;
+                case NORMAL -> 100;
+                case HARD -> 80;
+            };
+            assertEquals(floor, policy.calculate(Integer.MAX_VALUE, Integer.MAX_VALUE, difficulty).dropIntervalMillis());
         }
         assertEquals(920, policy.calculate(10, 0, Difficulty.EASY).dropIntervalMillis());
         assertEquals(900, policy.calculate(10, 0, Difficulty.NORMAL).dropIntervalMillis());
         assertEquals(880, policy.calculate(10, 0, Difficulty.HARD).dropIntervalMillis());
-        assertEquals(100, policy.calculate(0, Integer.MAX_VALUE, Difficulty.EASY).dropIntervalMillis());
+        assertEquals(120, policy.calculate(0, Integer.MAX_VALUE, Difficulty.EASY).dropIntervalMillis());
+    }
+
+    @Test
+    void difficultiesStayApartAtTheFastestSpeed() {
+        // With one shared 100ms floor, Hard caught up with Normal at the top level.
+        assertEquals(new SpeedPolicy.Speed(10, 120), policy.calculate(90, 90, Difficulty.EASY));
+        assertEquals(new SpeedPolicy.Speed(10, 100), policy.calculate(90, 90, Difficulty.NORMAL));
+        assertEquals(new SpeedPolicy.Speed(10, 80), policy.calculate(90, 90, Difficulty.HARD));
+        assertEquals(new SpeedPolicy.Speed(10, 100), policy.calculate(90, 0, Difficulty.NORMAL));
+        assertEquals(new SpeedPolicy.Speed(10, 80), policy.calculate(90, 0, Difficulty.HARD));
     }
 
     @Test
