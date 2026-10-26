@@ -162,8 +162,15 @@ class AnvilDriverTest {
     @ValueSource(ints = {0, 1})
     void realDefaultSelectorCanGenerateEitherRequiredItem(int choice) {
         Board board = new Board();
+        // The uniform selector draws first, then the embedded item's cell. Telling them apart by bound
+        // breaks once the registry holds four items, the same bound as the cell index.
         Random fixedChoice = new Random() {
-            @Override public int nextInt(int bound) { return bound == 2 ? choice : 3; }
+            private boolean selected;
+            @Override public int nextInt(int bound) {
+                if (selected) return 3;
+                selected = true;
+                return choice;
+            }
         };
         BlockBoardDriver driver = new BlockBoardDriver(board, () -> TetrominoType.O, fixedChoice,
                 ItemRegistry.defaults());

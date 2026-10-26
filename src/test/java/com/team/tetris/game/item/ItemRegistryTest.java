@@ -1,5 +1,5 @@
 /*
- * ItemRegistry 테스트: 기본 목록(L, W), 문자·이름 중복과 보이지 않는 문자 거부, 블록형 조회.
+ * ItemRegistry 테스트: 기본 목록(L, W, 팀 아이템), 문자·이름 중복과 보이지 않는 문자 거부, 블록형 조회.
  */
 package com.team.tetris.game.item;
 
@@ -14,9 +14,9 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class ItemRegistryTest {
     @Test
-    void defaultsContainTheTwoRequiredItemsWithDistinctSymbols() {
+    void defaultsContainTheRequiredAndTeamItemsWithDistinctSymbols() {
         ItemRegistry registry = ItemRegistry.defaults();
-        assertEquals(List.of("LINE_DELETE", "ANVIL"), registry.items().stream().map(Item::name).toList());
+        assertEquals(List.of("LINE_DELETE", "ANVIL", "BOMB"), registry.items().stream().map(Item::name).toList());
         assertEquals(LineDeleteItem.SYMBOL, registry.bySymbol('L').orElseThrow().symbol());
         assertTrue(registry.standaloneBySymbol(AnvilItem.SYMBOL).isPresent());
         assertTrue(registry.standaloneBySymbol(LineDeleteItem.SYMBOL).isEmpty(), "L is embedded, not standalone");
