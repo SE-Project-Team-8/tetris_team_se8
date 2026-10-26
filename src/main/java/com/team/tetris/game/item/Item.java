@@ -21,4 +21,10 @@ public sealed interface Item permits EmbeddedItem, StandaloneItem {
      * 색맹 팔레트에서도 문자는 유지되므로 색과 무관하게 아이템을 구분할 수 있다.
      */
     char symbol();
+
+    /**
+     * 이 아이템을 실은 조각이 고정되고 그 조각 자신의 점수가 반영된 뒤 한 번 호출된다.
+     * 점수 배율·속도 단계처럼 엔진 상태를 바꾸는 아이템만 구현한다. 기본은 아무 일도 하지 않는다.
+     */
+    default void onActivated(GameEffects effects) { }
 }

@@ -3,6 +3,7 @@ package com.team.tetris.game;
 import com.team.tetris.common.events.BoardSnapshot;
 import com.team.tetris.common.events.GameEventListener;
 import com.team.tetris.common.Difficulty;
+import com.team.tetris.game.item.Item;
 
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
@@ -36,6 +37,8 @@ public final class GameEngine implements AutoCloseable {
         default boolean awardsDropPoints() { return true; }
         /** Lock once and clear full rows; report overflow above the board as topOut. */
         LockResult lockAndClearLines();
+        /** Item carried by the piece the last lockAndClearLines() locked; null for a regular block. */
+        default Item lockedItem() { return null; }
         /** Composed 20 x 10 board; EMPTY = -1; falling piece is included. */
         BoardSnapshot snapshot();
         /** Cells occupied by the falling piece only, or null when unavailable. */

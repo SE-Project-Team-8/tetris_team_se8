@@ -46,4 +46,7 @@ public interface FallingPiece {
 
     /** 지금 하드드롭하면 놓일 위치의 조각(고스트). 이미 착지했거나 고스트를 쓰지 않는 조각은 null. */
     FallingPiece landingPreview(Board board);
+
+    /** 이 조각이 실은 아이템. 일반 블록(아이템 없음)은 null. */
+    Item item();
 }
