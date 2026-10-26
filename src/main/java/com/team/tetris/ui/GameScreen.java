@@ -27,7 +27,6 @@ import javax.swing.SwingUtilities;
 import javax.swing.Timer;
 
 import com.team.tetris.block.ColorScheme;
-import com.team.tetris.block.Anvil;
 import com.team.tetris.block.Cell;
 import com.team.tetris.block.Rotation;
 import com.team.tetris.block.Tetromino;
@@ -41,6 +40,7 @@ import com.team.tetris.game.GameAction;
 import com.team.tetris.game.GameEngine;
 import com.team.tetris.game.GameState;
 import com.team.tetris.game.ItemType;
+import com.team.tetris.game.item.Anvil;
 import com.team.tetris.settings.KeyBindings;
 
 /**

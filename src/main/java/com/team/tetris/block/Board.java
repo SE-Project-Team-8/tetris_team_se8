@@ -3,6 +3,7 @@ package com.team.tetris.block;
 import com.team.tetris.common.constants.GameConstants;
 
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -143,8 +144,24 @@ public final class Board implements BoardView {
         if (forcedRow < -1 || forcedRow >= rows) {
             throw new IndexOutOfBoundsException("Invalid row: " + forcedRow);
         }
+        return clearLinesIncludingAndGetRows(forcedRow < 0 ? List.of() : List.of(forcedRow));
+    }
+
+    /**
+     * 완성된 행과 아이템이 지정한 여러 행을 중복 없이 함께 제거하고, 삭제 전 보드에서의 행 번호를
+     * 위에서 아래 순서로 반환한다. 지정 행이 없으면 완성 행만 제거한다.
+     *
+     * @param forcedRows 꽉 차 있지 않아도 지울 행 번호들
+     * @return 삭제한 행 번호의 불변 목록
+     * @throws IndexOutOfBoundsException 지정 행이 보드 범위 밖인 경우. 이때 보드는 변경되지 않는다
+     */
+    public List<Integer> clearLinesIncludingAndGetRows(Collection<Integer> forcedRows) {
+        Objects.requireNonNull(forcedRows, "forcedRows");
         TreeSet<Integer> rowsToClear = new TreeSet<>(LineClearer.findFullRows(this));
-        if (forcedRow >= 0) rowsToClear.add(forcedRow);
+        for (Integer row : forcedRows) {
+            Objects.checkIndex(Objects.requireNonNull(row, "row"), rows);
+            rowsToClear.add(row);
+        }
         if (rowsToClear.isEmpty()) {
             return List.of();
         }
