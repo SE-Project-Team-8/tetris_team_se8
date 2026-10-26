@@ -40,8 +40,10 @@ public class PauseScreen extends JPanel implements Screen {
         this.router = Objects.requireNonNull(router, "router");
         this.engine = Objects.requireNonNull(engine, "engine");
         this.bindings = Objects.requireNonNull(bindings, "bindings");
+        // 포커스가 이 화면에 없어도 설정한 일시정지 키로 재개한다. P를 고정해 두면 키를 바꿔도 P가 재개한다.
         resumeKeyDispatcher = event -> {
-            if (event.getID() == KeyEvent.KEY_PRESSED && event.getKeyCode() == KeyEvent.VK_P
+            if (event.getID() == KeyEvent.KEY_PRESSED
+                    && event.getKeyCode() == this.bindings.get().keyFor(GameAction.PAUSE)
                     && ScreenRouter.PAUSE.equals(router.getCurrentScreenName())) {
                 router.showScreen(ScreenRouter.GAME);
                 return true;
@@ -57,6 +59,9 @@ public class PauseScreen extends JPanel implements Screen {
             @Override
             public void keyPressed(KeyEvent e) {
                 handleKeyPress(e.getKeyCode());
+                // 일시정지 화면에서 처리한 키가 아래에 남아 있는 게임 화면의 키 바인딩으로 넘어가지 않게 한다.
+                // 예: P가 아닌 키로 바꾼 일시정지 키가 재개 직후 다시 일시정지를 거는 문제.
+                e.consume();
             }
         });
     }
@@ -83,7 +88,7 @@ public class PauseScreen extends JPanel implements Screen {
     // 키보드 조작 처리
     private void handleKeyPress(int keyCode) {
         GameAction action = bindings.get().actionFor(keyCode).orElse(null);
-        if (keyCode == KeyEvent.VK_P || action == GameAction.PAUSE) {
+        if (action == GameAction.PAUSE) {
             router.showScreen(ScreenRouter.GAME);
             return;
         }
@@ -100,7 +105,8 @@ public class PauseScreen extends JPanel implements Screen {
                 selectedIndex = (selectedIndex + 1) % menuItems.length;
                 repaint();
             }
-            case KeyEvent.VK_ENTER ->
+            // 시작 메뉴·게임 오버 화면처럼 Enter와 Space 모두 선택 키로 받는다.
+            case KeyEvent.VK_ENTER, KeyEvent.VK_SPACE ->
                 executeSelectedMenu();
             default -> {
             }
@@ -177,7 +183,7 @@ public class PauseScreen extends JPanel implements Screen {
             g2d.setColor(Color.GRAY);
             g2d.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
             KeyBindings keys = bindings.get();
-            String helpText = "[UP/DOWN] Move  [ENTER] Select  ["
+            String helpText = "[UP/DOWN] Move  [ENTER/SPACE] Select  ["
                     + KeyEvent.getKeyText(keys.keyFor(GameAction.PAUSE)) + "] Resume  ["
                     + KeyEvent.getKeyText(keys.keyFor(GameAction.QUIT)) + "] Menu";
             FontMetrics fmHelp = g2d.getFontMetrics();
