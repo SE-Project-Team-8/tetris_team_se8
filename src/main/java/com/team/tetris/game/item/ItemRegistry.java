@@ -46,7 +46,8 @@ public final class ItemRegistry {
     public static ItemRegistry defaults() {
         return new ItemRegistry(List.of(
                 new LineDeleteItem(),
-                new AnvilItem()));
+                new AnvilItem(),
+                new SlowDownItem()));
     }
 
     /** 등록 순서대로의 불변 목록. */
