@@ -47,6 +47,7 @@ public class ScreenRouter extends JFrame {
         currentWidth = size.width();
         currentHeight = size.height();
         setTitle(GameConstants.GAME_TITLE);
+        AppIcons.apply(this);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setResizable(false);
 

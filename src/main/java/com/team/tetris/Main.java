@@ -24,6 +24,7 @@ import com.team.tetris.scoreboard.ScoreRecord;
 import com.team.tetris.scoreboard.ScoreboardRepository;
 import com.team.tetris.settings.GameSettings;
 import com.team.tetris.settings.SettingsRepository;
+import com.team.tetris.ui.AppIcons;
 import com.team.tetris.ui.GameOverScreen;
 import com.team.tetris.ui.GameScreen;
 import com.team.tetris.ui.MainMenuScreen;
@@ -83,6 +84,7 @@ public final class Main {
         }
 
         private void show() {
+            AppIcons.applyToTaskbar();
             router.setVisible(true);
             router.showScreen(ScreenRouter.MAIN_MENU);
             refreshBestScore(true);
