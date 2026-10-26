@@ -43,6 +43,8 @@ src/
 │   │       ├── ItemRegistry, ItemPolicy, ItemSelector # 등록 목록·등장 규칙·선택
 │   │       ├── WeightedItemSelector                   # 룰렛 휠 선택기
 │   │       ├── LineDeleteItem                         # L: 줄 삭제
+│   │       ├── BombItem                               # B: 3×3 폭탄
+│   │       ├── FeverItem                              # F: 10초 점수 2배
 │   │       ├── SlowDownItem                           # S: 속도 단계 1 영구 감소
 │   │       └── AnvilItem, AnvilPiece, Anvil           # W: 무게추
 │   │

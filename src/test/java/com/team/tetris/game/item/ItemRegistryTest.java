@@ -16,7 +16,7 @@ class ItemRegistryTest {
     @Test
     void defaultsContainTheRequiredAndTeamItemsWithDistinctSymbols() {
         ItemRegistry registry = ItemRegistry.defaults();
-        assertEquals(List.of("LINE_DELETE", "ANVIL", "SLOW_DOWN"), registry.items().stream().map(Item::name).toList());
+        assertEquals(List.of("LINE_DELETE", "ANVIL", "BOMB", "FEVER", "SLOW_DOWN"), registry.items().stream().map(Item::name).toList());
         assertEquals(LineDeleteItem.SYMBOL, registry.bySymbol('L').orElseThrow().symbol());
         assertTrue(registry.standaloneBySymbol(AnvilItem.SYMBOL).isPresent());
         assertTrue(registry.standaloneBySymbol(LineDeleteItem.SYMBOL).isEmpty(), "L is embedded, not standalone");

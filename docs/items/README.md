@@ -1,7 +1,7 @@
 # 아이템 구조와 추가 방법
 
 근거: `docs/requirments2.md` 4.2(두 가지 형태, 아이템마다 다른 문자), 4.5(팀 자체 아이템 명세), 4.6(아이템을 쉽게 추가할 수 있는 구조).
-개별 아이템 명세는 같은 폴더의 `line-delete.md`, `anvil.md`, `slow-down.md`를 본다.
+개별 아이템 명세는 같은 폴더의 `line-delete.md`, `anvil.md`, `bomb.md`, `fever.md`, `slow-down.md`를 본다.
 
 ## 구조
 
@@ -33,7 +33,7 @@
 
 이 네 단계 밖의 파일(`BlockBoardDriver`, `GameEngine`, `GameScreen`, `Main`, `CellCodes`)은 건드리지 않는다.
 
-### 예: 3×3 폭탄 (포함형, 보드 효과)
+### 예: 3×3 폭탄 (포함형, 보드 효과) — 실제 구현은 `BombItem`
 
 ```java
 public final class BombItem implements EmbeddedItem {
@@ -61,9 +61,9 @@ public final class BombItem implements EmbeddedItem {
 | 효과 | 붙는 자리 | 예 |
 | --- | --- | --- |
 | 행 삭제 | `EmbeddedItem.onLock`의 반환값 | 줄 삭제 `L` |
-| 칸 파괴, 보드 변경 | `onLock` 안에서 `Board.eraseCells` 등 호출 | 폭탄 `B` (`feat/item-2-bomb`) |
+| 칸 파괴, 보드 변경 | `onLock` 안에서 `Board.eraseCells` 등 호출 | 폭탄 `B` (`BombItem`) |
 | 낙하 중 보드 변경, 조작 제한, 점수 면제 | `FallingPiece` 구현 | 무게추 `W` |
-| 엔진 상태 변경 (점수 배율, 속도 단계) | `Item.onActivated(GameEffects)`: `scoreMultiplier`, `lowerLevel`. 조각이 고정되고 그 조각 자신의 낙하·줄 점수가 반영된 뒤 한 번 호출된다 | 피버 `F` (`feat/item-1-fever-time`), 속도 감소 `S` (`SlowDownItem`) |
+| 엔진 상태 변경 (점수 배율, 속도 단계) | `Item.onActivated(GameEffects)`: `scoreMultiplier`, `lowerLevel`. 조각이 고정되고 그 조각 자신의 낙하·줄 점수가 반영된 뒤 한 번 호출된다 | 피버 `F` (`FeverItem`), 속도 감소 `S` (`feat/item-3-slow-down`) |
 
 ## 기존 아이템 브랜치를 옮길 때
 
