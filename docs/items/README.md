@@ -1,7 +1,7 @@
 # 아이템 구조와 추가 방법
 
 근거: `docs/requirments2.md` 4.2(두 가지 형태, 아이템마다 다른 문자), 4.5(팀 자체 아이템 명세), 4.6(아이템을 쉽게 추가할 수 있는 구조).
-개별 아이템 명세는 같은 폴더의 `line-delete.md`, `anvil.md`, `bomb.md`, `fever.md`를 본다.
+개별 아이템 명세는 같은 폴더의 `line-delete.md`, `anvil.md`, `bomb.md`, `fever.md`, `slow-down.md`를 본다.
 
 ## 구조
 

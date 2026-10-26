@@ -48,7 +48,8 @@ public final class ItemRegistry {
                 new LineDeleteItem(),
                 new AnvilItem(),
                 new BombItem(),
-                new FeverItem()));
+                new FeverItem(),
+                new SlowDownItem()));
     }
 
     /** 등록 순서대로의 불변 목록. */
