@@ -131,6 +131,11 @@ public final class TetrominoPiece implements FallingPiece {
         return distance > 0 ? new TetrominoPiece(tetromino.moveBy(distance, 0), item, itemIndex) : null;
     }
 
+    @Override
+    public EmbeddedItem item() {
+        return item;
+    }
+
     private boolean adopt(Board board, Tetromino candidate) {
         if (!CollisionChecker.canPlace(board, candidate)) return false;
         tetromino = candidate;

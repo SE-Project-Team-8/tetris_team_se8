@@ -17,12 +17,14 @@ import java.util.Objects;
  * 명세: docs/items/anvil.md
  */
 public final class AnvilPiece implements FallingPiece {
+    private final StandaloneItem item;
     private final int code;
     private Anvil anvil;
     private boolean horizontalLocked;
 
     private AnvilPiece(Anvil anvil, StandaloneItem item) {
         this.anvil = Objects.requireNonNull(anvil, "anvil");
+        this.item = Objects.requireNonNull(item, "item");
         this.code = CellCodes.cell(item.paletteType().id(), item.symbol());
     }
 
@@ -100,6 +102,11 @@ public final class AnvilPiece implements FallingPiece {
     @Override
     public FallingPiece landingPreview(Board board) {
         return null;
+    }
+
+    @Override
+    public StandaloneItem item() {
+        return item;
     }
 
     private boolean moveSideways(Board board, int deltaCol) {

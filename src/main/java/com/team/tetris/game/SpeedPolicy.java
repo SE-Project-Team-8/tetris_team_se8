@@ -11,6 +11,11 @@ public interface SpeedPolicy {
     }
     Speed calculate(int generatedBlocks, int clearedLines);
 
+    /** Speed after items lowered the level by slowdownSteps; policies that ignore items keep their rule. */
+    default Speed calculate(int generatedBlocks, int clearedLines, Difficulty difficulty, int slowdownSteps) {
+        return calculate(generatedBlocks, clearedLines, difficulty);
+    }
+
     record Speed(int level, int dropIntervalMillis) {
         public Speed {
             if (level < 1 || dropIntervalMillis < 1) {

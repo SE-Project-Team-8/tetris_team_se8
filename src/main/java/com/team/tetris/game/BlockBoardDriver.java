@@ -45,6 +45,7 @@ public final class BlockBoardDriver implements GameEngine.BoardDriver {
     private final ArrayDeque<QueuedPiece> preview = new ArrayDeque<>();
     private ItemPolicy itemPolicy = ItemPolicy.none();
     private FallingPiece current;
+    private Item lockedItem;
 
     public BlockBoardDriver() {
         this(ItemRegistry.defaults());
@@ -95,6 +96,7 @@ public final class BlockBoardDriver implements GameEngine.BoardDriver {
     public void reset() {
         board.clear();
         current = null;
+        lockedItem = null;
         itemPolicy.reset();
         preview.clear();
         fillPreview();
@@ -139,7 +141,9 @@ public final class BlockBoardDriver implements GameEngine.BoardDriver {
 
     @Override
     public GameEngine.LockResult lockAndClearLines() {
-        LockOutcome outcome = requireCurrent().lock(board);
+        FallingPiece locking = requireCurrent();
+        LockOutcome outcome = locking.lock(board);
+        lockedItem = locking.item();
         current = null;
         if (!outcome.clearsLines()) return new GameEngine.LockResult(0, false);
         BoardSnapshot boardBeforeClear = snapshot();
@@ -147,6 +151,11 @@ public final class BlockBoardDriver implements GameEngine.BoardDriver {
         itemPolicy.onLinesCleared(clearedRows.size());
         return new GameEngine.LockResult(clearedRows.size(), false, clearedRows,
                 clearedRows.isEmpty() ? null : boardBeforeClear);
+    }
+
+    @Override
+    public Item lockedItem() {
+        return lockedItem;
     }
 
     @Override
