@@ -1,3 +1,6 @@
+/*
+ * BlockBoardDriver 테스트: 생성·충돌·회전·줄 삭제·스냅샷·엔진 연동과 L 아이템 흐름.
+ */
 package com.team.tetris.game;
 
 import com.team.tetris.block.Board;
@@ -6,8 +9,9 @@ import com.team.tetris.block.Tetromino;
 import com.team.tetris.block.TetrominoGenerator;
 import com.team.tetris.block.TetrominoType;
 import com.team.tetris.common.events.BoardSnapshot;
+import com.team.tetris.common.events.CellCodes;
 import com.team.tetris.common.events.GameEventListener;
-import com.team.tetris.common.events.LineDeleteIds;
+import com.team.tetris.game.item.LineDeleteItem;
 import org.junit.jupiter.api.Test;
 
 import javax.swing.SwingUtilities;
@@ -174,7 +178,7 @@ class BlockBoardDriverTest {
             @Override public int nextInt(int bound) { return 2; }
         };
         BlockBoardDriver driver = new BlockBoardDriver(board, sequence(TetrominoType.O),
-                chooseThirdCell, () -> ItemType.LINE_DELETE);
+                chooseThirdCell, LineDeleteItem::new);
         driver.setItemMode(true);
         driver.reset();
         for (int round = 0; round < 5; round++) {
@@ -187,13 +191,14 @@ class BlockBoardDriverTest {
         }
         assertArrayEquals(new int[]{TetrominoType.O.id()}, driver.nextBlockTypes());
         assertTrue(driver.spawnNextBlock());
-        assertArrayEquals(new int[]{LineDeleteIds.preview(TetrominoType.O.id(), 2)},
+        assertArrayEquals(new int[]{CellCodes.preview(TetrominoType.O.id(), LineDeleteItem.SYMBOL, 2)},
                 driver.nextBlockTypes());
         driver.hardDrop();
         assertEquals(0, driver.lockAndClearLines().clearedLines());
 
         assertTrue(driver.spawnNextBlock());
-        assertEquals(LineDeleteIds.boardCell(TetrominoType.O.id()), driver.snapshot().cells()[1][4]);
+        assertEquals(CellCodes.cell(TetrominoType.O.id(), LineDeleteItem.SYMBOL),
+                driver.snapshot().cells()[1][4]);
         driver.hardDrop();
         GameEngine.LockResult itemClear = driver.lockAndClearLines();
         assertEquals(1, itemClear.clearedLines(),
@@ -228,7 +233,7 @@ class BlockBoardDriverTest {
         Board board = new Board();
         BlockBoardDriver driver = new BlockBoardDriver(board, sequence(TetrominoType.O), new Random() {
             @Override public int nextInt(int bound) { return 2; }
-        }, () -> ItemType.LINE_DELETE);
+        }, LineDeleteItem::new);
         driver.setItemMode(true);
         Scores listener = new Scores();
         GameEngine.DropTimer timer = new GameEngine.DropTimer() {

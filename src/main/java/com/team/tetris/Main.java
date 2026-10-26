@@ -1,3 +1,6 @@
+/*
+ * 애플리케이션 조립부. 엔진·화면·설정·순위 저장소·아이템 목록을 만들고 연결한다.
+ */
 package com.team.tetris;
 
 import java.io.IOException;
@@ -16,6 +19,7 @@ import com.team.tetris.common.events.BoardSnapshot;
 import com.team.tetris.common.events.GameEventListener;
 import com.team.tetris.game.BlockBoardDriver;
 import com.team.tetris.game.GameEngine;
+import com.team.tetris.game.item.ItemRegistry;
 import com.team.tetris.scoreboard.ScoreRecord;
 import com.team.tetris.scoreboard.ScoreboardRepository;
 import com.team.tetris.settings.GameSettings;
@@ -43,9 +47,10 @@ public final class Main {
         private GameSettings settings = loadSettings();
         private final ScreenRouter router = new ScreenRouter(settings.screenSize());
         private final ForwardingListener listener = new ForwardingListener();
-        private final BlockBoardDriver boardDriver = new BlockBoardDriver();
+        private final ItemRegistry items = ItemRegistry.defaults();
+        private final BlockBoardDriver boardDriver = new BlockBoardDriver(items);
         private final GameEngine engine = new GameEngine(boardDriver, listener, () -> settings.difficulty());
-        private final GameScreen gameScreen = new GameScreen(router, engine, settings.keyBindings(), this::onGameOver);
+        private final GameScreen gameScreen = new GameScreen(router, engine, settings.keyBindings(), this::onGameOver, items);
         private final GameOverScreen gameOverScreen = new GameOverScreen(router);
         private final NameInputScreen nameInputScreen = new NameInputScreen(router, this::saveScore);
         private final ScoreboardScreen scoreboardScreen = new ScoreboardScreen(router, scoreboardRepository);

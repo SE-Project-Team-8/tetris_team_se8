@@ -88,6 +88,7 @@ GameEngine engine = new GameEngine(new BlockBoardDriver(), listener,
    다음 블록 생성은 엔진이 하며, 생성 위치가 막히면 게임이 종료된다.
 6. `snapshot()`은 낙하 중 블록을 포함한 20×10 최종 화면이다. 빈칸은 `BoardSnapshot.EMPTY(-1)`.
 7. `nextBlockTypes()`는 다음 블록 ID 배열이다. ID 0~6의 도형별 매핑은 담당자 1과 B가 맞춘다.
+   아이템이 붙은 칸·블록은 `common.events.CellCodes`로 인코딩한다(`docs/items/README.md`).
 
 엔진은 UI에 전달할 때 보드 배열과 다음 블록 배열을 복사한다.
 

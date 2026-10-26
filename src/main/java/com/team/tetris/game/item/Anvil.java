@@ -1,8 +1,13 @@
-package com.team.tetris.block;
+/*
+ * 무게추의 불변 좌표와 6칸 형태(.WW. / WWWW). 낙하 규칙은 AnvilPiece, 아이템 정의는 AnvilItem에 있다.
+ */
+package com.team.tetris.game.item;
+
+import com.team.tetris.block.Cell;
 
 import java.util.List;
 
-/** Fixed-orientation, four-cell-wide weight: .WW. / WWWW. */
+/** 고정 방향의 너비 4칸 무게추 형태: .WW. / WWWW. 낙하 규칙은 {@link AnvilPiece}가 가진다. */
 public record Anvil(int row, int col) {
     public static final int WIDTH = 4;
     public static final int HEIGHT = 2;

@@ -1,13 +1,19 @@
+/*
+ * 무게추 동작을 실제 BlockBoardDriver 경로로 검증하는 테스트(등장, 이동·잠금, 파괴, 소모, 점수 없음).
+ */
 package com.team.tetris.game;
 
 import com.team.tetris.block.Board;
 import com.team.tetris.block.Rotation;
 import com.team.tetris.block.Tetromino;
 import com.team.tetris.block.TetrominoType;
-import com.team.tetris.common.events.AnvilIds;
 import com.team.tetris.common.events.BoardSnapshot;
+import com.team.tetris.common.events.CellCodes;
 import com.team.tetris.common.events.GameEventListener;
-import com.team.tetris.common.events.LineDeleteIds;
+import com.team.tetris.game.item.AnvilItem;
+import com.team.tetris.game.item.Item;
+import com.team.tetris.game.item.ItemRegistry;
+import com.team.tetris.game.item.LineDeleteItem;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -20,17 +26,21 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.junit.jupiter.api.Assertions.*;
 
 class AnvilDriverTest {
+    private static final Item ANVIL_ITEM = new AnvilItem();
+    private static final Item LINE_ITEM = new LineDeleteItem();
+    private static final int W = CellCodes.cell(TetrominoType.J.id(), AnvilItem.SYMBOL);
+
     @Test
     void earnedAnvilHasSixCellsAndFourCellWidthInPreviewAndBoard() {
         Board board = new Board();
         BlockBoardDriver driver = anvilDriver(board);
         spawnEarnedAnvil(driver, board);
-        assertArrayEquals(new int[]{-1, -1, -1, -1, 35, 35, -1, -1, -1, -1},
+        assertArrayEquals(new int[]{-1, -1, -1, -1, W, W, -1, -1, -1, -1},
                 driver.snapshot().cells()[0]);
-        assertArrayEquals(new int[]{-1, -1, -1, 35, 35, 35, 35, -1, -1, -1},
+        assertArrayEquals(new int[]{-1, -1, -1, W, W, W, W, -1, -1, -1},
                 driver.snapshot().cells()[1]);
         assertEquals(6, anvilCells(driver.snapshot()));
-        assertFalse(LineDeleteIds.isItemPreview(AnvilIds.ANVIL_ID));
+        assertEquals(CellCodes.NO_INDEX, CellCodes.itemCellIndex(W), "The weight is a whole-piece item");
         assertFalse(driver.awardsDropPoints());
     }
 
@@ -119,7 +129,7 @@ class AnvilDriverTest {
         Board board = new Board();
         AtomicInteger selections = new AtomicInteger();
         BlockBoardDriver driver = new BlockBoardDriver(board, () -> TetrominoType.O, new Random(1),
-                () -> selections.getAndIncrement() == 0 ? ItemType.ANVIL : ItemType.LINE_DELETE);
+                () -> selections.getAndIncrement() == 0 ? ANVIL_ITEM : LINE_ITEM);
         spawnEarnedAnvil(driver, board);
         driver.hardDrop();
         assertEquals(0, driver.lockAndClearLines().clearedLines());
@@ -130,7 +140,7 @@ class AnvilDriverTest {
             assertEquals(2, driver.lockAndClearLines().clearedLines());
         }
         assertTrue(driver.spawnNextBlock());
-        assertTrue(LineDeleteIds.isItemPreview(driver.nextBlockTypes()[0]));
+        assertEquals(LineDeleteItem.SYMBOL, CellCodes.symbol(driver.nextBlockTypes()[0]));
         assertEquals(2, selections.get());
     }
 
@@ -155,9 +165,11 @@ class AnvilDriverTest {
         Random fixedChoice = new Random() {
             @Override public int nextInt(int bound) { return bound == 2 ? choice : 3; }
         };
-        BlockBoardDriver driver = new BlockBoardDriver(board, () -> TetrominoType.O, fixedChoice);
+        BlockBoardDriver driver = new BlockBoardDriver(board, () -> TetrominoType.O, fixedChoice,
+                ItemRegistry.defaults());
         earnTenAndQueueItem(driver, board);
-        int expected = choice == 0 ? LineDeleteIds.preview(TetrominoType.O.id(), 3) : AnvilIds.ANVIL_ID;
+        int expected = choice == 0
+                ? CellCodes.preview(TetrominoType.O.id(), LineDeleteItem.SYMBOL, 3) : W;
         assertArrayEquals(new int[]{expected}, driver.nextBlockTypes());
     }
 
@@ -189,7 +201,7 @@ class AnvilDriverTest {
                 fillTwoRowsExceptTheCenter(board);
                 engine.handle(GameAction.HARD_DROP);
             }
-            assertArrayEquals(new int[]{AnvilIds.ANVIL_ID}, driver.nextBlockTypes());
+            assertArrayEquals(new int[]{W}, driver.nextBlockTypes());
             engine.handle(GameAction.HARD_DROP); // The pre-existing regular preview falls first.
             assertEquals(6, anvilCells(driver.snapshot()));
             int scoreBeforeWeight = engine.getScore();
@@ -207,7 +219,7 @@ class AnvilDriverTest {
     }
 
     private static BlockBoardDriver anvilDriver(Board board) {
-        return new BlockBoardDriver(board, () -> TetrominoType.O, new Random(1), () -> ItemType.ANVIL);
+        return new BlockBoardDriver(board, () -> TetrominoType.O, new Random(1), () -> ANVIL_ITEM);
     }
 
     private static void earnTenAndQueueItem(BlockBoardDriver driver, Board board) {
@@ -225,7 +237,7 @@ class AnvilDriverTest {
 
     private static void spawnEarnedAnvil(BlockBoardDriver driver, Board board) {
         earnTenAndQueueItem(driver, board);
-        assertArrayEquals(new int[]{AnvilIds.ANVIL_ID}, driver.nextBlockTypes());
+        assertArrayEquals(new int[]{W}, driver.nextBlockTypes());
         driver.hardDrop();
         assertEquals(0, driver.lockAndClearLines().clearedLines());
         board.clear(); // Isolate the fixture terrain without resetting earned game progress.
@@ -242,7 +254,7 @@ class AnvilDriverTest {
 
     private static long anvilCells(BoardSnapshot snapshot) {
         return Arrays.stream(snapshot.cells()).flatMapToInt(Arrays::stream)
-                .filter(cell -> cell == AnvilIds.ANVIL_ID).count();
+                .filter(cell -> cell == W).count();
     }
 
     private static final class ManualTimer implements GameEngine.DropTimer {

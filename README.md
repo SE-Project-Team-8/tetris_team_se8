@@ -35,7 +35,15 @@ src/
 │   │   ├── ScoreCalculator.java                       # 기본 점수 정책
 │   │   ├── ScoringPolicy.java                         # 교체 가능한 점수 규칙
 │   │   ├── SpeedPolicy.java                           # 교체 가능한 낙하 속도 규칙
-│   │   └── DefaultSpeedPolicy.java                    # 1차 속도 정책
+│   │   ├── DefaultSpeedPolicy.java                    # 1차 속도 정책
+│   │   ├── TetrominoPiece.java, QueuedPiece.java      # 낙하 조각·다음 블록 큐 항목
+│   │   └── item/                                      # 아이템 (추가 방법: docs/items/README.md)
+│   │       ├── Item, EmbeddedItem, StandaloneItem     # 아이템 계약 (포함형 / 블록형)
+│   │       ├── FallingPiece, LockOutcome              # 낙하 조각 계약과 고정 결과
+│   │       ├── ItemRegistry, ItemPolicy, ItemSelector # 등록 목록·등장 규칙·선택
+│   │       ├── WeightedItemSelector                   # 룰렛 휠 선택기
+│   │       ├── LineDeleteItem                         # L: 줄 삭제
+│   │       └── AnvilItem, AnvilPiece, Anvil           # W: 무게추
 │   │
 │   ├── settings/                                      # 담당자2
 │   │   ├── package-info.java                          # 담당자2
@@ -68,6 +76,7 @@ src/
 │       │   └── package-info.java                      # 담당자2 + B
 │       └── events/
 │           ├── BoardSnapshot.java                     # 담당자2 + B
+│           ├── CellCodes.java                         # 보드·미리보기 셀 코드 (아이템 문자 포함)
 │           ├── GameEventListener.java                 # 담당자2 + B
 │           └── package-info.java                      # 담당자2 + B
 │

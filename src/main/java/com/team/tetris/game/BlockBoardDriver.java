@@ -1,47 +1,83 @@
+/*
+ * block 패키지를 GameEngine.BoardDriver 계약에 맞게 연결하는 어댑터. 보드와 다음 블록 큐를 소유한다.
+ * 조각 규칙은 FallingPiece, 아이템 효과는 Item, 등장 규칙은 ItemPolicy에 맡기고 여기서는 위임만 한다.
+ */
 package com.team.tetris.game;
 
 import com.team.tetris.block.Board;
-import com.team.tetris.block.Anvil;
-import com.team.tetris.block.Cell;
-import com.team.tetris.block.CollisionChecker;
-import com.team.tetris.block.DropCalculator;
-import com.team.tetris.block.Rotation;
-import com.team.tetris.block.Tetromino;
 import com.team.tetris.block.TetrominoGenerator;
 import com.team.tetris.block.TetrominoType;
 import com.team.tetris.block.WeightedTetrominoGenerator;
 import com.team.tetris.common.Difficulty;
 import com.team.tetris.common.constants.GameConstants;
 import com.team.tetris.common.events.BoardSnapshot;
-import com.team.tetris.common.events.LineDeleteIds;
-import com.team.tetris.common.events.AnvilIds;
+import com.team.tetris.game.item.EmbeddedItem;
+import com.team.tetris.game.item.FallingPiece;
+import com.team.tetris.game.item.Item;
+import com.team.tetris.game.item.ItemPolicy;
+import com.team.tetris.game.item.ItemRegistry;
+import com.team.tetris.game.item.ItemSelector;
+import com.team.tetris.game.item.LockOutcome;
+import com.team.tetris.game.item.StandaloneItem;
+import com.team.tetris.game.item.WeightedItemSelector;
 
 import java.util.ArrayDeque;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.Random;
-import java.util.function.Supplier;
+import java.util.random.RandomGenerator;
 
-/** Adapts the block domain to the game engine; used on the Swing EDT. */
+/**
+ * Adapts the block domain to the game engine; used on the Swing EDT.
+ *
+ * This class owns the board and the preview queue only. The falling piece's rules live in
+ * {@link FallingPiece} implementations, item effects in {@link Item} implementations, and the
+ * "when does an item appear" rule in {@link ItemPolicy}. Adding an item changes none of this file.
+ */
 public final class BlockBoardDriver implements GameEngine.BoardDriver {
+    /** Every tetromino has four cells; an embedded item attaches to one of them at random. */
+    private static final int CELLS_PER_TETROMINO = 4;
     private final Board board;
     private final TetrominoGenerator generator;
-    private final ArrayDeque<QueuedBlock> preview = new ArrayDeque<>();
-    private final Random itemRandom;
-    private final Supplier<ItemType> itemSelector;
-    private Tetromino current;
-    private Anvil currentAnvil;
-    private boolean anvilHorizontalLocked;
-    private int currentItemIndex = -1;
-    private int clearedLines;
-    private int pendingItems;
-    private boolean itemMode;
-
-    private record QueuedBlock(TetrominoType type, ItemType item, int itemIndex) { }
+    private final RandomGenerator random;
+    private final ItemPolicy itemModePolicy;
+    private final ArrayDeque<QueuedPiece> preview = new ArrayDeque<>();
+    private ItemPolicy itemPolicy = ItemPolicy.none();
+    private FallingPiece current;
 
     public BlockBoardDriver() {
-        this(new Board(), new WeightedTetrominoGenerator(new Random(), Difficulty.NORMAL));
+        this(ItemRegistry.defaults());
+    }
+
+    /** The real game: weighted block generation and every registered item with equal odds. */
+    public BlockBoardDriver(ItemRegistry items) {
+        this(new Board(), new WeightedTetrominoGenerator(new Random(), Difficulty.NORMAL), new Random(), items);
+    }
+
+    public BlockBoardDriver(Board board, TetrominoGenerator generator) {
+        this(board, generator, new Random(), ItemRegistry.defaults());
+    }
+
+    public BlockBoardDriver(Board board, TetrominoGenerator generator, RandomGenerator random, ItemRegistry items) {
+        this(board, generator, random, WeightedItemSelector.uniform(items, random));
+    }
+
+    /** The selector chooses an item only after a ten-line milestone is earned (item mode only). */
+    public BlockBoardDriver(Board board, TetrominoGenerator generator, RandomGenerator random, ItemSelector selector) {
+        this(board, generator, random, ItemPolicy.everyLines(GameConstants.LINES_PER_ITEM, selector));
+    }
+
+    /** @param itemModePolicy the item rule used while item mode is on; normal mode never spawns items */
+    public BlockBoardDriver(Board board, TetrominoGenerator generator, RandomGenerator random,
+                            ItemPolicy itemModePolicy) {
+        this.board = Objects.requireNonNull(board, "board");
+        this.generator = Objects.requireNonNull(generator, "generator");
+        this.random = Objects.requireNonNull(random, "random");
+        this.itemModePolicy = Objects.requireNonNull(itemModePolicy, "itemModePolicy");
+        if (board.rows() != GameConstants.BOARD_ROWS || board.cols() != GameConstants.BOARD_COLS) {
+            throw new IllegalArgumentException("Game board must be 20 rows by 10 columns");
+        }
     }
 
     @Override
@@ -50,145 +86,72 @@ public final class BlockBoardDriver implements GameEngine.BoardDriver {
         if (generator instanceof WeightedTetrominoGenerator weighted) weighted.setDifficulty(difficulty);
     }
 
-    public BlockBoardDriver(Board board, TetrominoGenerator generator) {
-        this(board, generator, new Random());
-    }
-
-    public BlockBoardDriver(Board board, TetrominoGenerator generator, Random itemRandom) {
-        this(board, generator, itemRandom,
-                () -> itemRandom.nextInt(2) == 0 ? ItemType.LINE_DELETE : ItemType.ANVIL);
-    }
-
-    /** The selector chooses an item only after a ten-line milestone is earned. */
-    public BlockBoardDriver(Board board, TetrominoGenerator generator, Random itemRandom,
-                            Supplier<ItemType> itemSelector) {
-        this.board = Objects.requireNonNull(board, "board");
-        this.generator = Objects.requireNonNull(generator, "generator");
-        this.itemRandom = Objects.requireNonNull(itemRandom, "itemRandom");
-        this.itemSelector = Objects.requireNonNull(itemSelector, "itemSelector");
-        if (board.rows() != GameConstants.BOARD_ROWS || board.cols() != GameConstants.BOARD_COLS) {
-            throw new IllegalArgumentException("Game board must be 20 rows by 10 columns");
-        }
+    /** Select the rules for the next game. */
+    public void setItemMode(boolean itemMode) {
+        itemPolicy = itemMode ? itemModePolicy : ItemPolicy.none();
     }
 
     @Override
     public void reset() {
         board.clear();
         current = null;
-        currentAnvil = null;
-        anvilHorizontalLocked = false;
-        currentItemIndex = -1;
-        clearedLines = 0;
-        pendingItems = 0;
+        itemPolicy.reset();
         preview.clear();
         fillPreview();
     }
 
     @Override
     public boolean spawnNextBlock() {
-        if (current != null || currentAnvil != null) {
-            throw new IllegalStateException("The current block must be locked first");
-        }
+        if (current != null) throw new IllegalStateException("The current block must be locked first");
         if (preview.isEmpty()) throw new IllegalStateException("Reset the board before spawning");
-        QueuedBlock next = preview.removeFirst();
+        QueuedPiece next = preview.removeFirst();
         fillPreview();
-        if (next.item() == ItemType.ANVIL) {
-            Anvil candidate = new Anvil(0, (board.cols() - Anvil.WIDTH) / 2);
-            if (!canPlaceAnvil(candidate)) return false;
-            currentAnvil = candidate;
-            anvilHorizontalLocked = false;
-            refreshAnvilContact();
-            return true;
-        }
-        Tetromino candidate = spawnCandidate(next.type());
-        if (!CollisionChecker.canPlace(board, candidate)) return false;
-        current = candidate;
-        currentItemIndex = next.itemIndex();
+        FallingPiece piece = next.spawn(board);
+        if (piece == null) return false;
+        current = piece;
         return true;
     }
 
     @Override
     public boolean moveLeft() {
-        if (currentAnvil != null) return moveAnvilSideways(-1);
-        return adopt(requireCurrent().moveBy(0, -1));
+        return requireCurrent().moveLeft(board);
     }
 
     @Override
     public boolean moveRight() {
-        if (currentAnvil != null) return moveAnvilSideways(1);
-        return adopt(requireCurrent().moveBy(0, 1));
+        return requireCurrent().moveRight(board);
     }
 
     @Override
     public boolean moveDown() {
-        if (currentAnvil != null) return moveAnvilDown();
-        return adopt(requireCurrent().moveBy(1, 0));
+        return requireCurrent().moveDown(board);
     }
 
     @Override
     public boolean rotateClockwise() {
-        if (currentAnvil != null) return false; // The weight always remains four cells wide.
-        Tetromino rotated = requireCurrent().rotateClockwise();
-        if (adopt(rotated)) return true;
-
-        int minCol = rotated.cells().stream().mapToInt(Cell::col).min().orElseThrow();
-        int maxCol = rotated.cells().stream().mapToInt(Cell::col).max().orElseThrow();
-        // Shift only far enough to bring occupied cells back inside a side wall.
-        int correction = 0;
-        if (minCol < 0) correction = -minCol;
-        else if (maxCol >= board.cols()) correction = board.cols() - 1 - maxCol;
-        return correction != 0 && adopt(rotated.moveBy(0, correction));
-    }
-
-    /** Select the rules for the next game. */
-    public void setItemMode(boolean itemMode) {
-        this.itemMode = itemMode;
+        return requireCurrent().rotateClockwise(board);
     }
 
     @Override
     public int hardDrop() {
-        if (currentAnvil != null) {
-            int distance = 0;
-            while (moveAnvilDown()) distance++;
-            return distance;
-        }
-        int distance = DropCalculator.dropDistance(board, requireCurrent());
-        current = current.moveBy(distance, 0);
-        return distance;
+        return requireCurrent().hardDrop(board);
     }
 
     @Override
     public GameEngine.LockResult lockAndClearLines() {
-        if (currentAnvil != null) {
-            if (currentAnvil.row() + Anvil.HEIGHT != board.rows()) {
-                throw new IllegalStateException("The anvil must reach the floor before being consumed");
-            }
-            currentAnvil = null;
-            anvilHorizontalLocked = false;
-            return new GameEngine.LockResult(0, false);
-        }
-        Tetromino landed = requireCurrent();
-        if (!board.tryPlace(landed)) {
-            throw new IllegalStateException("A valid falling block could not be locked");
-        }
-        int forcedRow = currentItemIndex < 0 ? -1 : landed.cells().get(currentItemIndex).row();
+        LockOutcome outcome = requireCurrent().lock(board);
         current = null;
-        currentItemIndex = -1;
+        if (!outcome.clearsLines()) return new GameEngine.LockResult(0, false);
         BoardSnapshot boardBeforeClear = snapshot();
-        List<Integer> clearedRows = board.clearLinesIncludingAndGetRows(forcedRow);
-        int removed = clearedRows.size();
-        if (itemMode) {
-            int previousMilestones = clearedLines / 10;
-            clearedLines += removed;
-            pendingItems += clearedLines / 10 - previousMilestones;
-        }
-        return new GameEngine.LockResult(removed, false, clearedRows,
+        List<Integer> clearedRows = board.clearLinesIncludingAndGetRows(outcome.forcedRows());
+        itemPolicy.onLinesCleared(clearedRows.size());
+        return new GameEngine.LockResult(clearedRows.size(), false, clearedRows,
                 clearedRows.isEmpty() ? null : boardBeforeClear);
     }
 
     @Override
     public boolean awardsDropPoints() {
-        return currentAnvil == null;
+        return current == null || current.awardsDropPoints();
     }
 
     @Override
@@ -200,17 +163,7 @@ public final class BlockBoardDriver implements GameEngine.BoardDriver {
                         .map(TetrominoType::id).orElse(BoardSnapshot.EMPTY);
             }
         }
-        if (current != null) {
-            var occupied = current.cells();
-            for (int index = 0; index < occupied.size(); index++) {
-                Cell cell = occupied.get(index);
-                cells[cell.row()][cell.col()] = index == currentItemIndex
-                        ? LineDeleteIds.boardCell(current.type().id()) : current.type().id();
-            }
-        }
-        if (currentAnvil != null) {
-            for (Cell cell : currentAnvil.cells()) cells[cell.row()][cell.col()] = AnvilIds.ANVIL_ID;
-        }
+        if (current != null) current.paint(cells);
         return new BoardSnapshot(cells);
     }
 
@@ -221,112 +174,45 @@ public final class BlockBoardDriver implements GameEngine.BoardDriver {
 
     @Override
     public BoardSnapshot landingSnapshot() {
-        if (current == null) {
-            return null;
-        }
-        int distance = DropCalculator.dropDistance(board, current);
-        return distance > 0 ? pieceSnapshot(current.moveBy(distance, 0)) : null;
+        FallingPiece landing = current == null ? null : current.landingPreview(board);
+        return landing == null ? null : pieceSnapshot(landing);
     }
 
-    private BoardSnapshot pieceSnapshot(Tetromino piece) {
+    private BoardSnapshot pieceSnapshot(FallingPiece piece) {
         int[][] cells = new int[board.rows()][board.cols()];
         for (int[] row : cells) {
             Arrays.fill(row, BoardSnapshot.EMPTY);
         }
-        for (Cell cell : piece.cells()) {
-            cells[cell.row()][cell.col()] = piece.type().id();
-        }
+        piece.paint(cells);
         return new BoardSnapshot(cells);
     }
 
     @Override
     public int[] nextBlockTypes() {
-        return preview.stream().mapToInt(next -> switch (next.item()) {
-            case NONE -> next.type().id();
-            case LINE_DELETE -> LineDeleteIds.preview(next.type().id(), next.itemIndex());
-            case ANVIL -> AnvilIds.ANVIL_ID;
-        }).toArray();
-    }
-
-    private Tetromino spawnCandidate(TetrominoType type) {
-        Tetromino origin = new Tetromino(type, Rotation.SPAWN, 0, 0);
-        int minRow = origin.cells().stream().mapToInt(Cell::row).min().orElseThrow();
-        int minCol = origin.cells().stream().mapToInt(Cell::col).min().orElseThrow();
-        int maxCol = origin.cells().stream().mapToInt(Cell::col).max().orElseThrow();
-        int occupiedWidth = maxCol - minCol + 1;
-        int left = Math.floorDiv(board.cols() - occupiedWidth, 2);
-        return origin.moveBy(-minRow, left - minCol);
+        return preview.stream().mapToInt(QueuedPiece::previewCode).toArray();
     }
 
     private void fillPreview() {
         while (preview.size() < GameConstants.NEXT_QUEUE_SIZE) {
-            boolean earnedItem = itemMode && pendingItems > 0;
-            ItemType item = earnedItem ? Objects.requireNonNull(itemSelector.get(), "item type") : ItemType.NONE;
-            if (earnedItem && item == ItemType.NONE) {
-                throw new IllegalStateException("An earned item must not be a regular block");
-            }
-            TetrominoType type = item == ItemType.ANVIL ? null
-                    : Objects.requireNonNull(generator.next(), "next block type");
-            int itemIndex = item == ItemType.LINE_DELETE ? itemRandom.nextInt(4) : -1;
-            preview.addLast(new QueuedBlock(type, item, itemIndex));
-            if (earnedItem) pendingItems--;
+            preview.addLast(queue(itemPolicy.nextItem().orElse(null)));
         }
     }
 
-    private boolean canPlaceAnvil(Anvil candidate) {
-        for (Cell cell : candidate.cells()) {
-            if (cell.row() < 0 || cell.row() >= board.rows()
-                    || cell.col() < 0 || cell.col() >= board.cols()
-                    || board.cellAt(cell.row(), cell.col()).isPresent()) return false;
-        }
-        return true;
+    /** The sealed Item hierarchy makes this switch exhaustive: a new item kind would fail to compile here. */
+    private QueuedPiece queue(Item item) {
+        return switch (item) {
+            case null -> new QueuedPiece.Regular(nextType(), null, -1);
+            case StandaloneItem standalone -> new QueuedPiece.Standalone(standalone);
+            case EmbeddedItem embedded ->
+                    new QueuedPiece.Regular(nextType(), embedded, random.nextInt(CELLS_PER_TETROMINO));
+        };
     }
 
-    private void refreshAnvilContact() {
-        int below = currentAnvil.row() + Anvil.HEIGHT;
-        if (below >= board.rows()) {
-            anvilHorizontalLocked = true;
-            return;
-        }
-        for (int col = currentAnvil.col(); col < currentAnvil.col() + Anvil.WIDTH; col++) {
-            if (board.cellAt(below, col).isPresent()) {
-                anvilHorizontalLocked = true;
-                return;
-            }
-        }
+    private TetrominoType nextType() {
+        return Objects.requireNonNull(generator.next(), "next block type");
     }
 
-    private boolean moveAnvilSideways(int deltaCol) {
-        refreshAnvilContact();
-        if (anvilHorizontalLocked) return false;
-        Anvil candidate = currentAnvil.moveBy(0, deltaCol);
-        if (!canPlaceAnvil(candidate)) return false;
-        currentAnvil = candidate;
-        refreshAnvilContact();
-        return true;
-    }
-
-    private boolean moveAnvilDown() {
-        refreshAnvilContact();
-        Anvil candidate = currentAnvil.moveBy(1, 0);
-        if (candidate.row() + Anvil.HEIGHT > board.rows()) return false;
-        // Latch contact before crushing; removing the obstacle must never unlock horizontal movement.
-        if (candidate.cells().stream().anyMatch(cell -> board.cellAt(cell.row(), cell.col()).isPresent())) {
-            anvilHorizontalLocked = true;
-        }
-        board.eraseCells(candidate.cells());
-        currentAnvil = candidate;
-        refreshAnvilContact();
-        return true;
-    }
-
-    private boolean adopt(Tetromino candidate) {
-        if (!CollisionChecker.canPlace(board, candidate)) return false;
-        current = candidate;
-        return true;
-    }
-
-    private Tetromino requireCurrent() {
+    private FallingPiece requireCurrent() {
         if (current == null) throw new IllegalStateException("No falling block");
         return current;
     }
