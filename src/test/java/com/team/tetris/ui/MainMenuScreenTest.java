@@ -35,10 +35,12 @@ class MainMenuScreenTest {
         edt(() -> {
             ScreenRouter router = new ScreenRouter();
             try {
-                MainMenuScreen menu = new MainMenuScreen(router, () -> { }, () -> { });
+                GameScreen gameScreen = new GameScreen(router, engine, KeyBindings.defaults(), score -> { });
+                // Main처럼 일반 게임 시작 동작으로 GameScreen.startNewGame()을 넘긴다.
+                // 메뉴가 이 동작으로 게임을 시작하게 바뀌어도(아이템 모드 메뉴) 같은 경로를 검증한다.
+                MainMenuScreen menu = new MainMenuScreen(router, gameScreen::startNewGame, () -> { });
                 router.addScreen(ScreenRouter.MAIN_MENU, menu);
-                router.addScreen(ScreenRouter.GAME,
-                        new GameScreen(router, engine, KeyBindings.defaults(), score -> { }));
+                router.addScreen(ScreenRouter.GAME, gameScreen);
                 router.setVisible(true);
                 router.showScreen(ScreenRouter.MAIN_MENU);
 
