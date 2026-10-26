@@ -122,13 +122,21 @@ Gradle 테스트 실행 인수 파일을 시스템 문자셋으로 읽도록 하
 테스트 결과는 `build/reports/tests/test/index.html`, 커버리지는
 `build/reports/jacoco/test/html/index.html`에서 확인할 수 있습니다.
 
-## Windows 배포
+## 데스크톱 배포
 
-Windows 11에서 Java 21 toolchain으로 앱 이미지와 실행용 runtime을 함께 만듭니다.
+Windows 11과 macOS에서 Java 21 runtime을 포함하는 native package를 만듭니다.
 
 ```powershell
 .\gradlew.bat clean build packageWindows
 ```
 
-실행 파일은 `build/package/windows/Tetris/Tetris.exe`입니다. GitHub Actions에서는
-동일한 앱 이미지가 `tetris-windows-app` artifact로 업로드됩니다.
+Windows 실행 파일은 `build/package/windows/Tetris/Tetris.exe`입니다.
+
+macOS에서는 다음 명령으로 DMG를 만듭니다.
+
+```bash
+./gradlew clean build packageMacOS
+```
+
+DMG는 `build/package/macos/Tetris-1.0.0.dmg`에 생성됩니다. `v*` 태그를 push하면
+GitHub Actions가 Windows ZIP과 macOS DMG를 모두 빌드한 뒤 하나의 GitHub Release에 첨부합니다.

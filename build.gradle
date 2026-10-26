@@ -5,7 +5,7 @@ plugins {
 }
 
 group = 'com.team.tetris'
-version = '0.1.0'
+version = '1.0.0'
 
 java {
     toolchain {
@@ -53,6 +53,37 @@ tasks.register('packageWindows', Exec) {
                 '--main-class', application.mainClass.get(),
                 '--dest', appImageDirectory.get().asFile.absolutePath,
                 '--icon', layout.projectDirectory.file('src/main/resources/tetris.ico').asFile.absolutePath,
+                '--app-version', project.version.toString(),
+                '--vendor', 'SE-Project-Team-8'
+    }
+}
+
+tasks.register('packageMacOS', Exec) {
+    group = 'distribution'
+    description = 'Creates a macOS disk image with a bundled Java runtime.'
+    dependsOn tasks.named('jar')
+
+    def packageDirectory = layout.buildDirectory.dir('package/macos')
+    outputs.dir(packageDirectory)
+    inputs.file(layout.projectDirectory.file('src/main/resources/tetris.icns'))
+
+    doFirst {
+        if (!System.getProperty('os.name').toLowerCase(Locale.ROOT).contains('mac')) {
+            throw new GradleException('packageMacOS must run on macOS with the Java 21 toolchain.')
+        }
+
+        delete(packageDirectory.get().asFile)
+        def launcher = javaToolchains.launcherFor {
+            languageVersion = JavaLanguageVersion.of(21)
+        }.get()
+        executable new File(launcher.metadata.installationPath.asFile, 'bin/jpackage')
+        args '--type', 'dmg',
+                '--name', 'Tetris',
+                '--input', tasks.named('jar').get().archiveFile.get().asFile.parent,
+                '--main-jar', tasks.named('jar').get().archiveFile.get().asFile.name,
+                '--main-class', application.mainClass.get(),
+                '--dest', packageDirectory.get().asFile.absolutePath,
+                '--icon', layout.projectDirectory.file('src/main/resources/tetris.icns').asFile.absolutePath,
                 '--app-version', project.version.toString(),
                 '--vendor', 'SE-Project-Team-8'
     }

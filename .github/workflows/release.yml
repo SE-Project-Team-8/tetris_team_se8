@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  package-and-release:
+  package-windows:
     runs-on: windows-latest
     steps:
       - name: Checkout
@@ -24,9 +24,45 @@ jobs:
       - name: Archive app image
         shell: pwsh
         run: Compress-Archive -Path build/package/windows/Tetris -DestinationPath build/package/tetris-windows-x64.zip -CompressionLevel Optimal
+      - name: Upload Windows release asset
+        uses: actions/upload-artifact@v4
+        with:
+          name: tetris-release-windows
+          path: build/package/tetris-windows-x64.zip
+          if-no-files-found: error
+
+  package-macos:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Temurin JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Test and package macOS disk image
+        run: ./gradlew clean build packageMacOS
+      - name: Upload macOS release asset
+        uses: actions/upload-artifact@v4
+        with:
+          name: tetris-release-macos
+          path: build/package/macos/*.dmg
+          if-no-files-found: error
+
+  publish-release:
+    needs: [package-windows, package-macos]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download release assets
+        uses: actions/download-artifact@v4
+        with:
+          pattern: tetris-release-*
+          path: release-assets
+          merge-multiple: true
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           name: Tetris ${{ github.ref_name }}
           generate_release_notes: true
-          files: build/package/tetris-windows-x64.zip
+          files: release-assets/*
