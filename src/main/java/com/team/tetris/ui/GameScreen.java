@@ -10,10 +10,12 @@ import java.awt.RenderingHints;
 import java.awt.event.ActionEvent;
 import java.awt.event.KeyEvent;
 import java.util.Arrays;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.IntConsumer;
 
 import javax.swing.AbstractAction;
@@ -51,6 +53,9 @@ public class GameScreen extends JPanel implements Screen {
     private static final int HEADER_HEIGHT = 40;
     private static final int FOOTER_HEIGHT = 36;
     private static final int[] LINE_CLEAR_FLASH_ALPHA = {255, 70, 255, 0};
+    /** 한 번 누르면 한 번만 일어나야 하는 동작. 이동·회전은 누르고 있으면 계속 반복된다. */
+    private static final Set<GameAction> ONE_PRESS_ACTIONS =
+            EnumSet.of(GameAction.HARD_DROP, GameAction.PAUSE, GameAction.QUIT);
     private static final int LINE_CLEAR_FLASH_INTERVAL_MS = 65;
     private static final int BEST_SCORE_TICK_MS = 30;
     private static final int BEST_SCORE_HOLD_MS = 500;
@@ -333,6 +338,8 @@ public class GameScreen extends JPanel implements Screen {
     }
 
     private void handleAction(GameAction action) {
+        // 하드 드롭 키를 누르고 있으면 자동 반복으로 다음 블록까지 연달아 떨어지므로 새로 누를 때만 받는다.
+        if (ONE_PRESS_ACTIONS.contains(action) && HeldKeys.isAutoRepeat()) return;
         if (!engine.handle(action)) return;
         if (action == GameAction.PAUSE) router.showScreen(ScreenRouter.PAUSE);
         if (action == GameAction.QUIT) router.showScreen(ScreenRouter.MAIN_MENU);
