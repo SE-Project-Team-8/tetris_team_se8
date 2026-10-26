@@ -1,3 +1,6 @@
+/*
+ * ItemPolicy 테스트: 10줄 마일스톤 계산, 기회 소모, reset, none()의 무동작.
+ */
 package com.team.tetris.game.item;
 
 import org.junit.jupiter.api.Test;

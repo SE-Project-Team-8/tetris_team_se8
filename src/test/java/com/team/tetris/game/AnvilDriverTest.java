@@ -1,3 +1,6 @@
+/*
+ * 무게추 동작을 실제 BlockBoardDriver 경로로 검증하는 테스트(등장, 이동·잠금, 파괴, 소모, 점수 없음).
+ */
 package com.team.tetris.game;
 
 import com.team.tetris.block.Board;

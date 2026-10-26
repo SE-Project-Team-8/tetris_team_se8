@@ -1,3 +1,7 @@
+/*
+ * 아이템 기회가 언제 생기고 무엇이 나오는지 정하는 규칙의 계약. none()은 일반 모드(아이템 없음),
+ * everyLines(10, selector)는 아이템 모드(누적 10줄마다 하나, 요구사항 4.2).
+ */
 package com.team.tetris.game.item;
 
 import java.util.Optional;

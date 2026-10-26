@@ -1,3 +1,6 @@
+/*
+ * ItemRegistry 테스트: 기본 목록(L, W), 문자·이름 중복과 보이지 않는 문자 거부, 블록형 조회.
+ */
 package com.team.tetris.game.item;
 
 import com.team.tetris.block.Board;

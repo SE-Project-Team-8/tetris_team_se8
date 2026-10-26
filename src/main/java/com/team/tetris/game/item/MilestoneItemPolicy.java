@@ -1,3 +1,7 @@
+/*
+ * ItemPolicy.everyLines()의 구현. 누적 삭제 줄 수가 일정 배수를 넘을 때마다 아이템 기회를 하나 쌓고,
+ * 큐를 채울 때 선택기가 고른 아이템을 하나씩 내준다.
+ */
 package com.team.tetris.game.item;
 
 import java.util.Objects;

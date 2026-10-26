@@ -1,3 +1,6 @@
+/*
+ * 무게추의 불변 좌표와 6칸 형태(.WW. / WWWW). 낙하 규칙은 AnvilPiece, 아이템 정의는 AnvilItem에 있다.
+ */
 package com.team.tetris.game.item;
 
 import com.team.tetris.block.Cell;

@@ -1,3 +1,7 @@
+/*
+ * 줄 삭제 아이템(L)의 정의. 포함형(EmbeddedItem)으로, 블록이 고정되면 L이 있는 행을 꽉 차 있지 않아도
+ * 지울 행으로 돌려준다. 명세: docs/items/line-delete.md
+ */
 package com.team.tetris.game.item;
 
 import com.team.tetris.block.Board;

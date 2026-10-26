@@ -1,3 +1,7 @@
+/*
+ * 낙하 중인 조각이 보드와 상호작용하는 규칙(이동·회전·낙하·고정·그리기)의 계약.
+ * TetrominoPiece(일반 블록)와 AnvilPiece(무게추)가 구현하고, BlockBoardDriver는 종류를 묻지 않고 위임만 한다.
+ */
 package com.team.tetris.game.item;
 
 import com.team.tetris.block.Board;

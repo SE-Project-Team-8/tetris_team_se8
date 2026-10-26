@@ -1,3 +1,6 @@
+/*
+ * 고정된 블록 셀을 소유하는 보드. 배치·행 삭제(강제 행 포함)·셀 삭제·초기화를 제공한다.
+ */
 package com.team.tetris.block;
 
 import com.team.tetris.common.constants.GameConstants;

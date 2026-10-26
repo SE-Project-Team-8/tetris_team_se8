@@ -1,3 +1,7 @@
+/*
+ * 블록형 아이템 계약. 블록 자체가 아이템이며 색(paletteType), 미리보기 모양(previewShape),
+ * 낙하 조각 생성(spawn)을 제공한다. 예: AnvilItem(W).
+ */
 package com.team.tetris.game.item;
 
 import com.team.tetris.block.Board;

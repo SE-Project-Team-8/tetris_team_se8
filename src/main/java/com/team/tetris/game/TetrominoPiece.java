@@ -1,3 +1,7 @@
+/*
+ * 일반 테트로미노의 낙하 조각(FallingPiece 구현). 이동·회전(벽 보정)·하드드롭·고정 규칙을 가지며,
+ * 네 칸 중 하나에 포함형 아이템을 붙여 고정 시 아이템의 onLock을 호출한다.
+ */
 package com.team.tetris.game;
 
 import com.team.tetris.block.Board;

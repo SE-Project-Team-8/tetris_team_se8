@@ -1,3 +1,7 @@
+/*
+ * 게임 화면. 엔진 이벤트를 그리고 설정된 키를 GameAction으로 변환한다.
+ * 셀 코드(CellCodes)에서 색과 문자를 디코드해 그리며, 블록형 아이템의 미리보기 모양은 ItemRegistry에서 찾는다.
+ */
 package com.team.tetris.ui;
 
 import java.awt.AlphaComposite;

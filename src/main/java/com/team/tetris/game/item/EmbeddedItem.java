@@ -1,3 +1,7 @@
+/*
+ * 포함형 아이템 계약. 기본 블록의 한 칸에 붙으며, 블록이 고정된 직후 onLock(Board, Cell)에서 보드 효과를
+ * 적용하고 강제로 지울 행을 돌려준다. 예: LineDeleteItem(L).
+ */
 package com.team.tetris.game.item;
 
 import com.team.tetris.block.Board;

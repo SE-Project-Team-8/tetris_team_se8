@@ -1,3 +1,7 @@
+/*
+ * 실제 게임 경로(ItemRegistry.defaults() + 균등 선택기 + BlockBoardDriver)로 아이템 2,000개를 뽑아
+ * 누적 10줄마다 정확히 하나가 나오는지와 아이템별 비율(±5%)을 검증한다.
+ */
 package com.team.tetris.game;
 
 import com.team.tetris.block.Board;

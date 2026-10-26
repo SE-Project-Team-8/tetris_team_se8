@@ -1,3 +1,7 @@
+/*
+ * 레지스트리에 등록된 모든 아이템이 지켜야 하는 공통 계약 테스트. 문자 고유성, 미리보기 너비, 생성·낙하·고정,
+ * 10줄 후 실제 드라이버 경로를 아이템마다 검사한다. 아이템을 등록하면 자동으로 대상이 된다.
+ */
 package com.team.tetris.game.item;
 
 import com.team.tetris.block.Board;

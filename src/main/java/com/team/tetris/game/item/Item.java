@@ -1,3 +1,7 @@
+/*
+ * 아이템의 공통 계약(sealed). 하위 타입은 포함형 EmbeddedItem과 블록형 StandaloneItem만 허용해
+ * 형태를 가르는 switch가 빠짐없는지 컴파일러가 검사한다. name()과 고유 표시 문자 symbol()을 가진다.
+ */
 package com.team.tetris.game.item;
 
 /**

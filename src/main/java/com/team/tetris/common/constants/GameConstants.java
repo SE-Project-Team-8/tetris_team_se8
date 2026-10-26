@@ -1,3 +1,6 @@
+/*
+ * 보드 크기·낙하 간격·아이템 등장 줄 수 등 공용 상수.
+ */
 package com.team.tetris.common.constants;
 
 public final class GameConstants {

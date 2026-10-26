@@ -1,3 +1,7 @@
+/*
+ * 무게추의 낙하 조각(FallingPiece 구현). 접촉 전 좌우 이동, 첫 접촉 후 좌우 잠금, 내려가며 아래 블록 파괴,
+ * 회전 없음, 낙하 점수 없음, 바닥에서 소모(LockOutcome.consumed).
+ */
 package com.team.tetris.game.item;
 
 import com.team.tetris.block.Board;

@@ -1,3 +1,6 @@
+/*
+ * 애플리케이션 조립부. 엔진·화면·설정·순위 저장소·아이템 목록을 만들고 연결한다.
+ */
 package com.team.tetris;
 
 import java.io.IOException;

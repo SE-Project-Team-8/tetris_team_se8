@@ -1,3 +1,6 @@
+/*
+ * BlockBoardDriver 테스트: 생성·충돌·회전·줄 삭제·스냅샷·엔진 연동과 L 아이템 흐름.
+ */
 package com.team.tetris.game;
 
 import com.team.tetris.block.Board;

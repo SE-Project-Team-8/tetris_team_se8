@@ -1,3 +1,7 @@
+/*
+ * 가중치 비례(룰렛 휠) 아이템 선택기. 블록 생성기(WeightedTetrominoGenerator)와 같은 방식이며,
+ * 실제 게임은 uniform()으로 등록된 모든 아이템을 같은 확률로 고른다.
+ */
 package com.team.tetris.game.item;
 
 import java.util.Collections;

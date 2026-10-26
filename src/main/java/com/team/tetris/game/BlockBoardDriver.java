@@ -1,3 +1,7 @@
+/*
+ * block 패키지를 GameEngine.BoardDriver 계약에 맞게 연결하는 어댑터. 보드와 다음 블록 큐를 소유한다.
+ * 조각 규칙은 FallingPiece, 아이템 효과는 Item, 등장 규칙은 ItemPolicy에 맡기고 여기서는 위임만 한다.
+ */
 package com.team.tetris.game;
 
 import com.team.tetris.block.Board;

@@ -1,3 +1,7 @@
+/*
+ * 다음 블록 큐의 한 항목. 일반 테트로미노(Regular, 포함형 아이템 부착 가능)와 블록형 아이템(Standalone)이
+ * 각자 미리보기 코드를 만들고, 차례가 오면 낙하 조각(FallingPiece)을 생성한다.
+ */
 package com.team.tetris.game;
 
 import com.team.tetris.block.Board;

@@ -1,3 +1,6 @@
+/*
+ * GameScreen을 오프스크린에 그려 고스트·줄 삭제 깜빡임을 검증하는 테스트.
+ */
 package com.team.tetris.ui;
 
 import com.team.tetris.block.Board;

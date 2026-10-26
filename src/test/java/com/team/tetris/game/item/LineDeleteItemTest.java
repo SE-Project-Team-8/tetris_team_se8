@@ -1,3 +1,6 @@
+/*
+ * LineDeleteItem 테스트: 아이템 칸의 행만 지울 행으로 돌려주고 보드는 바꾸지 않는다.
+ */
 package com.team.tetris.game.item;
 
 import com.team.tetris.block.Board;

@@ -1,3 +1,6 @@
+/*
+ * CellCodes 테스트: 일반 블록 ID 0..6 불변, 아이템 코드 왕복·충돌 없음, 옛 ID·잘못된 입력 거부.
+ */
 package com.team.tetris.common.events;
 
 import com.team.tetris.block.TetrominoType;

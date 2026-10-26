@@ -1,3 +1,6 @@
+/*
+ * WeightedItemSelector 테스트: 균등·가중 선택의 비율(10,000회, ±5%), 가중치 0 아이템 제외, 잘못된 설정 거부.
+ */
 package com.team.tetris.game.item;
 
 import org.junit.jupiter.api.Test;

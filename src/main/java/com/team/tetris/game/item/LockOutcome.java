@@ -1,3 +1,7 @@
+/*
+ * FallingPiece.lock()의 결과 값 객체. 줄 삭제를 진행할지(clearLines)와 강제로 지울 행,
+ * 또는 조각이 소모만 되는지(consumed, 무게추)를 드라이버에 알려 준다.
+ */
 package com.team.tetris.game.item;
 
 import java.util.Objects;

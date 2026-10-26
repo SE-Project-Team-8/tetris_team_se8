@@ -1,3 +1,7 @@
+/*
+ * 무게추 아이템(W)의 정의. 블록형(StandaloneItem)으로 문자·색(J)·미리보기 모양을 제공하고
+ * spawn()에서 AnvilPiece를 만든다. 명세: docs/items/anvil.md
+ */
 package com.team.tetris.game.item;
 
 import com.team.tetris.block.Board;

@@ -1,3 +1,7 @@
+/*
+ * 게임에 등장하는 아이템 목록. 새 아이템을 등록하는 유일한 지점은 defaults()이며,
+ * 생성 시 이름·문자 중복과 보이지 않는 문자를 거부해 "아이템마다 다른 문자"(요구사항 4.2)를 보장한다.
+ */
 package com.team.tetris.game.item;
 
 import com.team.tetris.common.events.CellCodes;
