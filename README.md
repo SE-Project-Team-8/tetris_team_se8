@@ -43,6 +43,7 @@ src/
 │   │       ├── ItemRegistry, ItemPolicy, ItemSelector # 등록 목록·등장 규칙·선택
 │   │       ├── WeightedItemSelector                   # 룰렛 휠 선택기
 │   │       ├── LineDeleteItem                         # L: 줄 삭제
+│   │       ├── FeverItem                              # F: 10초 점수 2배
 │   │       └── AnvilItem, AnvilPiece, Anvil           # W: 무게추
 │   │
 │   ├── settings/                                      # 담당자2
