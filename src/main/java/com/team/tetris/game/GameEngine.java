@@ -3,11 +3,14 @@ package com.team.tetris.game;
 import com.team.tetris.common.events.BoardSnapshot;
 import com.team.tetris.common.events.GameEventListener;
 import com.team.tetris.common.Difficulty;
+import com.team.tetris.game.item.GameEffects;
+import com.team.tetris.game.item.Item;
 
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
 import java.util.List;
 import java.util.Objects;
+import java.util.function.LongSupplier;
 import java.util.function.Supplier;
 
 /**
@@ -17,6 +20,7 @@ import java.util.function.Supplier;
  */
 public final class GameEngine implements AutoCloseable {
     private static final int SURVIVAL_POINTS_PER_SECOND = 1;
+    private static final int SURVIVAL_INTERVAL_MILLIS = 1000;
     /** BlockBoardDriver adapts the block package without adding a game dependency to it. */
     public interface BoardDriver {
         /** Configure the next game before reset() fills the preview. */
@@ -36,6 +40,8 @@ public final class GameEngine implements AutoCloseable {
         default boolean awardsDropPoints() { return true; }
         /** Lock once and clear full rows; report overflow above the board as topOut. */
         LockResult lockAndClearLines();
+        /** Item carried by the piece the last lockAndClearLines() locked; null for a regular block. */
+        default Item lockedItem() { return null; }
         /** Composed 20 x 10 board; EMPTY = -1; falling piece is included. */
         BoardSnapshot snapshot();
         /** Cells occupied by the falling piece only, or null when unavailable. */
@@ -74,15 +80,53 @@ public final class GameEngine implements AutoCloseable {
     public interface DropTimer {
         void start(int intervalMillis, Runnable tick);
         void stop();
+
+        /** First tick after initialDelayMillis, then every intervalMillis. Timers without support restart in full. */
+        default void start(int initialDelayMillis, int intervalMillis, Runnable tick) {
+            start(intervalMillis, tick);
+        }
+
+        /** How far the current interval had run when the timer last stopped (or now, if running); 0 if unknown. */
+        default int elapsedMillis() { return 0; }
     }
 
-    private static final class SwingDropTimer implements DropTimer {
+    /** Package-private so tests can drive its clock; the Swing timer itself is never replaced. */
+    static final class SwingDropTimer implements DropTimer {
+        private final LongSupplier nanoClock;
         private Timer timer;
+        private int intervalMillis = 1;
+        private long intervalStartedNanos;
+        private long stoppedNanos;
+        private boolean running;
+
+        SwingDropTimer() {
+            this(System::nanoTime);
+        }
+
+        SwingDropTimer(LongSupplier nanoClock) {
+            this.nanoClock = Objects.requireNonNull(nanoClock, "nanoClock");
+        }
 
         @Override
         public void start(int intervalMillis, Runnable tick) {
+            start(intervalMillis, intervalMillis, tick);
+        }
+
+        @Override
+        public void start(int initialDelayMillis, int intervalMillis, Runnable tick) {
+            if (initialDelayMillis < 0 || initialDelayMillis > intervalMillis) {
+                throw new IllegalArgumentException("initialDelayMillis must be between 0 and intervalMillis");
+            }
             stop();
-            timer = new Timer(intervalMillis, event -> tick.run());
+            this.intervalMillis = intervalMillis;
+            // A shortened first interval continues one that already ran for the difference.
+            intervalStartedNanos = nanoClock.getAsLong() - (intervalMillis - initialDelayMillis) * 1_000_000L;
+            running = true;
+            timer = new Timer(intervalMillis, event -> {
+                intervalStartedNanos = nanoClock.getAsLong();
+                tick.run();
+            });
+            timer.setInitialDelay(initialDelayMillis);
             timer.setCoalesce(true);
             timer.start();
         }
@@ -90,6 +134,15 @@ public final class GameEngine implements AutoCloseable {
         @Override
         public void stop() {
             if (timer != null) timer.stop();
+            if (running) stoppedNanos = nanoClock.getAsLong();
+            running = false;
+        }
+
+        @Override
+        public int elapsedMillis() {
+            long end = running ? nanoClock.getAsLong() : stoppedNanos;
+            long elapsed = (end - intervalStartedNanos) / 1_000_000L;
+            return (int) Math.max(0, Math.min(intervalMillis - 1L, elapsed));
         }
     }
 
@@ -108,6 +161,12 @@ public final class GameEngine implements AutoCloseable {
     private int clearedLines;
     private long timerGeneration;
     private long survivalGeneration;
+    /** Part of the survival second already played when the game was paused; resume() keeps it. */
+    private int survivalElapsedMillis;
+    private final GameEffects effects = new ItemEffects();
+    private int scoreMultiplier = 1;
+    private int multiplierSeconds;
+    private int slowdownSteps;
 
     public GameEngine(BoardDriver board, GameEventListener listener) {
         this(board, listener, () -> Difficulty.NORMAL);
@@ -151,6 +210,10 @@ public final class GameEngine implements AutoCloseable {
         score = 0;
         generatedBlocks = 0;
         clearedLines = 0;
+        scoreMultiplier = 1;
+        multiplierSeconds = 0;
+        slowdownSteps = 0;
+        survivalElapsedMillis = 0;
         updateSpeed();
         transition(GameState.RUNNING);
         listener.onPauseStateChanged(false);
@@ -171,17 +234,22 @@ public final class GameEngine implements AutoCloseable {
         if (state != GameState.RUNNING) return false;
         transition(GameState.PAUSED);
         cancelTimer();
+        survivalElapsedMillis = Math.max(0, Math.min(SURVIVAL_INTERVAL_MILLIS - 1, survivalTimer.elapsedMillis()));
         listener.onPauseStateChanged(true);
         return true;
     }
 
-    /** Resume with a full new drop interval; paused time never accumulates. */
+    /**
+     * Resume with a full new drop interval; paused time never accumulates. The survival second continues
+     * from where the pause cut it, so pausing never discards played time (it drives the score multiplier's
+     * countdown, which repeated pauses could otherwise hold forever).
+     */
     public boolean resume() {
         requireEdt();
         if (state != GameState.PAUSED) return false;
         transition(GameState.RUNNING);
         scheduleTimer();
-        scheduleSurvivalTimer();
+        scheduleSurvivalTimer(SURVIVAL_INTERVAL_MILLIS - survivalElapsedMillis);
         listener.onPauseStateChanged(false);
         return true;
     }
@@ -226,6 +294,12 @@ public final class GameEngine implements AutoCloseable {
     public int getGeneratedBlocks() { return generatedBlocks; }
     public int getClearedLines() { return clearedLines; }
     public Difficulty getDifficulty() { return difficulty; }
+    /** 1 unless an item multiplies every point earned for a while. */
+    public int getScoreMultiplier() { return scoreMultiplier; }
+    /** Survival ticks left before the multiplier returns to 1; the UI can draw this countdown. */
+    public int getScoreMultiplierSeconds() { return multiplierSeconds; }
+    /** Levels removed by slow-down items in this game. */
+    public int getSlowdownSteps() { return slowdownSteps; }
 
     public int getDropIntervalMillis() {
         return speed.dropIntervalMillis();
@@ -255,6 +329,9 @@ public final class GameEngine implements AutoCloseable {
         }
         award(scoring.lineClearPoints(result.clearedLines(), getLevel(), difficulty));
         clearedLines = addCount(clearedLines, result.clearedLines());
+        // Item effects start after the locked piece's own points are awarded.
+        Item item = board.lockedItem();
+        if (item != null) item.onActivated(effects);
         if (result.topOut()) {
             gameOver();
             return;
@@ -276,7 +353,8 @@ public final class GameEngine implements AutoCloseable {
     }
 
     private void updateSpeed() {
-        speed = Objects.requireNonNull(speedPolicy.calculate(generatedBlocks, clearedLines, difficulty), "speed");
+        speed = Objects.requireNonNull(
+                speedPolicy.calculate(generatedBlocks, clearedLines, difficulty, slowdownSteps), "speed");
     }
 
     private static int addCount(int count, int increment) {
@@ -292,7 +370,7 @@ public final class GameEngine implements AutoCloseable {
 
     private void award(int points) {
         if (points == 0) return;
-        int updated = scoring.add(score, points);
+        int updated = scoring.add(score, (int) Math.min(Integer.MAX_VALUE, (long) points * scoreMultiplier));
         if (updated != score) {
             score = updated;
             listener.onScoreChanged(score);
@@ -333,13 +411,50 @@ public final class GameEngine implements AutoCloseable {
 
     /** Independent from gravity: spawning a new block never restarts the scoring interval. */
     private void scheduleSurvivalTimer() {
+        scheduleSurvivalTimer(SURVIVAL_INTERVAL_MILLIS);
+    }
+
+    private void scheduleSurvivalTimer(int firstTickMillis) {
         long generation = ++survivalGeneration;
-        survivalTimer.start(1000, () -> {
+        survivalTimer.start(firstTickMillis, SURVIVAL_INTERVAL_MILLIS, () -> {
             requireEdt();
             if (generation == survivalGeneration && state == GameState.RUNNING) {
                 award(SURVIVAL_POINTS_PER_SECOND);
+                countDownMultiplier();
             }
         });
+    }
+
+    /** The survival tick only runs while RUNNING, so a paused game keeps its remaining seconds. */
+    private void countDownMultiplier() {
+        if (multiplierSeconds == 0) return;
+        if (--multiplierSeconds == 0) scoreMultiplier = 1;
+    }
+
+    /** The only engine state items can change; kept private so callers cannot cast the engine. */
+    private final class ItemEffects implements GameEffects {
+        @Override
+        public void scoreMultiplier(int multiplier, int seconds) {
+            if (multiplier < 1 || seconds < 1) {
+                throw new IllegalArgumentException("multiplier and seconds must be positive");
+            }
+            // A repeated item restarts the countdown instead of adding to it.
+            scoreMultiplier = multiplier;
+            multiplierSeconds = seconds;
+            // Realign the 1 s tick to this moment so the effect lasts exactly `seconds`, not seconds - 1 to
+            // seconds. Like resume(), this drops only the partial survival second in progress.
+            if (state == GameState.RUNNING) scheduleSurvivalTimer();
+        }
+
+        @Override
+        public void lowerLevel(int steps) {
+            if (steps < 0) throw new IllegalArgumentException("steps must be non-negative");
+            // Level 1 has nothing to lower, so the item is not saved for a later level-up.
+            if (getLevel() > 1) {
+                slowdownSteps = addCount(slowdownSteps, steps);
+                updateSpeed();
+            }
+        }
     }
 
     private void transition(GameState next) {

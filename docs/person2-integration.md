@@ -56,7 +56,7 @@ GameEngine engine = new GameEngine(new BlockBoardDriver(), listener,
 | 낙하 속도 증가 | 줄 10개당 Easy 160 / Normal 200 / Hard 240ms 감소, 최소 Easy 120 / Normal 100 / Hard 80ms |
 | 자동/수동 무관하게 낙하당 점수 | 실제 이동 1칸당 `1 + (레벨 - 1)`점. 하드 드롭도 동일 |
 | 추가 점수 방식 1개 이상 | 한 번에 1/2/3/4줄 삭제 시 100/300/500/800 × 당시 레벨 |
-| 일시정지/재개 | P 기본키, 타이머 중단, 이동 입력 무시, 재개 후 온전한 주기부터 시작 |
+| 일시정지/재개 | P 기본키, 타이머 중단, 이동 입력 무시. 재개 후 낙하는 온전한 주기부터, 생존 점수의 1초는 멈춘 지점부터 이어 감 |
 | 게임 중/일시정지 중 종료 | Esc 기본키 또는 `stop()`; `STOPPED`로 이동 |
 | 더 쌓을 수 없는 경우 종료 | 생성 실패 또는 고정 시 `topOut` → `GAME_OVER`, 알림 1회 |
 | 최소 세 가지 화면 크기 | SMALL 480×640, MEDIUM 600×800, LARGE 750×1000 |
@@ -86,6 +86,8 @@ GameEngine engine = new GameEngine(new BlockBoardDriver(), listener,
 5. `lockAndClearLines()`은 현재 블록을 한 번 고정하고 `LockResult(삭제 줄 수, topOut)`을 반환한다.
    현재 블록 구현에는 숨겨진 상단 행이 없으므로 이 어댑터는 `topOut=false`를 반환한다.
    다음 블록 생성은 엔진이 하며, 생성 위치가 막히면 게임이 종료된다.
+   `lockedItem()`은 직전 `lockAndClearLines()`로 고정한 조각이 실었던 아이템(일반 블록·`reset()` 후는 null)이며,
+   엔진은 그 조각의 점수를 반영한 뒤 `Item.onActivated(GameEffects)`를 부른다.
 6. `snapshot()`은 낙하 중 블록을 포함한 20×10 최종 화면이다. 빈칸은 `BoardSnapshot.EMPTY(-1)`.
 7. `nextBlockTypes()`는 다음 블록 ID 배열이다. ID 0~6의 도형별 매핑은 담당자 1과 B가 맞춘다.
    아이템이 붙은 칸·블록은 `common.events.CellCodes`로 인코딩한다(`docs/items/README.md`).

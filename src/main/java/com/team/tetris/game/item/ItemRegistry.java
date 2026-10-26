@@ -47,7 +47,8 @@ public final class ItemRegistry {
         return new ItemRegistry(List.of(
                 new LineDeleteItem(),
                 new AnvilItem(),
-                new BombItem()));
+                new BombItem(),
+                new FeverItem()));
     }
 
     /** 등록 순서대로의 불변 목록. */

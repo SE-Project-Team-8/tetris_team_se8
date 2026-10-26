@@ -1,7 +1,7 @@
 # 아이템 구조와 추가 방법
 
 근거: `docs/requirments2.md` 4.2(두 가지 형태, 아이템마다 다른 문자), 4.5(팀 자체 아이템 명세), 4.6(아이템을 쉽게 추가할 수 있는 구조).
-개별 아이템 명세는 같은 폴더의 `line-delete.md`, `anvil.md`, `bomb.md`를 본다.
+개별 아이템 명세는 같은 폴더의 `line-delete.md`, `anvil.md`, `bomb.md`, `fever.md`를 본다.
 
 ## 구조
 
@@ -12,6 +12,7 @@
 | 블록형 | `StandaloneItem` | 블록 자체가 아이템이다. `paletteType()`(색), `previewShape()`(미리보기 모양), `spawn(Board)` → `FallingPiece` |
 | 낙하 조각 | `FallingPiece` | 이동·회전·낙하·고정 규칙. 일반 블록은 `game/TetrominoPiece`, 무게추는 `AnvilPiece` |
 | 고정 결과 | `LockOutcome` | 줄 삭제를 진행할지(`clearLines`)와 강제 삭제 행, 또는 소모만 할지(`consumed`) |
+| 엔진 효과 | `GameEffects` | `Item.onActivated`에서 받는 좁은 통로. `scoreMultiplier(배율, 초)`, `lowerLevel(단계)`. `GameEngine`이 내부 클래스로 구현한다 |
 | 등록 | `ItemRegistry.defaults()` | **유일한 등록 지점.** 이름·문자 중복과 보이지 않는 문자를 거부한다 |
 | 등장 규칙 | `ItemPolicy` | `none()`은 일반 모드, `everyLines(10, selector)`는 아이템 모드(누적 10줄마다 하나) |
 | 선택 | `ItemSelector`, `WeightedItemSelector` | 룰렛 휠. 실제 게임은 `uniform(registry, random)`으로 균등 선택 |
@@ -62,13 +63,16 @@ public final class BombItem implements EmbeddedItem {
 | 행 삭제 | `EmbeddedItem.onLock`의 반환값 | 줄 삭제 `L` |
 | 칸 파괴, 보드 변경 | `onLock` 안에서 `Board.eraseCells` 등 호출 | 폭탄 `B` (`BombItem`) |
 | 낙하 중 보드 변경, 조작 제한, 점수 면제 | `FallingPiece` 구현 | 무게추 `W` |
-| 엔진 상태 변경 (점수 배율, 속도 단계) | **아직 훅이 없다.** 다음 단계로 `Item`에 `default void onActivated(GameEffects)`를, 엔진에 `GameEffects` 구현을 추가해 드라이버가 고정된 아이템을 엔진에 넘기게 한다. 그 전까지는 `GameEngine` 수정이 필요하다 | 피버 `F` (`feat/item-1-fever-time`), 속도 감소 `S` (`feat/item-3-slow-down`) |
+| 엔진 상태 변경 (점수 배율, 속도 단계) | `Item.onActivated(GameEffects)`: `scoreMultiplier`, `lowerLevel`. 조각이 고정되고 그 조각 자신의 낙하·줄 점수가 반영된 뒤 한 번 호출된다 | 피버 `F` (`FeverItem`), 속도 감소 `S` (`feat/item-3-slow-down`) |
 
 ## 기존 아이템 브랜치를 옮길 때
 
 - `ItemType` enum, `ItemCellIds`, `LineDeleteIds`, `AnvilIds`는 없어졌다. 코드는 `CellCodes.cell(typeId, symbol)` /
   `CellCodes.preview(typeId, symbol, cellIndex)`이며, 아이템 ID 숫자를 배정할 필요가 없다.
-- `BoardDriver.lockedItem()`으로 엔진에 알리던 방식 대신, 보드 효과는 아이템의 `onLock`에서 직접 적용한다.
+- 보드 효과는 아이템의 `onLock`에서 직접 적용한다.
+- `BoardDriver.lockedItem()`이 돌아왔다. 반환형은 `Item`(일반 블록은 null)이며, 엔진은 이것으로 `onActivated`를 부른다.
+  아이템 쪽에서 `lockedItem()`을 직접 볼 일은 없고, 엔진 효과는 `onActivated`에서 `GameEffects`로 요청한다.
+  화면 표시는 `GameEngine.getScoreMultiplierSeconds()`, `getSlowdownSteps()` 같은 getter로 하며 `GameEventListener`는 그대로다.
 - `block/Bomb.blastCells` 같은 범위 계산은 아이템 클래스 안이나 `game/item/`에 둔다. `block`은 보드 연산만 남긴다.
 - `BlockBoardDriver(board, generator, random, ItemSelector)` 생성자로 선택기를 고정하면 기존 아이템 테스트 흐름을 그대로 쓸 수 있다.
 

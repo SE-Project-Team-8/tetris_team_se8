@@ -44,6 +44,7 @@ src/
 │   │       ├── WeightedItemSelector                   # 룰렛 휠 선택기
 │   │       ├── LineDeleteItem                         # L: 줄 삭제
 │   │       ├── BombItem                               # B: 3×3 폭탄
+│   │       ├── FeverItem                              # F: 10초 점수 2배
 │   │       └── AnvilItem, AnvilPiece, Anvil           # W: 무게추
 │   │
 │   ├── settings/                                      # 담당자2

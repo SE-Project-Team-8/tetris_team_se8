@@ -56,6 +56,37 @@ class DefaultSpeedPolicyTest {
     }
 
     @Test
+    void slowdownStepsLowerTheCappedLevelAndItsInterval() {
+        assertEquals(new SpeedPolicy.Speed(1, 1000), policy.calculate(0, 10, Difficulty.NORMAL, 1));
+        assertEquals(new SpeedPolicy.Speed(2, 800), policy.calculate(0, 20, Difficulty.NORMAL, 1));
+        assertEquals(new SpeedPolicy.Speed(2, 840), policy.calculate(0, 30, Difficulty.EASY, 2));
+        assertEquals(new SpeedPolicy.Speed(9, 100), policy.calculate(0, 90, Difficulty.NORMAL, 1));
+        assertEquals(new SpeedPolicy.Speed(9, 100), policy.calculate(0, Integer.MAX_VALUE, Difficulty.NORMAL, 1),
+                "steps come off the capped level, not off the raw line count");
+        for (Difficulty difficulty : Difficulty.values()) {
+            assertEquals(policy.calculate(5, 45, difficulty), policy.calculate(5, 45, difficulty, 0));
+        }
+    }
+
+    @Test
+    void slowdownNeverGoesBelowLevelOne() {
+        assertEquals(new SpeedPolicy.Speed(1, 1000), policy.calculate(0, 0, Difficulty.HARD, 1));
+        assertEquals(new SpeedPolicy.Speed(1, 1000), policy.calculate(0, 30, Difficulty.HARD, 5));
+        assertEquals(new SpeedPolicy.Speed(1, 1000), policy.calculate(0, 90, Difficulty.NORMAL, Integer.MAX_VALUE));
+    }
+
+    @Test
+    void rejectsNegativeSlowdown() {
+        assertThrows(IllegalArgumentException.class, () -> policy.calculate(0, 10, Difficulty.NORMAL, -1));
+    }
+
+    @Test
+    void policiesWithoutSlowdownSupportIgnoreTheSteps() {
+        SpeedPolicy legacy = (blocks, lines) -> new SpeedPolicy.Speed(3, 500);
+        assertEquals(new SpeedPolicy.Speed(3, 500), legacy.calculate(0, 50, Difficulty.HARD, 2));
+    }
+
+    @Test
     void rejectsInvalidProgressOrSpeed() {
         assertThrows(IllegalArgumentException.class, () -> policy.calculate(-1, 0));
         assertThrows(IllegalArgumentException.class, () -> policy.calculate(0, -1));
