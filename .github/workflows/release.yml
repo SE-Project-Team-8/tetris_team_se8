@@ -1,0 +1,32 @@
+name: Windows Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  package-and-release:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Temurin JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Test and package Windows app image
+        run: .\gradlew.bat clean build packageWindows
+      - name: Archive app image
+        shell: pwsh
+        run: Compress-Archive -Path build/package/windows/Tetris -DestinationPath build/package/tetris-windows-x64.zip -CompressionLevel Optimal
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Tetris ${{ github.ref_name }}
+          generate_release_notes: true
+          files: build/package/tetris-windows-x64.zip

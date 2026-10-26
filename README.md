@@ -121,3 +121,14 @@ Gradle 테스트 실행 인수 파일을 시스템 문자셋으로 읽도록 하
 일반적인 UTF-8 환경에서는 동작에 영향이 없으며, 소스와 저장 데이터는 별도로 UTF-8을 사용합니다.
 테스트 결과는 `build/reports/tests/test/index.html`, 커버리지는
 `build/reports/jacoco/test/html/index.html`에서 확인할 수 있습니다.
+
+## Windows 배포
+
+Windows 11에서 Java 21 toolchain으로 앱 이미지와 실행용 runtime을 함께 만듭니다.
+
+```powershell
+.\gradlew.bat clean build packageWindows
+```
+
+실행 파일은 `build/package/windows/Tetris/Tetris.exe`입니다. GitHub Actions에서는
+동일한 앱 이미지가 `tetris-windows-app` artifact로 업로드됩니다.
