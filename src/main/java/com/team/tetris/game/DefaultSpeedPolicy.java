@@ -20,11 +20,18 @@ public final class DefaultSpeedPolicy implements SpeedPolicy {
 
     @Override
     public Speed calculate(int generatedBlocks, int clearedLines, Difficulty difficulty) {
+        return calculate(generatedBlocks, clearedLines, difficulty, 0);
+    }
+
+    /** The slow-down item subtracts whole levels from the capped level, never going below level 1. */
+    @Override
+    public Speed calculate(int generatedBlocks, int clearedLines, Difficulty difficulty, int slowdownSteps) {
         Objects.requireNonNull(difficulty, "difficulty");
         if (generatedBlocks < 0 || clearedLines < 0) {
             throw new IllegalArgumentException("Progress counters must be non-negative");
         }
-        int lineSteps = Math.min(MAX_LEVEL - 1, clearedLines / LINES_PER_LEVEL);
+        if (slowdownSteps < 0) throw new IllegalArgumentException("slowdownSteps must be non-negative");
+        int lineSteps = Math.max(0, Math.min(MAX_LEVEL - 1, clearedLines / LINES_PER_LEVEL) - slowdownSteps);
         int level = 1 + lineSteps;
         int reduction = lineSteps * difficulty.lineSpeedStepMillis();
         int interval = Math.max(difficulty.minDropIntervalMillis(),
