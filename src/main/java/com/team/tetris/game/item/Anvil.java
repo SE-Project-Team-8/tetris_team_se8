@@ -1,7 +1,6 @@
 package com.team.tetris.game.item;
 
 import com.team.tetris.block.Cell;
-import com.team.tetris.block.TetrominoType;
 
 import java.util.List;
 
@@ -9,8 +8,6 @@ import java.util.List;
 public record Anvil(int row, int col) {
     public static final int WIDTH = 4;
     public static final int HEIGHT = 2;
-    /** The weight has no tetromino type; it borrows this type's color on screen. */
-    public static final TetrominoType PALETTE = TetrominoType.J;
     private static final List<Cell> OFFSETS = List.of(
             new Cell(0, 1), new Cell(0, 2),
             new Cell(1, 0), new Cell(1, 1), new Cell(1, 2), new Cell(1, 3));

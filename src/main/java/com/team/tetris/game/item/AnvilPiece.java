@@ -17,16 +17,16 @@ public final class AnvilPiece implements FallingPiece {
     private Anvil anvil;
     private boolean horizontalLocked;
 
-    private AnvilPiece(Anvil anvil, char symbol) {
+    private AnvilPiece(Anvil anvil, StandaloneItem item) {
         this.anvil = Objects.requireNonNull(anvil, "anvil");
-        this.code = CellCodes.cell(Anvil.PALETTE.id(), symbol);
+        this.code = CellCodes.cell(item.paletteType().id(), item.symbol());
     }
 
     /** 위쪽 중앙에 생성한다. 생성 공간이 점유되어 있으면 null이며 보드를 바꾸지 않는다. */
-    public static AnvilPiece spawn(Board board, char symbol) {
+    static AnvilPiece spawn(Board board, StandaloneItem item) {
         Anvil candidate = new Anvil(0, (board.cols() - Anvil.WIDTH) / 2);
         if (!canPlace(board, candidate)) return null;
-        AnvilPiece piece = new AnvilPiece(candidate, symbol);
+        AnvilPiece piece = new AnvilPiece(candidate, item);
         piece.refreshContact(board);
         return piece;
     }

@@ -8,6 +8,7 @@ import com.team.tetris.block.Rotation;
 import com.team.tetris.block.Tetromino;
 import com.team.tetris.block.TetrominoType;
 import com.team.tetris.common.events.CellCodes;
+import com.team.tetris.game.item.EmbeddedItem;
 import com.team.tetris.game.item.FallingPiece;
 import com.team.tetris.game.item.LockOutcome;
 
@@ -18,26 +19,31 @@ import java.util.Set;
 /**
  * 일반 테트로미노의 낙하 규칙. 네 칸 중 하나에 포함형 아이템을 붙일 수 있으며, 아이템은 이동·회전해도
  * 같은 칸을 따라간다. 이동·회전은 불변 {@link Tetromino} 후보를 만들어 충돌 검사 후 채택한다.
+ * 고정 시 아이템의 보드 효과({@link EmbeddedItem#onLock})를 적용한다.
  */
 public final class TetrominoPiece implements FallingPiece {
-    private final ItemType item;
+    private final EmbeddedItem item;
     private final int itemIndex;
     private Tetromino tetromino;
 
-    TetrominoPiece(Tetromino tetromino, ItemType item, int itemIndex) {
+    TetrominoPiece(Tetromino tetromino, EmbeddedItem item, int itemIndex) {
         this.tetromino = Objects.requireNonNull(tetromino, "tetromino");
-        this.item = Objects.requireNonNull(item, "item");
-        if ((item == ItemType.NONE) != (itemIndex < 0)) {
+        if ((item == null) != (itemIndex < 0)) {
             throw new IllegalArgumentException("An attached item needs exactly one cell index");
         }
         if (itemIndex >= tetromino.cells().size()) {
             throw new IllegalArgumentException("itemIndex outside the piece: " + itemIndex);
         }
+        this.item = item;
         this.itemIndex = itemIndex;
     }
 
-    /** 실제 점유 폭으로 중앙 정렬하고 가장 위 점유 셀이 0행에 오도록 생성한다. 생성 위치가 막히면 null. */
-    public static TetrominoPiece spawn(Board board, TetrominoType type, ItemType item, int itemIndex) {
+    /**
+     * 실제 점유 폭으로 중앙 정렬하고 가장 위 점유 셀이 0행에 오도록 생성한다. 생성 위치가 막히면 null.
+     *
+     * @param item 붙일 포함형 아이템. 없으면 null이고 {@code itemIndex}는 -1
+     */
+    public static TetrominoPiece spawn(Board board, TetrominoType type, EmbeddedItem item, int itemIndex) {
         Tetromino origin = new Tetromino(type, Rotation.SPAWN, 0, 0);
         int minRow = origin.cells().stream().mapToInt(Cell::row).min().orElseThrow();
         int minCol = origin.cells().stream().mapToInt(Cell::col).min().orElseThrow();
@@ -95,8 +101,8 @@ public final class TetrominoPiece implements FallingPiece {
         if (!board.tryPlace(tetromino)) {
             throw new IllegalStateException("A valid falling block could not be locked");
         }
-        Set<Integer> forcedRows = item == ItemType.LINE_DELETE
-                ? Set.of(tetromino.cells().get(itemIndex).row()) : Set.of();
+        Set<Integer> forcedRows = item == null ? Set.of()
+                : Objects.requireNonNull(item.onLock(board, tetromino.cells().get(itemIndex)), "forced rows");
         return LockOutcome.clearLines(forcedRows);
     }
 

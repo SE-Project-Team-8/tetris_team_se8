@@ -39,8 +39,8 @@ import com.team.tetris.common.events.GameEventListener;
 import com.team.tetris.game.GameAction;
 import com.team.tetris.game.GameEngine;
 import com.team.tetris.game.GameState;
-import com.team.tetris.game.ItemType;
-import com.team.tetris.game.item.Anvil;
+import com.team.tetris.game.item.ItemRegistry;
+import com.team.tetris.game.item.StandaloneItem;
 import com.team.tetris.settings.KeyBindings;
 
 /**
@@ -70,6 +70,7 @@ public class GameScreen extends JPanel implements Screen {
     private final ScreenRouter router;
     private final GameEngine engine;
     private final IntConsumer gameOverAction;
+    private final ItemRegistry items;
     private KeyBindings keyBindings;
 
     // 엔진 이벤트는 EDT에서 온다. 배열은 화면 상태로 보관하기 전에 복사한다.
@@ -259,9 +260,16 @@ public class GameScreen extends JPanel implements Screen {
         * @param gameOverAction 최종 점수를 전달받아 결과 화면을 설정하고 전환할 동작
      */
     public GameScreen(ScreenRouter router, GameEngine engine, KeyBindings bindings, IntConsumer gameOverAction) {
+        this(router, engine, bindings, gameOverAction, ItemRegistry.defaults());
+    }
+
+    /** @param items 블록형 아이템의 미리보기 모양을 문자로 찾는 데 쓴다. 게임 쪽과 같은 목록을 전달한다. */
+    public GameScreen(ScreenRouter router, GameEngine engine, KeyBindings bindings, IntConsumer gameOverAction,
+            ItemRegistry items) {
         this.router = Objects.requireNonNull(router, "router");
         this.engine = Objects.requireNonNull(engine, "engine");
         this.gameOverAction = Objects.requireNonNull(gameOverAction, "gameOverAction");
+        this.items = Objects.requireNonNull(items, "items");
 
         setBackground(BACKGROUND);
         setOpaque(true);
@@ -638,9 +646,11 @@ public class GameScreen extends JPanel implements Screen {
         drawPreviewShape(g2d, occupied, type, symbol, itemIndex, x, y, width, height);
     }
 
-    private static List<Cell> standaloneItemShape(char symbol) {
-        if (symbol == ItemType.ANVIL.symbol()) return new Anvil(0, 0).cells();
-        return List.of(new Cell(0, 0));
+    /** 블록형 아이템의 모양은 아이템 자신이 정한다. 목록에 없는 문자는 한 칸짜리로 그려 문자만이라도 보인다. */
+    private List<Cell> standaloneItemShape(char symbol) {
+        return items.standaloneBySymbol(symbol)
+                .map(StandaloneItem::previewShape)
+                .orElse(List.of(new Cell(0, 0)));
     }
 
     /**

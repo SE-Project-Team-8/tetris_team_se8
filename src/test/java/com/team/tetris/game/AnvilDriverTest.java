@@ -7,6 +7,10 @@ import com.team.tetris.block.TetrominoType;
 import com.team.tetris.common.events.BoardSnapshot;
 import com.team.tetris.common.events.CellCodes;
 import com.team.tetris.common.events.GameEventListener;
+import com.team.tetris.game.item.AnvilItem;
+import com.team.tetris.game.item.Item;
+import com.team.tetris.game.item.ItemRegistry;
+import com.team.tetris.game.item.LineDeleteItem;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -19,7 +23,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.junit.jupiter.api.Assertions.*;
 
 class AnvilDriverTest {
-    private static final int W = CellCodes.cell(TetrominoType.J.id(), ItemType.ANVIL.symbol());
+    private static final Item ANVIL_ITEM = new AnvilItem();
+    private static final Item LINE_ITEM = new LineDeleteItem();
+    private static final int W = CellCodes.cell(TetrominoType.J.id(), AnvilItem.SYMBOL);
 
     @Test
     void earnedAnvilHasSixCellsAndFourCellWidthInPreviewAndBoard() {
@@ -120,7 +126,7 @@ class AnvilDriverTest {
         Board board = new Board();
         AtomicInteger selections = new AtomicInteger();
         BlockBoardDriver driver = new BlockBoardDriver(board, () -> TetrominoType.O, new Random(1),
-                () -> selections.getAndIncrement() == 0 ? ItemType.ANVIL : ItemType.LINE_DELETE);
+                () -> selections.getAndIncrement() == 0 ? ANVIL_ITEM : LINE_ITEM);
         spawnEarnedAnvil(driver, board);
         driver.hardDrop();
         assertEquals(0, driver.lockAndClearLines().clearedLines());
@@ -131,7 +137,7 @@ class AnvilDriverTest {
             assertEquals(2, driver.lockAndClearLines().clearedLines());
         }
         assertTrue(driver.spawnNextBlock());
-        assertEquals(ItemType.LINE_DELETE.symbol(), CellCodes.symbol(driver.nextBlockTypes()[0]));
+        assertEquals(LineDeleteItem.SYMBOL, CellCodes.symbol(driver.nextBlockTypes()[0]));
         assertEquals(2, selections.get());
     }
 
@@ -156,10 +162,11 @@ class AnvilDriverTest {
         Random fixedChoice = new Random() {
             @Override public int nextInt(int bound) { return bound == 2 ? choice : 3; }
         };
-        BlockBoardDriver driver = new BlockBoardDriver(board, () -> TetrominoType.O, fixedChoice);
+        BlockBoardDriver driver = new BlockBoardDriver(board, () -> TetrominoType.O, fixedChoice,
+                ItemRegistry.defaults());
         earnTenAndQueueItem(driver, board);
         int expected = choice == 0
-                ? CellCodes.preview(TetrominoType.O.id(), ItemType.LINE_DELETE.symbol(), 3) : W;
+                ? CellCodes.preview(TetrominoType.O.id(), LineDeleteItem.SYMBOL, 3) : W;
         assertArrayEquals(new int[]{expected}, driver.nextBlockTypes());
     }
 
@@ -209,7 +216,7 @@ class AnvilDriverTest {
     }
 
     private static BlockBoardDriver anvilDriver(Board board) {
-        return new BlockBoardDriver(board, () -> TetrominoType.O, new Random(1), () -> ItemType.ANVIL);
+        return new BlockBoardDriver(board, () -> TetrominoType.O, new Random(1), () -> ANVIL_ITEM);
     }
 
     private static void earnTenAndQueueItem(BlockBoardDriver driver, Board board) {
