@@ -45,6 +45,8 @@ public class MainMenuScreen extends JPanel implements Screen {
             @Override
             public void keyPressed(KeyEvent e) {
                 handleKeyPress(e.getKeyCode());
+                // 메뉴에서 처리한 키를 소비해, 방금 표시된 게임 화면의 키 바인딩(Space = Hard Drop)으로 넘어가지 않게 한다.
+                e.consume();
             }
         });
     }
