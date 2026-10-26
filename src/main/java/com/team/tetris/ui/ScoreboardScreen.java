@@ -8,6 +8,8 @@ import com.team.tetris.scoreboard.ScoreboardRepository;
 
 import javax.swing.AbstractAction;
 import javax.swing.BorderFactory;
+import javax.swing.Box;
+import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
@@ -91,9 +93,13 @@ public final class ScoreboardScreen extends JPanel implements Screen {
         content.add(status, "status");
         add(content, BorderLayout.CENTER);
 
-        JPanel footer = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 8));
+        JPanel footer = new JPanel();
+        footer.setLayout(new BoxLayout(footer, BoxLayout.Y_AXIS));
+        footer.setPreferredSize(new Dimension(0, 100));
         footer.setBackground(BACKGROUND);
         footer.setBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, new Color(45, 58, 72)));
+        JPanel backRow = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 8));
+        backRow.setBackground(BACKGROUND);
         JButton back = new JButton("Main Menu");
         back.setFont(new Font(Font.MONOSPACED, Font.BOLD, 12));
         back.setForeground(ACCENT);
@@ -104,11 +110,17 @@ public final class ScoreboardScreen extends JPanel implements Screen {
         back.setFocusPainted(false);
         back.setOpaque(true);
         back.addActionListener(event -> router.showScreen(ScreenRouter.MAIN_MENU));
-        footer.add(back);
+        backRow.add(back);
+        JPanel keysRow = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 0));
+        keysRow.setBackground(BACKGROUND);
         JLabel keys = new JLabel("←→ DIFFICULTY  ↑↓ MODE");
         keys.setForeground(MUTED);
         keys.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 11));
-        footer.add(keys);
+        keysRow.add(keys);
+        footer.add(Box.createVerticalGlue());
+        footer.add(backRow);
+        footer.add(keysRow);
+        footer.add(Box.createVerticalGlue());
         add(footer, BorderLayout.SOUTH);
 
         bindKey("ESCAPE", "back", () -> router.showScreen(ScreenRouter.MAIN_MENU));

@@ -237,6 +237,10 @@ public final class Main {
         @Override public void onScoreChanged(int score) { delegate.onScoreChanged(score); }
         @Override public void onNextBlocksChanged(int[] types) { delegate.onNextBlocksChanged(types); }
         @Override public void onPauseStateChanged(boolean paused) { delegate.onPauseStateChanged(paused); }
+        @Override public void onFeverActivated(int seconds) { delegate.onFeverActivated(seconds); }
+        @Override public void onSlowDownActivated(int previousLevel, int currentLevel) {
+            delegate.onSlowDownActivated(previousLevel, currentLevel);
+        }
         @Override public void onGameOver(int score) { delegate.onGameOver(score); }
     }
 }
