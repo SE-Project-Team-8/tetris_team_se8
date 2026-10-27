@@ -150,5 +150,15 @@ macOS에서는 다음 명령으로 DMG를 만듭니다.
 ./gradlew clean build packageMacOS
 ```
 
-DMG는 `build/package/macos/Tetris-1.0.0.dmg`에 생성됩니다. `v*` 태그를 push하면
+DMG는 `build/package/macos/Tetris-<버전>.dmg`에 생성됩니다. `v*` 태그를 push하면
 GitHub Actions가 Windows ZIP과 macOS DMG를 모두 빌드한 뒤 하나의 GitHub Release에 첨부합니다.
+
+macOS 앱은 Apple Developer ID 서명·공증 없이 ad-hoc 서명만 되어 있어서, 인터넷에서 받은 DMG는
+처음 실행할 때 Gatekeeper가 막습니다. `Tetris.app`을 `응용 프로그램`으로 옮긴 뒤 한 번 실행하고,
+`시스템 설정 > 개인정보 보호 및 보안`에서 `그래도 열기`를 누르면 됩니다. 터미널에서는 다음 명령으로도 풀 수 있습니다.
+
+```bash
+xattr -dr com.apple.quarantine /Applications/Tetris.app
+```
+
+DMG는 Apple Silicon(arm64)용입니다.
