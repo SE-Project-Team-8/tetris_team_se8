@@ -441,6 +441,7 @@ public final class GameEngine implements AutoCloseable {
             // A repeated item restarts the countdown instead of adding to it.
             scoreMultiplier = multiplier;
             multiplierSeconds = seconds;
+            listener.onFeverActivated(seconds);
             // Realign the 1 s tick to this moment so the effect lasts exactly `seconds`, not seconds - 1 to
             // seconds. Like resume(), this drops only the partial survival second in progress.
             if (state == GameState.RUNNING) scheduleSurvivalTimer();
@@ -450,10 +451,12 @@ public final class GameEngine implements AutoCloseable {
         public void lowerLevel(int steps) {
             if (steps < 0) throw new IllegalArgumentException("steps must be non-negative");
             // Level 1 has nothing to lower, so the item is not saved for a later level-up.
+            int previousLevel = getLevel();
             if (getLevel() > 1) {
                 slowdownSteps = addCount(slowdownSteps, steps);
                 updateSpeed();
             }
+            listener.onSlowDownActivated(previousLevel, getLevel());
         }
     }
 

@@ -13,6 +13,7 @@ import com.team.tetris.game.BlockBoardDriver;
 import com.team.tetris.game.DefaultSpeedPolicy;
 import com.team.tetris.game.GameEngine;
 import com.team.tetris.game.ScoreCalculator;
+import com.team.tetris.game.item.AnvilItem;
 import com.team.tetris.game.item.LineDeleteItem;
 import com.team.tetris.settings.KeyBindings;
 import org.junit.jupiter.api.BeforeEach;
@@ -123,6 +124,51 @@ class GameScreenTest {
         });
     }
 
+    @Test
+    void itemEffectsShowDistinctFeverAndSlowDownNotifications() throws Exception {
+        edt(() -> {
+            Fixture fixture = new Fixture();
+            BufferedImage normal = fixture.render();
+
+            fixture.events().onFeverActivated(10);
+            BufferedImage fever = fixture.render();
+            assertNotNull(difference(normal, fever), "Fever activation adds its toast and spotlight");
+            assertTrue(countColor(fever, new Rectangle(0, 0, WIDTH, HEIGHT), 0xFFD340) > 0,
+                    "Fever notification uses its gold accent");
+
+            fixture.events().onSlowDownActivated(3, 2);
+            BufferedImage slowDown = fixture.render();
+            assertNotNull(difference(fever, slowDown), "Slow-down activation updates the notification");
+            assertTrue(countColor(slowDown, new Rectangle(0, 0, WIDTH, HEIGHT), 0x64E6FF) > 0,
+                    "Slow-down notification uses its cyan accent");
+
+            fixture.events().onSlowDownActivated(1, 1);
+            BufferedImage minimumSpeed = fixture.render();
+            assertNotNull(difference(slowDown, minimumSpeed),
+                    "A slow-down at minimum speed still explains why the level did not change");
+            fixture.dispose();
+        });
+    }
+
+    @Test
+    void anvilUsesBlackMetalInThePreviewAndOnTheBoard() throws Exception {
+        edt(() -> {
+            Fixture fixture = new Fixture();
+            fixture.events().onNextBlocksChanged(
+                    new int[]{CellCodes.cell(TetrominoType.J.id(), AnvilItem.SYMBOL)});
+            BufferedImage preview = fixture.render();
+            assertTrue(countColor(preview, new Rectangle(496, 102, 32, 32), 0x121418) > 0,
+                    "Anvil preview cells use the fixed black-metal color");
+
+            int[][] anvilBoard = board(Map.of(0, CellCodes.cell(TetrominoType.J.id(), AnvilItem.SYMBOL)));
+            fixture.events().onBoardUpdated(new BoardSnapshot(anvilBoard));
+            BufferedImage falling = fixture.render();
+            assertTrue(countColor(falling, new Rectangle(55, 58, 33, 33), 0x121418) > 0,
+                    "Anvil cells on the board use the same fixed black-metal color");
+            fixture.dispose();
+        });
+    }
+
     /** Each given row holds one cell at column 0; every other cell is empty. */
     private static int[][] board(Map<Integer, Integer> firstColumnByRow) {
         int[][] cells = new int[20][10];
@@ -210,6 +256,10 @@ class GameScreenTest {
         @Override public void onScoreChanged(int score) { delegate.onScoreChanged(score); }
         @Override public void onNextBlocksChanged(int[] types) { delegate.onNextBlocksChanged(types); }
         @Override public void onPauseStateChanged(boolean paused) { delegate.onPauseStateChanged(paused); }
+        @Override public void onFeverActivated(int seconds) { delegate.onFeverActivated(seconds); }
+        @Override public void onSlowDownActivated(int previousLevel, int currentLevel) {
+            delegate.onSlowDownActivated(previousLevel, currentLevel);
+        }
         @Override public void onGameOver(int score) { delegate.onGameOver(score); }
     }
 }
