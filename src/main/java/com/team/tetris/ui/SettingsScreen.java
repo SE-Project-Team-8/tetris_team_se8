@@ -76,19 +76,19 @@ public final class SettingsScreen extends JPanel implements Screen {
 
         styleComboBox(size);
         size.setRenderer(new ValueRenderer<GameSettings.ScreenSize>(value -> switch (value) {
-            case SMALL -> "Small  |  480 x 640";
-            case MEDIUM -> "Medium |  600 x 800";
-            case LARGE -> "Large  |  750 x 1000";
+            case SMALL -> " Small  |  480 x 640";
+            case MEDIUM -> " Medium |  600 x 800";
+            case LARGE -> " Large  |  750 x 1000";
         }));
         styleComboBox(color);
         color.setRenderer(new ValueRenderer<GameSettings.ColorBlindMode>(value -> switch (value) {
-            case OFF -> "Off";
-            case RED_GREEN -> "Red / Green";
-            case BLUE_YELLOW -> "Blue / Yellow";
+            case OFF -> " Off";
+            case RED_GREEN -> " Red / Green";
+            case BLUE_YELLOW -> " Blue / Yellow";
         }));
 
         styleComboBox(difficulty);
-        difficulty.setRenderer(new ValueRenderer<Difficulty>(Difficulty::label));
+        difficulty.setRenderer(new ValueRenderer<Difficulty>(value -> " " + value.label()));
 
         JPanel form = new JPanel(new GridBagLayout());
         form.setBackground(PANEL_BACKGROUND);

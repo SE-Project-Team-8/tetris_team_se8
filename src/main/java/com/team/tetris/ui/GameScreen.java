@@ -10,10 +10,12 @@ import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.RadialGradientPaint;
 import java.awt.RenderingHints;
 import java.awt.event.ActionEvent;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
+import java.awt.geom.Point2D;
 import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.List;
@@ -43,6 +45,7 @@ import com.team.tetris.common.events.GameEventListener;
 import com.team.tetris.game.GameAction;
 import com.team.tetris.game.GameEngine;
 import com.team.tetris.game.GameState;
+import com.team.tetris.game.item.AnvilItem;
 import com.team.tetris.game.item.ItemRegistry;
 import com.team.tetris.game.item.StandaloneItem;
 import com.team.tetris.settings.KeyBindings;
@@ -67,9 +70,15 @@ public class GameScreen extends JPanel implements Screen {
     private static final int BEST_SCORE_TICK_MS = 30;
     private static final int BEST_SCORE_HOLD_MS = 500;
     private static final int BEST_SCORE_FADE_MS = 1_500;
+    private static final int ITEM_EFFECT_TICK_MS = 30;
+    private static final int ITEM_EFFECT_FADE_MS = 450;
+    private static final int FEVER_NOTIFICATION_MS = 2_700;
+    private static final int SLOW_DOWN_NOTIFICATION_MS = 2_000;
     private static final Color BACKGROUND = new Color(ColorScheme.standard().emptyRgb());
     private static final Color GRID_COLOR = new Color(255, 255, 255, 35);
     private static final Color BEST_SCORE_COLOR = new Color(255, 211, 64);
+    private static final Color ANVIL_COLOR = new Color(18, 20, 24);
+    private static final Color ANVIL_HIGHLIGHT = new Color(105, 112, 122);
 
     private final ScreenRouter router;
     private final GameEngine engine;
@@ -179,6 +188,21 @@ public class GameScreen extends JPanel implements Screen {
         }
 
         @Override
+        public void onFeverActivated(int seconds) {
+            showItemEffect("★ FEVER TIME! ★", "2X SCORE  ·  " + seconds + " SECONDS",
+                    BEST_SCORE_COLOR, FEVER_NOTIFICATION_MS, true);
+        }
+
+        @Override
+        public void onSlowDownActivated(int previousLevel, int currentLevel) {
+            String title = currentLevel < previousLevel ? "LEVEL DOWN!" : "SPEED AT MINIMUM";
+            String subtitle = currentLevel < previousLevel
+                    ? "LEVEL " + previousLevel + "  →  " + currentLevel
+                    : "LEVEL " + currentLevel + " CANNOT DROP";
+            showItemEffect(title, subtitle, new Color(100, 230, 255), SLOW_DOWN_NOTIFICATION_MS, false);
+        }
+
+        @Override
         public void onGameOver(int finalScore) {
             onEdt(() -> {
                 if (gameOver) {
@@ -204,6 +228,12 @@ public class GameScreen extends JPanel implements Screen {
     private int bestScore = -1;
     private boolean bestScoreNotificationShown;
     private int bestScoreElapsedMs;
+    private String itemEffectTitle;
+    private String itemEffectSubtitle;
+    private Color itemEffectColor;
+    private boolean itemSpotlightActive;
+    private int itemEffectElapsedMs;
+    private int itemEffectDurationMs;
     private int[][] pendingBoard;
     private int[][] falling;
     private int[][] pendingFalling;
@@ -211,6 +241,7 @@ public class GameScreen extends JPanel implements Screen {
     private int[][] pendingLanding;
     private final Timer lineClearTimer = new Timer(LINE_CLEAR_FLASH_INTERVAL_MS, event -> advanceLineClearAnimation());
     private final Timer bestScoreTimer = new Timer(BEST_SCORE_TICK_MS, event -> advanceBestScoreAnimation());
+    private final Timer itemEffectTimer = new Timer(ITEM_EFFECT_TICK_MS, event -> advanceItemEffectAnimation());
 
     public void setBestScore(int bestScore) {
         if (bestScore < -1) {
@@ -235,6 +266,31 @@ public class GameScreen extends JPanel implements Screen {
         bestScoreElapsedMs += BEST_SCORE_TICK_MS;
         if (bestScoreElapsedMs >= BEST_SCORE_HOLD_MS + BEST_SCORE_FADE_MS) {
             bestScoreTimer.stop();
+        }
+        repaint();
+    }
+
+    private void showItemEffect(String title, String subtitle, Color color, int durationMs, boolean spotlight) {
+        onEdt(() -> {
+            itemEffectTitle = title;
+            itemEffectSubtitle = subtitle;
+            itemEffectColor = color;
+            itemSpotlightActive = spotlight;
+            itemEffectElapsedMs = 0;
+            itemEffectDurationMs = durationMs;
+            itemEffectTimer.restart();
+            repaint();
+        });
+    }
+
+    private void advanceItemEffectAnimation() {
+        itemEffectElapsedMs += ITEM_EFFECT_TICK_MS;
+        if (itemEffectElapsedMs >= itemEffectDurationMs) {
+            itemEffectTitle = null;
+            itemEffectSubtitle = null;
+            itemEffectColor = null;
+            itemSpotlightActive = false;
+            itemEffectTimer.stop();
         }
         repaint();
     }
@@ -393,10 +449,17 @@ public class GameScreen extends JPanel implements Screen {
         // 새 게임 시작 시 이전 판에서 전달받은 표시 데이터만 초기화한다.
         lineClearTimer.stop();
         bestScoreTimer.stop();
+        itemEffectTimer.stop();
         flashingRows = new int[0];
         lineClearAnimating = false;
         bestScoreNotificationShown = false;
         bestScoreElapsedMs = 0;
+        itemEffectTitle = null;
+        itemEffectSubtitle = null;
+        itemEffectColor = null;
+        itemSpotlightActive = false;
+        itemEffectElapsedMs = 0;
+        itemEffectDurationMs = 0;
         pendingBoard = null;
         falling = null;
         pendingFalling = null;
@@ -463,6 +526,8 @@ public class GameScreen extends JPanel implements Screen {
 
             drawBoard(g2d, boardX, boardY, cellSize);
             drawSidebar(g2d, sideX, HEADER_HEIGHT + PADDING, sideWidth);
+            drawItemSpotlight(g2d, boardX, boardY, boardWidth, boardHeight);
+            drawItemEffectNotification(g2d, width);
             drawBestScoreNotification(g2d, width, height);
 
             if (engine.getState() != GameState.PAUSED) {
@@ -479,6 +544,66 @@ public class GameScreen extends JPanel implements Screen {
         } finally {
             // create()로 만든 Graphics 복사본은 사용 후 반드시 해제한다.
             g2d.dispose();
+        }
+    }
+
+    private void drawItemSpotlight(Graphics2D g2d, int x, int y, int width, int height) {
+        if (!itemSpotlightActive) return;
+        float fade = itemEffectFade();
+        double sweep = Math.sin(itemEffectElapsedMs / 420.0) * width * 0.18;
+        Point2D center = new Point2D.Double(x + width / 2.0 + sweep, y + height * 0.42);
+        float radius = Math.max(width, height) * 0.72f;
+        Graphics2D glow = (Graphics2D) g2d.create();
+        try {
+            glow.setComposite(AlphaComposite.SrcOver);
+            glow.setPaint(new RadialGradientPaint(center, radius, new float[]{0f, 0.55f, 1f},
+                    new Color[]{
+                            new Color(255, 205, 45, Math.round(68 * fade)),
+                            new Color(255, 205, 45, Math.round(24 * fade)),
+                            new Color(255, 205, 45, 0)
+                    }));
+            glow.fillRect(x, y, width, height);
+        } finally {
+            glow.dispose();
+        }
+    }
+
+    private float itemEffectFade() {
+        if (itemEffectDurationMs <= 0) return 0f;
+        int fadeStart = itemEffectDurationMs - ITEM_EFFECT_FADE_MS;
+        if (itemEffectElapsedMs <= fadeStart) return 1f;
+        return Math.max(0f, (float) (itemEffectDurationMs - itemEffectElapsedMs) / ITEM_EFFECT_FADE_MS);
+    }
+
+    private void drawItemEffectNotification(Graphics2D g2d, int width) {
+        if (itemEffectTitle == null) return;
+        Graphics2D toast = (Graphics2D) g2d.create();
+        try {
+            toast.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, itemEffectFade()));
+            toast.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 21));
+            FontMetrics titleMetrics = toast.getFontMetrics();
+            toast.setFont(new Font(Font.MONOSPACED, Font.BOLD, 12));
+            FontMetrics subtitleMetrics = toast.getFontMetrics();
+            int boxWidth = Math.min(width - 32, Math.max(titleMetrics.stringWidth(itemEffectTitle),
+                    subtitleMetrics.stringWidth(itemEffectSubtitle)) + 40);
+            int boxHeight = 68;
+            int boxX = (width - boxWidth) / 2;
+            int boxY = HEADER_HEIGHT + 18;
+
+            toast.setColor(new Color(8, 12, 18, 225));
+            toast.fillRoundRect(boxX, boxY, boxWidth, boxHeight, 14, 14);
+            toast.setColor(itemEffectColor);
+            toast.drawRoundRect(boxX, boxY, boxWidth, boxHeight, 14, 14);
+            toast.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 21));
+            titleMetrics = toast.getFontMetrics();
+            toast.drawString(itemEffectTitle, (width - titleMetrics.stringWidth(itemEffectTitle)) / 2,
+                    boxY + 29);
+            toast.setFont(new Font(Font.MONOSPACED, Font.BOLD, 12));
+            subtitleMetrics = toast.getFontMetrics();
+            toast.drawString(itemEffectSubtitle, (width - subtitleMetrics.stringWidth(itemEffectSubtitle)) / 2,
+                    boxY + 51);
+        } finally {
+            toast.dispose();
         }
     }
 
@@ -563,9 +688,13 @@ public class GameScreen extends JPanel implements Screen {
         if (type == null) {
             return;
         }
-        // 셀 코드는 색을 빌려 올 블록 종류와 아이템 문자를 함께 담는다. 아이템 종류별 분기는 두지 않는다.
-        drawBlockCell(g2d, cellX, cellY, cellSize, type, colorScheme);
         char symbol = CellCodes.symbol(code);
+        if (symbol == AnvilItem.SYMBOL) {
+            drawAnvilCell(g2d, cellX, cellY, cellSize);
+        } else {
+            // 셀 코드는 색을 빌려 올 블록 종류와 아이템 문자를 함께 담는다.
+            drawBlockCell(g2d, cellX, cellY, cellSize, type, colorScheme);
+        }
         if (symbol != CellCodes.NO_SYMBOL) {
             drawItemLetter(g2d, cellX, cellY, cellSize, String.valueOf(symbol));
         }
@@ -624,15 +753,21 @@ public class GameScreen extends JPanel implements Screen {
         g2d.setFont(new Font(Font.MONOSPACED, Font.BOLD, 20));
         g2d.drawString(String.valueOf(engine.getLevel()), x, levelY + 29);
 
-        int difficultyY = levelY + 62;
+        int difficultyY = levelY + 58;
         g2d.setColor(new Color(190, 198, 208));
         g2d.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 14));
         g2d.drawString("DIFFICULTY", x, difficultyY);
         g2d.setColor(Color.WHITE);
-        g2d.drawString(engine.getDifficulty().label(), x, difficultyY + 24);
-        g2d.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 12));
-        g2d.drawString("Line score " + engine.getDifficulty().lineScorePercent() + "%", x, difficultyY + 45);
-        g2d.drawString("+1 pts/sec", x, difficultyY + 62);
+        g2d.setFont(new Font(Font.MONOSPACED, Font.BOLD, 20));
+        g2d.drawString(engine.getDifficulty().label(), x, difficultyY + 29);
+
+        int linesY = difficultyY + 58;
+        g2d.setColor(new Color(190, 198, 208));
+        g2d.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 14));
+        g2d.drawString("LINES CLEARED", x, linesY);
+        g2d.setColor(Color.WHITE);
+        g2d.setFont(new Font(Font.MONOSPACED, Font.BOLD, 20));
+        g2d.drawString(String.valueOf(engine.getClearedLines()), x, linesY + 29);
     }
 
     private void drawPreview(Graphics2D g2d, int code, int x, int y, int width, int height) {
@@ -679,7 +814,11 @@ public class GameScreen extends JPanel implements Screen {
             var cell = occupied.get(index);
             int cellX = shapeX + (cell.col() - minCol) * previewCellSize;
             int cellY = shapeY + (cell.row() - minRow) * previewCellSize;
-            drawBlockCell(g2d, cellX, cellY, previewCellSize, type, colorScheme);
+            if (symbol == AnvilItem.SYMBOL) {
+                drawAnvilCell(g2d, cellX, cellY, previewCellSize);
+            } else {
+                drawBlockCell(g2d, cellX, cellY, previewCellSize, type, colorScheme);
+            }
             boolean lettered = symbol != CellCodes.NO_SYMBOL
                     && (itemIndex == CellCodes.NO_INDEX || index == itemIndex);
             if (lettered) {
@@ -709,6 +848,20 @@ public class GameScreen extends JPanel implements Screen {
         g2d.fillRect(x + 1, y + 1, Math.max(1, size - 2), Math.max(1, size - 2));
         g2d.setColor(new Color(0, 0, 0, 100));
         g2d.drawRect(x + 1, y + 1, Math.max(1, size - 2), Math.max(1, size - 2));
+    }
+
+    private static void drawAnvilCell(Graphics2D g2d, int x, int y, int size) {
+        int inset = Math.max(1, size / 12);
+        int right = x + size - 1 - inset;
+        int bottom = y + size - 1 - inset;
+        g2d.setColor(ANVIL_COLOR);
+        g2d.fillRect(x + inset, y + inset, Math.max(1, size - inset * 2), Math.max(1, size - inset * 2));
+        g2d.setColor(ANVIL_HIGHLIGHT);
+        g2d.drawLine(x + inset, y + inset, right, y + inset);
+        g2d.drawLine(x + inset, y + inset, x + inset, bottom);
+        g2d.setColor(Color.BLACK);
+        g2d.drawLine(x + inset, bottom, right, bottom);
+        g2d.drawLine(right, y + inset, right, bottom);
     }
 
     /** 빈칸이나 규칙에 없는 코드는 null. 잘못된 코드 하나 때문에 전체 화면 그리기가 중단되지 않게 한다. */
