@@ -1,5 +1,8 @@
 package com.team.tetris.game;
 
+import com.team.tetris.common.Difficulty;
+import java.util.Objects;
+
 /** Pure scoring policy. Automatic, soft and hard drops use the same rule. */
 public final class ScoreCalculator implements ScoringPolicy {
     private static final int[] LINE_POINTS = {0, 100, 300, 500, 800};
@@ -15,11 +18,17 @@ public final class ScoreCalculator implements ScoringPolicy {
     /** Extra scoring rule: reward clearing multiple lines in one placement. */
     @Override
     public int lineClearPoints(int lines, int level) {
+        return lineClearPoints(lines, level, Difficulty.NORMAL);
+    }
+
+    @Override
+    public int lineClearPoints(int lines, int level, Difficulty difficulty) {
         if (lines < 0 || lines >= LINE_POINTS.length) {
             throw new IllegalArgumentException("lines must be between 0 and 4");
         }
         requireLevel(level);
-        return saturate((long) LINE_POINTS[lines] * level);
+        Objects.requireNonNull(difficulty, "difficulty");
+        return saturate((long) LINE_POINTS[lines] * level * difficulty.lineScorePercent() / 100);
     }
 
     @Override

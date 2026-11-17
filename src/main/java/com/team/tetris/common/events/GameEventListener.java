@@ -21,5 +21,9 @@ public interface GameEventListener {
 
     void onPauseStateChanged(boolean paused);
 
+    default void onFeverActivated(int seconds) { }
+
+    default void onSlowDownActivated(int previousLevel, int currentLevel) { }
+
     void onGameOver(int score);
 }

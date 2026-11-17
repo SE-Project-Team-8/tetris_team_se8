@@ -1,0 +1,88 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  package-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Temurin JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Test and package Windows app image
+        run: .\gradlew.bat clean build packageWindows
+      - name: Archive app image
+        shell: pwsh
+        run: Compress-Archive -Path build/package/windows/Tetris -DestinationPath build/package/tetris-windows-x64.zip -CompressionLevel Optimal
+      - name: Upload Windows release asset
+        uses: actions/upload-artifact@v4
+        with:
+          name: tetris-release-windows
+          path: build/package/tetris-windows-x64.zip
+          if-no-files-found: error
+
+  package-macos:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Temurin JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Test and package macOS disk image
+        run: ./gradlew clean build packageMacOS
+      # Without a Developer ID the app ships ad-hoc signed; a broken signature shows up as "damaged" on arm64.
+      - name: Verify macOS ad-hoc signature
+        run: |
+          hdiutil attach -nobrowse -readonly -mountpoint "$RUNNER_TEMP/tetris-dmg" build/package/macos/*.dmg
+          codesign --verify --deep --strict --verbose=2 "$RUNNER_TEMP/tetris-dmg/Tetris.app"
+          hdiutil detach "$RUNNER_TEMP/tetris-dmg"
+      - name: Upload macOS release asset
+        uses: actions/upload-artifact@v4
+        with:
+          name: tetris-release-macos
+          path: build/package/macos/*.dmg
+          if-no-files-found: error
+
+  publish-release:
+    needs: [package-windows, package-macos]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download release assets
+        uses: actions/download-artifact@v4
+        with:
+          pattern: tetris-release-*
+          path: release-assets
+          merge-multiple: true
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Tetris ${{ github.ref_name }}
+          generate_release_notes: true
+          body: |
+            ## 다운로드
+            - Windows: `tetris-windows-x64.zip` 압축을 풀고 `Tetris/Tetris.exe` 실행
+            - macOS (Apple Silicon): `Tetris-*.dmg`를 열고 `Tetris.app`을 `응용 프로그램`으로 이동
+
+            ### macOS에서 "열 수 없음" / "확인할 수 없음" 경고가 뜰 때
+            Apple Developer ID 공증 없이 ad-hoc 서명으로 배포해서 처음 실행할 때 Gatekeeper가 막습니다.
+            1. `Tetris.app`을 한 번 실행해 경고를 띄운 뒤 닫기
+            2. `시스템 설정 > 개인정보 보호 및 보안` 아래쪽에서 `그래도 열기` 클릭
+
+            또는 터미널에서:
+            ```bash
+            xattr -dr com.apple.quarantine /Applications/Tetris.app
+            ```
+          files: release-assets/*

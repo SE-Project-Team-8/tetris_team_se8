@@ -35,7 +35,18 @@ src/
 │   │   ├── ScoreCalculator.java                       # 기본 점수 정책
 │   │   ├── ScoringPolicy.java                         # 교체 가능한 점수 규칙
 │   │   ├── SpeedPolicy.java                           # 교체 가능한 낙하 속도 규칙
-│   │   └── DefaultSpeedPolicy.java                    # 1차 속도 정책
+│   │   ├── DefaultSpeedPolicy.java                    # 1차 속도 정책
+│   │   ├── TetrominoPiece.java, QueuedPiece.java      # 낙하 조각·다음 블록 큐 항목
+│   │   └── item/                                      # 아이템 (추가 방법: docs/items/README.md)
+│   │       ├── Item, EmbeddedItem, StandaloneItem     # 아이템 계약 (포함형 / 블록형)
+│   │       ├── FallingPiece, LockOutcome              # 낙하 조각 계약과 고정 결과
+│   │       ├── ItemRegistry, ItemPolicy, ItemSelector # 등록 목록·등장 규칙·선택
+│   │       ├── WeightedItemSelector                   # 룰렛 휠 선택기
+│   │       ├── LineDeleteItem                         # L: 줄 삭제
+│   │       ├── BombItem                               # B: 3×3 폭탄
+│   │       ├── FeverItem                              # F: 10초 점수 2배
+│   │       ├── SlowDownItem                           # S: 속도 단계 1 영구 감소
+│   │       └── AnvilItem, AnvilPiece, Anvil           # W: 무게추
 │   │
 │   ├── settings/                                      # 담당자2
 │   │   ├── package-info.java                          # 담당자2
@@ -68,6 +79,7 @@ src/
 │       │   └── package-info.java                      # 담당자2 + B
 │       └── events/
 │           ├── BoardSnapshot.java                     # 담당자2 + B
+│           ├── CellCodes.java                         # 보드·미리보기 셀 코드 (아이템 문자 포함)
 │           ├── GameEventListener.java                 # 담당자2 + B
 │           └── package-info.java                      # 담당자2 + B
 │
@@ -121,3 +133,32 @@ Gradle 테스트 실행 인수 파일을 시스템 문자셋으로 읽도록 하
 일반적인 UTF-8 환경에서는 동작에 영향이 없으며, 소스와 저장 데이터는 별도로 UTF-8을 사용합니다.
 테스트 결과는 `build/reports/tests/test/index.html`, 커버리지는
 `build/reports/jacoco/test/html/index.html`에서 확인할 수 있습니다.
+
+## 데스크톱 배포
+
+Windows 11과 macOS에서 Java 21 runtime을 포함하는 native package를 만듭니다.
+
+```powershell
+.\gradlew.bat clean build packageWindows
+```
+
+Windows 실행 파일은 `build/package/windows/Tetris/Tetris.exe`입니다.
+
+macOS에서는 다음 명령으로 DMG를 만듭니다.
+
+```bash
+./gradlew clean build packageMacOS
+```
+
+DMG는 `build/package/macos/Tetris-<버전>.dmg`에 생성됩니다. `v*` 태그를 push하면
+GitHub Actions가 Windows ZIP과 macOS DMG를 모두 빌드한 뒤 하나의 GitHub Release에 첨부합니다.
+
+macOS 앱은 Apple Developer ID 서명·공증 없이 ad-hoc 서명만 되어 있어서, 인터넷에서 받은 DMG는
+처음 실행할 때 Gatekeeper가 막습니다. `Tetris.app`을 `응용 프로그램`으로 옮긴 뒤 한 번 실행하고,
+`시스템 설정 > 개인정보 보호 및 보안`에서 `그래도 열기`를 누르면 됩니다. 터미널에서는 다음 명령으로도 풀 수 있습니다.
+
+```bash
+xattr -dr com.apple.quarantine /Applications/Tetris.app
+```
+
+DMG는 Apple Silicon(arm64)용입니다.

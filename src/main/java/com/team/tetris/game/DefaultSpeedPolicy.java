@@ -1,24 +1,41 @@
 package com.team.tetris.game;
 
 import com.team.tetris.common.constants.GameConstants;
+import com.team.tetris.common.Difficulty;
 
-/** First-stage rules: faster every ten generated blocks or cleared lines. */
+import java.util.Objects;
+
+/**
+ * Faster every ten cleared lines, by the difficulty's step, down to the difficulty's floor.
+ * Placed blocks do not count: Requirements 2 (2.1) ties the speed-up to line clears.
+ */
 public final class DefaultSpeedPolicy implements SpeedPolicy {
-    public static final int BLOCKS_PER_LEVEL = 10;
     public static final int LINES_PER_LEVEL = 10;
     public static final int MAX_LEVEL = 10;
-    public static final int MIN_DROP_INTERVAL_MS = 100;
-    public static final int SPEED_STEP_MS = 100;
 
     @Override
     public Speed calculate(int generatedBlocks, int clearedLines) {
+        return calculate(generatedBlocks, clearedLines, Difficulty.NORMAL);
+    }
+
+    @Override
+    public Speed calculate(int generatedBlocks, int clearedLines, Difficulty difficulty) {
+        return calculate(generatedBlocks, clearedLines, difficulty, 0);
+    }
+
+    /** The slow-down item subtracts whole levels from the capped level, never going below level 1. */
+    @Override
+    public Speed calculate(int generatedBlocks, int clearedLines, Difficulty difficulty, int slowdownSteps) {
+        Objects.requireNonNull(difficulty, "difficulty");
         if (generatedBlocks < 0 || clearedLines < 0) {
             throw new IllegalArgumentException("Progress counters must be non-negative");
         }
-        int level = Math.min(MAX_LEVEL, 1 + Math.max(
-                generatedBlocks / BLOCKS_PER_LEVEL, clearedLines / LINES_PER_LEVEL));
-        int interval = Math.max(MIN_DROP_INTERVAL_MS,
-                (int) GameConstants.INITIAL_DROP_INTERVAL_MS - (level - 1) * SPEED_STEP_MS);
+        if (slowdownSteps < 0) throw new IllegalArgumentException("slowdownSteps must be non-negative");
+        int lineSteps = Math.max(0, Math.min(MAX_LEVEL - 1, clearedLines / LINES_PER_LEVEL) - slowdownSteps);
+        int level = 1 + lineSteps;
+        int reduction = lineSteps * difficulty.lineSpeedStepMillis();
+        int interval = Math.max(difficulty.minDropIntervalMillis(),
+                (int) GameConstants.INITIAL_DROP_INTERVAL_MS - reduction);
         return new Speed(level, interval);
     }
 }

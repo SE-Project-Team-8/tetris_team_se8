@@ -17,7 +17,7 @@ import com.team.tetris.common.Screen;
 
 /**
  * 시작 화면 메뉴 패널.
- * - 게임 시작, 설정, 스코어보드, 게임 종료 메뉴를 보여준다.
+ * - 일반 게임 시작, 아이템 모드 시작, 설정, 스코어보드, 게임 종료 메뉴를 보여준다.
  * - 키보드 방향키와 W/S 키로 메뉴 이동이 가능하다.
  * - Enter 또는 Space로 선택된 메뉴를 실행한다.
  */
@@ -30,7 +30,8 @@ public class MainMenuScreen extends JPanel implements Screen {
     Objects.requireNonNull(startNormal, "startNormal");
     Objects.requireNonNull(startItemMode, "startItemMode");
     menuItems = List.of(
-        new MenuItem("New Game", () -> router.showScreen(ScreenRouter.GAME)),
+        new MenuItem("New Game", startNormal),
+        new MenuItem("Item Mode", startItemMode),
         new MenuItem("Settings", () -> router.showScreen(ScreenRouter.SETTINGS)),
         new MenuItem("Scoreboard", () -> router.showScreen(ScreenRouter.SCOREBOARD)),
         new MenuItem("Exit", () -> System.exit(0))
@@ -44,6 +45,8 @@ public class MainMenuScreen extends JPanel implements Screen {
             @Override
             public void keyPressed(KeyEvent e) {
                 handleKeyPress(e.getKeyCode());
+                // 메뉴에서 처리한 키를 소비해, 방금 표시된 게임 화면의 키 바인딩(Space = Hard Drop)으로 넘어가지 않게 한다.
+                e.consume();
             }
         });
     }

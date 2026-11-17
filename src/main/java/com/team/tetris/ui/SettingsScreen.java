@@ -1,6 +1,7 @@
 package com.team.tetris.ui;
 
 import com.team.tetris.common.Screen;
+import com.team.tetris.common.Difficulty;
 import com.team.tetris.game.GameAction;
 import com.team.tetris.scoreboard.ScoreboardRepository;
 import com.team.tetris.settings.GameSettings;
@@ -55,6 +56,7 @@ public final class SettingsScreen extends JPanel implements Screen {
             new JComboBox<>(GameSettings.ScreenSize.values());
     private final JComboBox<GameSettings.ColorBlindMode> color =
             new JComboBox<>(GameSettings.ColorBlindMode.values());
+    private final JComboBox<Difficulty> difficulty = new JComboBox<>(Difficulty.values());
     private final EnumMap<GameAction, JTextField> keyFields = new EnumMap<>(GameAction.class);
     private final EnumMap<GameAction, Integer> selectedKeys = new EnumMap<>(GameAction.class);
 
@@ -74,16 +76,19 @@ public final class SettingsScreen extends JPanel implements Screen {
 
         styleComboBox(size);
         size.setRenderer(new ValueRenderer<GameSettings.ScreenSize>(value -> switch (value) {
-            case SMALL -> "Small  |  480 x 640";
-            case MEDIUM -> "Medium |  600 x 800";
-            case LARGE -> "Large  |  750 x 1000";
+            case SMALL -> " Small  |  480 x 640";
+            case MEDIUM -> " Medium |  600 x 800";
+            case LARGE -> " Large  |  750 x 1000";
         }));
         styleComboBox(color);
         color.setRenderer(new ValueRenderer<GameSettings.ColorBlindMode>(value -> switch (value) {
-            case OFF -> "Off";
-            case RED_GREEN -> "Red / Green";
-            case BLUE_YELLOW -> "Blue / Yellow";
+            case OFF -> " Off";
+            case RED_GREEN -> " Red / Green";
+            case BLUE_YELLOW -> " Blue / Yellow";
         }));
+
+        styleComboBox(difficulty);
+        difficulty.setRenderer(new ValueRenderer<Difficulty>(value -> " " + value.label()));
 
         JPanel form = new JPanel(new GridBagLayout());
         form.setBackground(PANEL_BACKGROUND);
@@ -93,6 +98,7 @@ public final class SettingsScreen extends JPanel implements Screen {
         int row = 0;
         addSettingRow(form, "WINDOW SIZE", size, row++);
         addSettingRow(form, "COLOR MODE", color, row++);
+        addSettingRow(form, "DIFFICULTY", difficulty, row++);
         for (GameAction action : GameAction.values()) {
             JTextField field = new JTextField();
             field.setEditable(false);
@@ -113,6 +119,8 @@ public final class SettingsScreen extends JPanel implements Screen {
                         if (entry.getKey() != action && entry.getValue() == keyCode) {
                             showMessage("That key is already in use.", "Key Conflict",
                                     JOptionPane.WARNING_MESSAGE);
+                            // 충돌한 키(예: ESC)가 설정 화면의 단축키로 넘어가 화면을 닫지 않게 한다.
+                            event.consume();
                             return;
                         }
                     }
@@ -169,6 +177,7 @@ public final class SettingsScreen extends JPanel implements Screen {
     private void display(GameSettings settings) {
         size.setSelectedItem(settings.screenSize());
         color.setSelectedItem(settings.colorBlindMode());
+        difficulty.setSelectedItem(settings.difficulty());
         selectedKeys.clear();
         selectedKeys.putAll(settings.keyBindings().keys());
         keyFields.forEach((action, field) -> field.setText(KeyEvent.getKeyText(selectedKeys.get(action))));
@@ -177,7 +186,8 @@ public final class SettingsScreen extends JPanel implements Screen {
     private void saveSelected() {
         try {
             save(new GameSettings((GameSettings.ScreenSize) size.getSelectedItem(),
-                    (GameSettings.ColorBlindMode) color.getSelectedItem(), new KeyBindings(selectedKeys)));
+                    (GameSettings.ColorBlindMode) color.getSelectedItem(), new KeyBindings(selectedKeys),
+                    (Difficulty) difficulty.getSelectedItem()));
         } catch (IllegalArgumentException invalid) {
             showMessage("Please assign a different key to every action.", "Invalid Key Bindings",
                     JOptionPane.WARNING_MESSAGE);

@@ -43,6 +43,7 @@ public class ScreenRouter extends JFrame {
 
     public ScreenRouter(GameSettings.ScreenSize size) {
         Objects.requireNonNull(size, "size");
+        HeldKeys.install();
         currentWidth = size.width();
         currentHeight = size.height();
         setTitle(GameConstants.GAME_TITLE);
@@ -94,6 +95,8 @@ public class ScreenRouter extends JFrame {
         if (name.equals(currentScreenName)) {
             return;
         }
+        // 이 화면 전환을 일으킨 키를 누르고 있으면 그 자동 반복이 새 화면의 키로 처리되지 않게 한다.
+        HeldKeys.screenChanged();
 
         if (currentScreenName != null) {
             screens.get(currentScreenName).onHide();

@@ -1,3 +1,7 @@
+/*
+ * 게임 화면. 엔진 이벤트를 그리고 설정된 키를 GameAction으로 변환한다.
+ * 셀 코드(CellCodes)에서 색과 문자를 디코드해 그리며, 블록형 아이템의 미리보기 모양은 ItemRegistry에서 찾는다.
+ */
 package com.team.tetris.ui;
 
 import java.awt.AlphaComposite;
@@ -6,14 +10,19 @@ import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.RadialGradientPaint;
 import java.awt.RenderingHints;
 import java.awt.event.ActionEvent;
+import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
+import java.awt.geom.Point2D;
 import java.util.Arrays;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.IntConsumer;
 
 import javax.swing.AbstractAction;
@@ -24,7 +33,6 @@ import javax.swing.SwingUtilities;
 import javax.swing.Timer;
 
 import com.team.tetris.block.ColorScheme;
-import com.team.tetris.block.Anvil;
 import com.team.tetris.block.Cell;
 import com.team.tetris.block.Rotation;
 import com.team.tetris.block.Tetromino;
@@ -32,12 +40,14 @@ import com.team.tetris.block.TetrominoType;
 import com.team.tetris.common.Screen;
 import com.team.tetris.common.constants.GameConstants;
 import com.team.tetris.common.events.BoardSnapshot;
-import com.team.tetris.common.events.LineDeleteIds;
-import com.team.tetris.common.events.AnvilIds;
+import com.team.tetris.common.events.CellCodes;
 import com.team.tetris.common.events.GameEventListener;
 import com.team.tetris.game.GameAction;
 import com.team.tetris.game.GameEngine;
 import com.team.tetris.game.GameState;
+import com.team.tetris.game.item.AnvilItem;
+import com.team.tetris.game.item.ItemRegistry;
+import com.team.tetris.game.item.StandaloneItem;
 import com.team.tetris.settings.KeyBindings;
 
 /**
@@ -45,23 +55,35 @@ import com.team.tetris.settings.KeyBindings;
  * 보드·점수·다음 블록의 실제 상태는 GameEngine이 소유한다.
  */
 public class GameScreen extends JPanel implements Screen {
+    /** Shift·Ctrl·Alt·Meta를 누른 모든 조합. 조작 키는 수정 키를 함께 누른 상태로도 연결한다. */
+    private static final int[] MODIFIER_COMBINATIONS = modifierCombinations();
     // 화면 크기와 관계없이 유지할 여백 및 상·하단 영역의 기준 크기다.
     private static final int PADDING = 16;
     private static final int PANEL_GAP = 16;
     private static final int HEADER_HEIGHT = 40;
     private static final int FOOTER_HEIGHT = 36;
     private static final int[] LINE_CLEAR_FLASH_ALPHA = {255, 70, 255, 0};
+    /** 한 번 누르면 한 번만 일어나야 하는 동작. 이동·회전은 누르고 있으면 계속 반복된다. */
+    private static final Set<GameAction> ONE_PRESS_ACTIONS =
+            EnumSet.of(GameAction.HARD_DROP, GameAction.PAUSE, GameAction.QUIT);
     private static final int LINE_CLEAR_FLASH_INTERVAL_MS = 65;
     private static final int BEST_SCORE_TICK_MS = 30;
     private static final int BEST_SCORE_HOLD_MS = 500;
     private static final int BEST_SCORE_FADE_MS = 1_500;
+    private static final int ITEM_EFFECT_TICK_MS = 30;
+    private static final int ITEM_EFFECT_FADE_MS = 450;
+    private static final int FEVER_NOTIFICATION_MS = 2_700;
+    private static final int SLOW_DOWN_NOTIFICATION_MS = 2_000;
     private static final Color BACKGROUND = new Color(ColorScheme.standard().emptyRgb());
     private static final Color GRID_COLOR = new Color(255, 255, 255, 35);
     private static final Color BEST_SCORE_COLOR = new Color(255, 211, 64);
+    private static final Color ANVIL_COLOR = new Color(18, 20, 24);
+    private static final Color ANVIL_HIGHLIGHT = new Color(105, 112, 122);
 
     private final ScreenRouter router;
     private final GameEngine engine;
     private final IntConsumer gameOverAction;
+    private final ItemRegistry items;
     private KeyBindings keyBindings;
 
     // 엔진 이벤트는 EDT에서 온다. 배열은 화면 상태로 보관하기 전에 복사한다.
@@ -166,6 +188,21 @@ public class GameScreen extends JPanel implements Screen {
         }
 
         @Override
+        public void onFeverActivated(int seconds) {
+            showItemEffect("★ FEVER TIME! ★", "2X SCORE  ·  " + seconds + " SECONDS",
+                    BEST_SCORE_COLOR, FEVER_NOTIFICATION_MS, true);
+        }
+
+        @Override
+        public void onSlowDownActivated(int previousLevel, int currentLevel) {
+            String title = currentLevel < previousLevel ? "LEVEL DOWN!" : "SPEED AT MINIMUM";
+            String subtitle = currentLevel < previousLevel
+                    ? "LEVEL " + previousLevel + "  →  " + currentLevel
+                    : "LEVEL " + currentLevel + " CANNOT DROP";
+            showItemEffect(title, subtitle, new Color(100, 230, 255), SLOW_DOWN_NOTIFICATION_MS, false);
+        }
+
+        @Override
         public void onGameOver(int finalScore) {
             onEdt(() -> {
                 if (gameOver) {
@@ -191,6 +228,12 @@ public class GameScreen extends JPanel implements Screen {
     private int bestScore = -1;
     private boolean bestScoreNotificationShown;
     private int bestScoreElapsedMs;
+    private String itemEffectTitle;
+    private String itemEffectSubtitle;
+    private Color itemEffectColor;
+    private boolean itemSpotlightActive;
+    private int itemEffectElapsedMs;
+    private int itemEffectDurationMs;
     private int[][] pendingBoard;
     private int[][] falling;
     private int[][] pendingFalling;
@@ -198,6 +241,7 @@ public class GameScreen extends JPanel implements Screen {
     private int[][] pendingLanding;
     private final Timer lineClearTimer = new Timer(LINE_CLEAR_FLASH_INTERVAL_MS, event -> advanceLineClearAnimation());
     private final Timer bestScoreTimer = new Timer(BEST_SCORE_TICK_MS, event -> advanceBestScoreAnimation());
+    private final Timer itemEffectTimer = new Timer(ITEM_EFFECT_TICK_MS, event -> advanceItemEffectAnimation());
 
     public void setBestScore(int bestScore) {
         if (bestScore < -1) {
@@ -222,6 +266,31 @@ public class GameScreen extends JPanel implements Screen {
         bestScoreElapsedMs += BEST_SCORE_TICK_MS;
         if (bestScoreElapsedMs >= BEST_SCORE_HOLD_MS + BEST_SCORE_FADE_MS) {
             bestScoreTimer.stop();
+        }
+        repaint();
+    }
+
+    private void showItemEffect(String title, String subtitle, Color color, int durationMs, boolean spotlight) {
+        onEdt(() -> {
+            itemEffectTitle = title;
+            itemEffectSubtitle = subtitle;
+            itemEffectColor = color;
+            itemSpotlightActive = spotlight;
+            itemEffectElapsedMs = 0;
+            itemEffectDurationMs = durationMs;
+            itemEffectTimer.restart();
+            repaint();
+        });
+    }
+
+    private void advanceItemEffectAnimation() {
+        itemEffectElapsedMs += ITEM_EFFECT_TICK_MS;
+        if (itemEffectElapsedMs >= itemEffectDurationMs) {
+            itemEffectTitle = null;
+            itemEffectSubtitle = null;
+            itemEffectColor = null;
+            itemSpotlightActive = false;
+            itemEffectTimer.stop();
         }
         repaint();
     }
@@ -251,9 +320,16 @@ public class GameScreen extends JPanel implements Screen {
         * @param gameOverAction 최종 점수를 전달받아 결과 화면을 설정하고 전환할 동작
      */
     public GameScreen(ScreenRouter router, GameEngine engine, KeyBindings bindings, IntConsumer gameOverAction) {
+        this(router, engine, bindings, gameOverAction, ItemRegistry.defaults());
+    }
+
+    /** @param items 블록형 아이템의 미리보기 모양을 문자로 찾는 데 쓴다. 게임 쪽과 같은 목록을 전달한다. */
+    public GameScreen(ScreenRouter router, GameEngine engine, KeyBindings bindings, IntConsumer gameOverAction,
+            ItemRegistry items) {
         this.router = Objects.requireNonNull(router, "router");
         this.engine = Objects.requireNonNull(engine, "engine");
         this.gameOverAction = Objects.requireNonNull(gameOverAction, "gameOverAction");
+        this.items = Objects.requireNonNull(items, "items");
 
         setBackground(BACKGROUND);
         setOpaque(true);
@@ -326,16 +402,34 @@ public class GameScreen extends JPanel implements Screen {
         getActionMap().clear();
         for (GameAction action : GameAction.values()) {
             int keyCode = bindings.keyFor(action);
-            bindKey(action.name(), KeyStroke.getKeyStroke(keyCode, 0), () ->
-                    keyBindings.actionFor(keyCode).ifPresent(this::handleAction));
+            // 수정 키(Shift 등)를 조작 키로 지정하면 그 키를 누를 때 자기 자신이 눌린 상태로 오고,
+            // 수정 키를 누른 채 다른 조작 키를 눌러도 동작해야 하므로 모든 조합에 같은 동작을 연결한다.
+            for (int modifiers : MODIFIER_COMBINATIONS) {
+                bindKey(action.name(), KeyStroke.getKeyStroke(keyCode, modifiers), () ->
+                        keyBindings.actionFor(keyCode).ifPresent(this::handleAction));
+            }
         }
         repaint();
     }
 
     private void handleAction(GameAction action) {
+        // 하드 드롭 키를 누르고 있으면 자동 반복으로 다음 블록까지 연달아 떨어지므로 새로 누를 때만 받는다.
+        if (ONE_PRESS_ACTIONS.contains(action) && HeldKeys.isAutoRepeat()) return;
         if (!engine.handle(action)) return;
         if (action == GameAction.PAUSE) router.showScreen(ScreenRouter.PAUSE);
         if (action == GameAction.QUIT) router.showScreen(ScreenRouter.MAIN_MENU);
+    }
+
+    private static int[] modifierCombinations() {
+        int[] masks = {InputEvent.SHIFT_DOWN_MASK, InputEvent.CTRL_DOWN_MASK,
+                InputEvent.ALT_DOWN_MASK, InputEvent.META_DOWN_MASK};
+        int[] combinations = new int[1 << masks.length];
+        for (int combination = 0; combination < combinations.length; combination++) {
+            for (int bit = 0; bit < masks.length; bit++) {
+                if ((combination & (1 << bit)) != 0) combinations[combination] |= masks[bit];
+            }
+        }
+        return combinations;
     }
 
     private void bindKey(String name, KeyStroke keyStroke, Runnable command) {
@@ -355,10 +449,17 @@ public class GameScreen extends JPanel implements Screen {
         // 새 게임 시작 시 이전 판에서 전달받은 표시 데이터만 초기화한다.
         lineClearTimer.stop();
         bestScoreTimer.stop();
+        itemEffectTimer.stop();
         flashingRows = new int[0];
         lineClearAnimating = false;
         bestScoreNotificationShown = false;
         bestScoreElapsedMs = 0;
+        itemEffectTitle = null;
+        itemEffectSubtitle = null;
+        itemEffectColor = null;
+        itemSpotlightActive = false;
+        itemEffectElapsedMs = 0;
+        itemEffectDurationMs = 0;
         pendingBoard = null;
         falling = null;
         pendingFalling = null;
@@ -425,6 +526,8 @@ public class GameScreen extends JPanel implements Screen {
 
             drawBoard(g2d, boardX, boardY, cellSize);
             drawSidebar(g2d, sideX, HEADER_HEIGHT + PADDING, sideWidth);
+            drawItemSpotlight(g2d, boardX, boardY, boardWidth, boardHeight);
+            drawItemEffectNotification(g2d, width);
             drawBestScoreNotification(g2d, width, height);
 
             if (engine.getState() != GameState.PAUSED) {
@@ -441,6 +544,66 @@ public class GameScreen extends JPanel implements Screen {
         } finally {
             // create()로 만든 Graphics 복사본은 사용 후 반드시 해제한다.
             g2d.dispose();
+        }
+    }
+
+    private void drawItemSpotlight(Graphics2D g2d, int x, int y, int width, int height) {
+        if (!itemSpotlightActive) return;
+        float fade = itemEffectFade();
+        double sweep = Math.sin(itemEffectElapsedMs / 420.0) * width * 0.18;
+        Point2D center = new Point2D.Double(x + width / 2.0 + sweep, y + height * 0.42);
+        float radius = Math.max(width, height) * 0.72f;
+        Graphics2D glow = (Graphics2D) g2d.create();
+        try {
+            glow.setComposite(AlphaComposite.SrcOver);
+            glow.setPaint(new RadialGradientPaint(center, radius, new float[]{0f, 0.55f, 1f},
+                    new Color[]{
+                            new Color(255, 205, 45, Math.round(68 * fade)),
+                            new Color(255, 205, 45, Math.round(24 * fade)),
+                            new Color(255, 205, 45, 0)
+                    }));
+            glow.fillRect(x, y, width, height);
+        } finally {
+            glow.dispose();
+        }
+    }
+
+    private float itemEffectFade() {
+        if (itemEffectDurationMs <= 0) return 0f;
+        int fadeStart = itemEffectDurationMs - ITEM_EFFECT_FADE_MS;
+        if (itemEffectElapsedMs <= fadeStart) return 1f;
+        return Math.max(0f, (float) (itemEffectDurationMs - itemEffectElapsedMs) / ITEM_EFFECT_FADE_MS);
+    }
+
+    private void drawItemEffectNotification(Graphics2D g2d, int width) {
+        if (itemEffectTitle == null) return;
+        Graphics2D toast = (Graphics2D) g2d.create();
+        try {
+            toast.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, itemEffectFade()));
+            toast.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 21));
+            FontMetrics titleMetrics = toast.getFontMetrics();
+            toast.setFont(new Font(Font.MONOSPACED, Font.BOLD, 12));
+            FontMetrics subtitleMetrics = toast.getFontMetrics();
+            int boxWidth = Math.min(width - 32, Math.max(titleMetrics.stringWidth(itemEffectTitle),
+                    subtitleMetrics.stringWidth(itemEffectSubtitle)) + 40);
+            int boxHeight = 68;
+            int boxX = (width - boxWidth) / 2;
+            int boxY = HEADER_HEIGHT + 18;
+
+            toast.setColor(new Color(8, 12, 18, 225));
+            toast.fillRoundRect(boxX, boxY, boxWidth, boxHeight, 14, 14);
+            toast.setColor(itemEffectColor);
+            toast.drawRoundRect(boxX, boxY, boxWidth, boxHeight, 14, 14);
+            toast.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 21));
+            titleMetrics = toast.getFontMetrics();
+            toast.drawString(itemEffectTitle, (width - titleMetrics.stringWidth(itemEffectTitle)) / 2,
+                    boxY + 29);
+            toast.setFont(new Font(Font.MONOSPACED, Font.BOLD, 12));
+            subtitleMetrics = toast.getFontMetrics();
+            toast.drawString(itemEffectSubtitle, (width - subtitleMetrics.stringWidth(itemEffectSubtitle)) / 2,
+                    boxY + 51);
+        } finally {
+            toast.dispose();
         }
     }
 
@@ -477,25 +640,7 @@ public class GameScreen extends JPanel implements Screen {
         // 스냅샷의 숫자 ID를 종류로 바꿔 팔레트 색상과 블록 식별 문자를 함께 그린다.
         for (int row = 0; row < board.length; row++) {
             for (int col = 0; col < board[row].length; col++) {
-                int blockId = board[row][col];
-                if (blockId == AnvilIds.ANVIL_ID) {
-                    int cellX = x + col * cellSize;
-                    int cellY = y + row * cellSize;
-                    drawBlockCell(g2d, cellX, cellY, cellSize, TetrominoType.J, colorScheme);
-                    drawItemLetter(g2d, cellX, cellY, cellSize, "W");
-                    continue;
-                }
-                if (blockId != BoardSnapshot.EMPTY) {
-                    boolean itemCell = LineDeleteIds.isItemCell(blockId);
-                    TetrominoType type = typeFromId(itemCell ? LineDeleteIds.boardType(blockId) : blockId);
-                    if (type != null) {
-                        int cellX = x + col * cellSize;
-                        int cellY = y + row * cellSize;
-                        drawBlockCell(g2d, cellX, cellY,
-                                cellSize, type, colorScheme);
-                        if (itemCell) drawItemLetter(g2d, cellX, cellY, cellSize, "L");
-                    }
-                }
+                drawBoardCell(g2d, board[row][col], x + col * cellSize, y + row * cellSize, cellSize);
             }
         }
 
@@ -506,6 +651,18 @@ public class GameScreen extends JPanel implements Screen {
             for (int row : flashingRows) {
                 g2d.fillRect(x + 1, y + row * cellSize + 1,
                         Math.max(1, width - 2), Math.max(1, cellSize - 2));
+            }
+        }
+
+        if (lineClearAnimating && pendingFalling != null) {
+            // 깜빡이는 동안에도 엔진은 다음 블록을 움직이므로, 그 블록은 보이게 그린다.
+            // 아이템 문자는 블록이 합쳐진 대기 중 보드의 셀 코드에 들어 있으므로 그 코드를 쓴다.
+            for (int row = 0; row < pendingFalling.length; row++) {
+                for (int col = 0; col < pendingFalling[row].length; col++) {
+                    if (pendingFalling[row][col] == BoardSnapshot.EMPTY) continue;
+                    int blockId = pendingBoard != null ? pendingBoard[row][col] : pendingFalling[row][col];
+                    drawBoardCell(g2d, blockId, x + col * cellSize, y + row * cellSize, cellSize);
+                }
             }
         }
 
@@ -526,11 +683,29 @@ public class GameScreen extends JPanel implements Screen {
         g2d.drawRect(x, y, width, height);
     }
 
+    private void drawBoardCell(Graphics2D g2d, int code, int cellX, int cellY, int cellSize) {
+        TetrominoType type = typeFromCode(code);
+        if (type == null) {
+            return;
+        }
+        char symbol = CellCodes.symbol(code);
+        if (symbol == AnvilItem.SYMBOL) {
+            drawAnvilCell(g2d, cellX, cellY, cellSize);
+        } else {
+            // 셀 코드는 색을 빌려 올 블록 종류와 아이템 문자를 함께 담는다.
+            drawBlockCell(g2d, cellX, cellY, cellSize, type, colorScheme);
+        }
+        if (symbol != CellCodes.NO_SYMBOL) {
+            drawItemLetter(g2d, cellX, cellY, cellSize, String.valueOf(symbol));
+        }
+    }
+
     private void drawLandingGhost(Graphics2D g2d, int x, int y, int cellSize) {
         for (int row = 0; row < landing.length; row++) {
             for (int col = 0; col < landing[row].length; col++) {
-                TetrominoType type = typeFromId(landing[row][col]);
-                if (type == null) {
+                TetrominoType type = typeFromCode(landing[row][col]);
+                // 착지 위치가 낙하 중인 블록과 겹치는 칸은 블록 위에 테두리를 덧그리지 않는다.
+                if (type == null || board[row][col] != BoardSnapshot.EMPTY) {
                     continue;
                 }
                 Color blockColor = new Color(colorScheme.rgbOf(type));
@@ -577,28 +752,52 @@ public class GameScreen extends JPanel implements Screen {
         g2d.setColor(Color.WHITE);
         g2d.setFont(new Font(Font.MONOSPACED, Font.BOLD, 20));
         g2d.drawString(String.valueOf(engine.getLevel()), x, levelY + 29);
+
+        int difficultyY = levelY + 58;
+        g2d.setColor(new Color(190, 198, 208));
+        g2d.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 14));
+        g2d.drawString("DIFFICULTY", x, difficultyY);
+        g2d.setColor(Color.WHITE);
+        g2d.setFont(new Font(Font.MONOSPACED, Font.BOLD, 20));
+        g2d.drawString(engine.getDifficulty().label(), x, difficultyY + 29);
+
+        int linesY = difficultyY + 58;
+        g2d.setColor(new Color(190, 198, 208));
+        g2d.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 14));
+        g2d.drawString("LINES CLEARED", x, linesY);
+        g2d.setColor(Color.WHITE);
+        g2d.setFont(new Font(Font.MONOSPACED, Font.BOLD, 20));
+        g2d.drawString(String.valueOf(engine.getClearedLines()), x, linesY + 29);
     }
 
-    private void drawPreview(Graphics2D g2d, int blockId, int x, int y, int width, int height) {
-        if (blockId == AnvilIds.ANVIL_ID) {
-            drawPreviewShape(g2d, new Anvil(0, 0).cells(), TetrominoType.J,
-                    -1, true, x, y, width, height);
-            return;
-        }
-        boolean item = LineDeleteIds.isItemPreview(blockId);
-        TetrominoType type = typeFromId(item ? LineDeleteIds.previewType(blockId) : blockId);
+    private void drawPreview(Graphics2D g2d, int code, int x, int y, int width, int height) {
+        TetrominoType type = typeFromCode(code);
         if (type == null) {
             return;
         }
-
-        // 각 블록의 회전 격자에는 빈 테두리가 있을 수 있으므로 실제 점유 셀 범위만 찾아 중앙에 맞춘다.
-        Tetromino piece = new Tetromino(type, Rotation.SPAWN, 0, 0);
-        drawPreviewShape(g2d, piece.cells(), type,
-                item ? LineDeleteIds.previewCellIndex(blockId) : -1, false, x, y, width, height);
+        char symbol = CellCodes.symbol(code);
+        int itemIndex = CellCodes.itemCellIndex(code);
+        // 문자가 있는데 붙은 칸 번호가 없으면 블록 전체가 아이템인 블록형이다.
+        boolean wholePieceItem = symbol != CellCodes.NO_SYMBOL && itemIndex == CellCodes.NO_INDEX;
+        List<Cell> occupied = wholePieceItem
+                ? standaloneItemShape(symbol)
+                : new Tetromino(type, Rotation.SPAWN, 0, 0).cells();
+        drawPreviewShape(g2d, occupied, type, symbol, itemIndex, x, y, width, height);
     }
 
+    /** 블록형 아이템의 모양은 아이템 자신이 정한다. 목록에 없는 문자는 한 칸짜리로 그려 문자만이라도 보인다. */
+    private List<Cell> standaloneItemShape(char symbol) {
+        return items.standaloneBySymbol(symbol)
+                .map(StandaloneItem::previewShape)
+                .orElse(List.of(new Cell(0, 0)));
+    }
+
+    /**
+     * 실제 점유 셀 범위만 찾아 영역 중앙에 맞춰 그린다. 각 블록의 회전 격자에는 빈 테두리가 있을 수 있다.
+     * {@code symbol}이 있으면 {@code itemIndex} 칸에, 칸 번호가 없으면 모든 칸에 문자를 얹는다.
+     */
     private void drawPreviewShape(Graphics2D g2d, List<Cell> occupied, TetrominoType type,
-            int itemIndex, boolean anvil, int x, int y, int width, int height) {
+            char symbol, int itemIndex, int x, int y, int width, int height) {
         int minRow = occupied.stream().mapToInt(Cell::row).min().orElse(0);
         int maxRow = occupied.stream().mapToInt(Cell::row).max().orElse(0);
         int minCol = occupied.stream().mapToInt(Cell::col).min().orElse(0);
@@ -615,9 +814,15 @@ public class GameScreen extends JPanel implements Screen {
             var cell = occupied.get(index);
             int cellX = shapeX + (cell.col() - minCol) * previewCellSize;
             int cellY = shapeY + (cell.row() - minRow) * previewCellSize;
-            drawBlockCell(g2d, cellX, cellY, previewCellSize, type, colorScheme);
-            if (anvil || index == itemIndex) {
-                drawItemLetter(g2d, cellX, cellY, previewCellSize, anvil ? "W" : "L");
+            if (symbol == AnvilItem.SYMBOL) {
+                drawAnvilCell(g2d, cellX, cellY, previewCellSize);
+            } else {
+                drawBlockCell(g2d, cellX, cellY, previewCellSize, type, colorScheme);
+            }
+            boolean lettered = symbol != CellCodes.NO_SYMBOL
+                    && (itemIndex == CellCodes.NO_INDEX || index == itemIndex);
+            if (lettered) {
+                drawItemLetter(g2d, cellX, cellY, previewCellSize, String.valueOf(symbol));
             }
         }
     }
@@ -645,13 +850,26 @@ public class GameScreen extends JPanel implements Screen {
         g2d.drawRect(x + 1, y + 1, Math.max(1, size - 2), Math.max(1, size - 2));
     }
 
-    private static TetrominoType typeFromId(int blockId) {
-        try {
-            return TetrominoType.fromId(blockId);
-        } catch (IllegalArgumentException exception) {
-            // 잘못된 ID 하나 때문에 전체 화면 그리기가 중단되지 않도록 해당 셀만 생략한다.
+    private static void drawAnvilCell(Graphics2D g2d, int x, int y, int size) {
+        int inset = Math.max(1, size / 12);
+        int right = x + size - 1 - inset;
+        int bottom = y + size - 1 - inset;
+        g2d.setColor(ANVIL_COLOR);
+        g2d.fillRect(x + inset, y + inset, Math.max(1, size - inset * 2), Math.max(1, size - inset * 2));
+        g2d.setColor(ANVIL_HIGHLIGHT);
+        g2d.drawLine(x + inset, y + inset, right, y + inset);
+        g2d.drawLine(x + inset, y + inset, x + inset, bottom);
+        g2d.setColor(Color.BLACK);
+        g2d.drawLine(x + inset, bottom, right, bottom);
+        g2d.drawLine(right, y + inset, right, bottom);
+    }
+
+    /** 빈칸이나 규칙에 없는 코드는 null. 잘못된 코드 하나 때문에 전체 화면 그리기가 중단되지 않게 한다. */
+    private static TetrominoType typeFromCode(int code) {
+        if (!CellCodes.isValid(code)) {
             return null;
         }
+        return TetrominoType.fromId(CellCodes.baseType(code));
     }
 
     private String keyText(GameAction action) {

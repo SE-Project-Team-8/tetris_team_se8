@@ -1,6 +1,7 @@
 package com.team.tetris.settings;
 
 import com.team.tetris.game.GameAction;
+import com.team.tetris.common.Difficulty;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -16,6 +17,36 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class SettingsRepositoryTest {
     @TempDir Path directory;
+
+    @ParameterizedTest
+    @EnumSource(Difficulty.class)
+    void difficultyIsSavedAndRetainedWhenOtherPreferencesChange(Difficulty difficulty) throws Exception {
+        Path file = directory.resolve("difficulty.properties");
+        GameSettings settings = GameSettings.defaults().withDifficulty(difficulty)
+                .withScreenSize(GameSettings.ScreenSize.LARGE)
+                .withColorBlindMode(GameSettings.ColorBlindMode.RED_GREEN)
+                .withKeyBindings(KeyBindings.defaults().withKey(GameAction.MOVE_LEFT, KeyEvent.VK_A));
+        new SettingsRepository(file).save(settings);
+        assertEquals(settings, new SettingsRepository(file).load());
+    }
+
+    @Test
+    void legacySettingsDefaultToNormalWithoutOverwritingAndModernMissingDifficultyIsRejected() throws Exception {
+        Path file = directory.resolve("settings.properties");
+        SettingsRepository repository = new SettingsRepository(file);
+        repository.save(GameSettings.defaults().withDifficulty(Difficulty.HARD));
+        String modern = Files.readString(file);
+        String missingDifficulty = modern.replaceAll("(?m)^difficulty=.*\\R?", "");
+        Files.writeString(file, missingDifficulty);
+        assertThrows(IOException.class, repository::load);
+        assertEquals(missingDifficulty, Files.readString(file));
+        String legacy = missingDifficulty.replace("version=2", "version=1");
+        Files.writeString(file, legacy);
+        assertEquals(Difficulty.NORMAL, repository.load().difficulty());
+        assertEquals(legacy, Files.readString(file));
+        repository.save(repository.load().withDifficulty(Difficulty.EASY));
+        assertEquals(Difficulty.EASY, new SettingsRepository(file).load().difficulty());
+    }
 
     @Test
     void firstLaunchUsesDefaultsWithoutCreatingAFile() throws Exception {

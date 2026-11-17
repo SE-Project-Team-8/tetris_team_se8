@@ -1,3 +1,6 @@
+/*
+ * 애플리케이션 조립부. 엔진·화면·설정·순위 저장소·아이템 목록을 만들고 연결한다.
+ */
 package com.team.tetris;
 
 import java.io.IOException;
@@ -10,10 +13,13 @@ import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
 
 import com.team.tetris.block.ColorScheme;
+import com.team.tetris.common.Difficulty;
+import com.team.tetris.common.GameMode;
 import com.team.tetris.common.events.BoardSnapshot;
 import com.team.tetris.common.events.GameEventListener;
 import com.team.tetris.game.BlockBoardDriver;
 import com.team.tetris.game.GameEngine;
+import com.team.tetris.game.item.ItemRegistry;
 import com.team.tetris.scoreboard.ScoreRecord;
 import com.team.tetris.scoreboard.ScoreboardRepository;
 import com.team.tetris.settings.GameSettings;
@@ -41,15 +47,19 @@ public final class Main {
         private GameSettings settings = loadSettings();
         private final ScreenRouter router = new ScreenRouter(settings.screenSize());
         private final ForwardingListener listener = new ForwardingListener();
-        private final BlockBoardDriver boardDriver = new BlockBoardDriver();
-        private final GameEngine engine = new GameEngine(boardDriver, listener);
-        private final GameScreen gameScreen = new GameScreen(router, engine, settings.keyBindings(), this::onGameOver);
+        private final ItemRegistry items = ItemRegistry.defaults();
+        private final BlockBoardDriver boardDriver = new BlockBoardDriver(items);
+        private final GameEngine engine = new GameEngine(boardDriver, listener, () -> settings.difficulty());
+        private final GameScreen gameScreen = new GameScreen(router, engine, settings.keyBindings(), this::onGameOver, items);
         private final GameOverScreen gameOverScreen = new GameOverScreen(router);
         private final NameInputScreen nameInputScreen = new NameInputScreen(router, this::saveScore);
         private final ScoreboardScreen scoreboardScreen = new ScoreboardScreen(router, scoreboardRepository);
         private int finalScore;
         private int bestScoreLoadGeneration;
         private int bestScore = -1;
+        private Difficulty finalDifficulty = Difficulty.NORMAL;
+        private GameMode currentMode = GameMode.NORMAL;
+        private GameMode finalMode = GameMode.NORMAL;
 
         private Application() {
             listener.setDelegate(gameScreen.eventListener());
@@ -78,11 +88,14 @@ public final class Main {
             refreshBestScore(true);
         }
 
+        /** The best-score notice compares against the ranking of the mode and difficulty being played. */
         private void refreshBestScore(boolean showError) {
             int generation = ++bestScoreLoadGeneration;
+            Difficulty difficulty = settings.difficulty();
+            GameMode mode = currentMode;
             new SwingWorker<Integer, Void>() {
                 @Override protected Integer doInBackground() throws Exception {
-                    List<ScoreRecord> records = scoreboardRepository.load();
+                    List<ScoreRecord> records = scoreboardRepository.load(difficulty, mode);
                     return records.isEmpty() ? -1 : records.getFirst().score();
                 }
 
@@ -110,7 +123,11 @@ public final class Main {
         }
 
         private void startGame(boolean itemMode) {
+            currentMode = itemMode ? GameMode.ITEM : GameMode.NORMAL;
             boardDriver.setItemMode(itemMode);
+            // No notice until this ranking's best score is loaded; the previous game's may differ.
+            gameScreen.setBestScore(-1);
+            refreshBestScore(false);
             gameScreen.startNewGame();
         }
 
@@ -142,6 +159,8 @@ public final class Main {
 
         private void onGameOver(int score) {
             finalScore = score;
+            finalDifficulty = engine.getDifficulty();
+            finalMode = currentMode;
             int level = engine.getLevel();
             int lines = engine.getClearedLines();
             // Avoid changing screens from inside the engine's notification stack.
@@ -149,14 +168,18 @@ public final class Main {
         }
 
         private void checkRanking(int score, int level, int lines) {
+            Difficulty difficulty = finalDifficulty;
+            GameMode mode = finalMode;
             new SwingWorker<Boolean, Void>() {
                 @Override protected Boolean doInBackground() throws Exception {
-                    return scoreboardRepository.qualifies(score);
+                    return scoreboardRepository.qualifies(score, difficulty, mode);
                 }
 
                 @Override protected void done() {
                     try {
                         boolean qualifies = get();
+                        // Both "Enter name" and "View scoreboard" lead to the ranking just played.
+                        scoreboardScreen.select(mode, difficulty);
                         gameOverScreen.setGameResult(score, level, lines, qualifies);
                         router.showScreen(ScreenRouter.GAME_OVER);
                     } catch (Exception failure) {
@@ -172,9 +195,12 @@ public final class Main {
         }
 
         private void saveScore(String name) {
+            int scoreToSave = finalScore;
+            Difficulty difficultyToSave = finalDifficulty;
+            GameMode modeToSave = finalMode;
             new SwingWorker<Optional<ScoreRecord>, Void>() {
                 @Override protected Optional<ScoreRecord> doInBackground() throws Exception {
-                    return scoreboardRepository.add(name, finalScore);
+                    return scoreboardRepository.add(name, scoreToSave, difficultyToSave, modeToSave);
                 }
 
                 @Override protected void done() {
@@ -211,6 +237,10 @@ public final class Main {
         @Override public void onScoreChanged(int score) { delegate.onScoreChanged(score); }
         @Override public void onNextBlocksChanged(int[] types) { delegate.onNextBlocksChanged(types); }
         @Override public void onPauseStateChanged(boolean paused) { delegate.onPauseStateChanged(paused); }
+        @Override public void onFeverActivated(int seconds) { delegate.onFeverActivated(seconds); }
+        @Override public void onSlowDownActivated(int previousLevel, int currentLevel) {
+            delegate.onSlowDownActivated(previousLevel, currentLevel);
+        }
         @Override public void onGameOver(int score) { delegate.onGameOver(score); }
     }
 }

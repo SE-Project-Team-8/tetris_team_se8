@@ -2,6 +2,7 @@ package com.team.tetris.game;
 
 import com.team.tetris.common.events.BoardSnapshot;
 import com.team.tetris.common.events.GameEventListener;
+import com.team.tetris.common.Difficulty;
 import com.team.tetris.settings.KeyBindings;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -28,7 +29,8 @@ class GameEngineTest {
         board = new FakeBoard();
         timer = new ManualTimer();
         events = new Events();
-        engine = new GameEngine(board, events, new ScoreCalculator(), timer);
+        engine = new GameEngine(board, events, new ScoreCalculator(), new DefaultSpeedPolicy(),
+                timer, new ManualTimer(), () -> Difficulty.NORMAL);
     }
 
     @Test
@@ -121,19 +123,25 @@ class GameEngineTest {
     }
 
     @Test
-    void speedIncreasesOnTenthGeneratedPieceAndHasAFloor() throws Exception {
+    void speedIncreasesEveryTenClearedLinesButNotWithPlacedBlocksAndHasAFloor() throws Exception {
         edt(() -> {
             engine.start();
             board.dropDistance = 0;
-            for (int i = 0; i < 8; i++) engine.handle(HARD_DROP);
+            for (int i = 0; i < 30; i++) engine.handle(HARD_DROP);
+            assertEquals(31, engine.getGeneratedBlocks());
+            assertEquals(1, engine.getLevel(), "Placing blocks without clearing lines keeps the speed");
             assertEquals(1000, timer.interval);
+            board.lines = 3;
+            for (int i = 0; i < 3; i++) engine.handle(HARD_DROP);
+            assertEquals(9, engine.getClearedLines());
+            assertEquals(1000, timer.interval);
+            board.lines = 1;
             engine.handle(HARD_DROP);
-            assertEquals(10, engine.getGeneratedBlocks());
+            assertEquals(10, engine.getClearedLines());
             assertEquals(2, engine.getLevel());
-            assertEquals(900, timer.interval);
-            timer.fire();
-            assertEquals(2, engine.getScore());
-            for (int i = 0; i < 150; i++) engine.handle(HARD_DROP);
+            assertEquals(800, timer.interval);
+            board.lines = 4;
+            for (int i = 0; i < 40; i++) engine.handle(HARD_DROP);
             assertEquals(10, engine.getLevel());
             assertEquals(100, timer.interval);
         });
@@ -215,7 +223,8 @@ class GameEngineTest {
         edt(() -> {
             engine.start();
             board.dropDistance = 0;
-            for (int i = 0; i < 9; i++) engine.handle(HARD_DROP);
+            board.lines = 4;
+            for (int i = 0; i < 3; i++) engine.handle(HARD_DROP);
             assertEquals(2, engine.getLevel());
             engine.stop();
             board.canSpawn = false;
@@ -224,6 +233,7 @@ class GameEngineTest {
             assertEquals(1, engine.getLevel());
             assertEquals(1000, engine.getDropIntervalMillis());
             assertEquals(0, engine.getGeneratedBlocks());
+            assertEquals(0, engine.getClearedLines());
         });
     }
 
@@ -274,7 +284,8 @@ class GameEngineTest {
         };
         SpeedPolicy customSpeed = (blocks, lines) ->
                 new SpeedPolicy.Speed(1 + blocks, 600 - blocks * 20);
-        engine = new GameEngine(board, events, customScore, customSpeed, timer);
+        engine = new GameEngine(board, events, customScore, customSpeed, timer,
+                new ManualTimer(), () -> Difficulty.NORMAL);
 
         edt(() -> {
             engine.start();
@@ -299,9 +310,9 @@ class GameEngineTest {
         AtomicLong firstDrop = new AtomicLong();
         AtomicLong started = new AtomicLong();
         GameEngine realEngine = new GameEngine(board, new Events() {
-            @Override public void onScoreChanged(int score) {
-                super.onScoreChanged(score);
-                if (score > 0 && firstDrop.compareAndSet(0, System.nanoTime())) dropped.countDown();
+            @Override public void onBoardUpdated(BoardSnapshot snapshot) {
+                super.onBoardUpdated(snapshot);
+                if (board.downCalls > 0 && firstDrop.compareAndSet(0, System.nanoTime())) dropped.countDown();
             }
         });
         try {
