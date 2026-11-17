@@ -28,6 +28,12 @@ public class MainMenuScreen extends JPanel implements Screen {
             new Color(0x6FD66F), new Color(0xFF7F7F), new Color(0xFFA94F)
     };
 
+    // 창 크기 L(600px) 기준 수치. 그릴 때 UiPainter.scale()을 곱한다.
+    private static final int LOGO_TILE = 52;
+    private static final int LOGO_TO_MENU_GAP = 56;
+    private static final int BUTTON_HEIGHT = 52;
+    private static final int BUTTON_GAP = 14;
+
     private final List<MenuItem> menuItems;
     private int selectedIndex = 0;
 
@@ -118,7 +124,11 @@ public class MainMenuScreen extends JPanel implements Screen {
 
             UiPainter.fillBackground(g2d, width, height);
             drawDecorations(g2d, width, height);
-            int logoBottom = drawTitle(g2d, width, scale);
+            // 로고와 메뉴를 한 묶음으로 보고 화면 세로 가운데에 둔다. 하단 안내 문구 몫만큼 살짝 위로 올린다.
+            int tile = Math.round(LOGO_TILE * scale);
+            int blockHeight = tile + Math.round(LOGO_TO_MENU_GAP * scale) + menuHeight(scale);
+            int top = Math.max(Math.round(24 * scale), (height - blockHeight) / 2 - Math.round(20 * scale));
+            int logoBottom = drawTitle(g2d, width, top, tile);
             drawMenuItems(g2d, width, logoBottom, scale);
             drawHint(g2d, width, height, scale);
         } finally {
@@ -145,9 +155,14 @@ public class MainMenuScreen extends JPanel implements Screen {
      *
      * @return 로고 아래 y. 메뉴 버튼은 그 아래부터 놓는다.
      */
-    private static int drawTitle(Graphics2D g2d, int width, float scale) {
-        int tile = Math.round(52 * scale);
-        return UiPainter.drawLogo(g2d, "TETRIS", width / 2, Math.round(70 * scale), tile, LOGO_COLORS);
+    private static int drawTitle(Graphics2D g2d, int width, int top, int tile) {
+        return UiPainter.drawLogo(g2d, "TETRIS", width / 2, top, tile, LOGO_COLORS);
+    }
+
+    /** 메뉴 버튼 전체 묶음의 높이. */
+    private int menuHeight(float scale) {
+        int count = menuItems.size();
+        return count * Math.round(BUTTON_HEIGHT * scale) + (count - 1) * Math.round(BUTTON_GAP * scale);
     }
 
     /**
@@ -155,10 +170,10 @@ public class MainMenuScreen extends JPanel implements Screen {
      */
     private void drawMenuItems(Graphics2D g2d, int width, int top, float scale) {
         int buttonWidth = Math.round(width * 0.6f);
-        int buttonHeight = Math.round(52 * scale);
-        int gap = Math.round(14 * scale);
+        int buttonHeight = Math.round(BUTTON_HEIGHT * scale);
+        int gap = Math.round(BUTTON_GAP * scale);
         int x = (width - buttonWidth) / 2;
-        int y = top + Math.round(64 * scale);
+        int y = top + Math.round(LOGO_TO_MENU_GAP * scale);
         float fontSize = Math.round(19 * scale);
 
         for (int i = 0; i < menuItems.size(); i++) {
