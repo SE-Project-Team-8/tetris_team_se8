@@ -45,6 +45,8 @@ import com.team.tetris.game.GameAction;
 import com.team.tetris.game.GameEngine;
 import com.team.tetris.game.GameState;
 import com.team.tetris.game.item.AnvilItem;
+import com.team.tetris.game.item.BombItem;
+import com.team.tetris.game.item.FeverItem;
 import com.team.tetris.game.item.ItemRegistry;
 import com.team.tetris.game.item.StandaloneItem;
 import com.team.tetris.settings.KeyBindings;
@@ -91,8 +93,6 @@ public class GameScreen extends JPanel implements Screen {
     private static final int FEVER_NOTIFICATION_MS = 2_700;
     private static final int SLOW_DOWN_NOTIFICATION_MS = 2_000;
     private static final Color BEST_SCORE_COLOR = new Color(255, 211, 64);
-    private static final Color ANVIL_COLOR = new Color(18, 20, 24);
-    private static final Color ANVIL_HIGHLIGHT = new Color(105, 112, 122);
 
     private final ScreenRouter router;
     private final GameEngine engine;
@@ -734,10 +734,21 @@ public class GameScreen extends JPanel implements Screen {
         }
 
         // 스냅샷의 숫자 ID를 종류로 바꿔 팔레트 색상과 블록 식별 문자를 함께 그린다.
+        // 모루 칸은 모아 두었다가 한 덩어리 실루엣으로 그린다.
+        boolean[][] anvil = new boolean[board.length][GameConstants.BOARD_COLS];
+        boolean hasAnvil = false;
         for (int row = 0; row < board.length; row++) {
             for (int col = 0; col < board[row].length; col++) {
+                if (isAnvil(board[row][col])) {
+                    anvil[row][col] = true;
+                    hasAnvil = true;
+                    continue;
+                }
                 drawBoardCell(g2d, board[row][col], x + col * cellSize, y + row * cellSize, cellSize);
             }
+        }
+        if (hasAnvil) {
+            CellPainter.drawAnvil(g2d, anvil, x, y, cellSize, cellInset(cellSize), AnvilItem.SYMBOL);
         }
 
         if (flashingRows.length > 0) {
@@ -821,14 +832,23 @@ public class GameScreen extends JPanel implements Screen {
         if (type == null) {
             return;
         }
+        Color color = new Color(colorScheme.rgbOf(type));
         if (symbol == AnvilItem.SYMBOL) {
-            drawAnvilCell(g2d, x, y, size);
-            CellPainter.drawLetter(g2d, x, y, size, symbol, UiColors.CREAM, 0.45f);
+            // 보드와 미리보기는 모루를 한 덩어리로 그린다. 여기는 줄 삭제 중 낱칸으로 그려야 할 때만 온다.
+            CellPainter.drawAnvil(g2d, new boolean[][]{{true}}, x, y, size, 0, symbol);
+        } else if (symbol == BombItem.SYMBOL) {
+            CellPainter.drawBombItem(g2d, x, y, size, color, symbol);
+        } else if (symbol == FeverItem.SYMBOL) {
+            CellPainter.drawFeverItem(g2d, x, y, size, color, symbol);
         } else if (symbol != CellCodes.NO_SYMBOL) {
-            CellPainter.drawItem(g2d, x, y, size, new Color(colorScheme.rgbOf(type)), symbol);
+            CellPainter.drawItem(g2d, x, y, size, color, symbol);
         } else {
-            CellPainter.drawBlock(g2d, x, y, size, new Color(colorScheme.rgbOf(type)));
+            CellPainter.drawBlock(g2d, x, y, size, color);
         }
+    }
+
+    private static boolean isAnvil(int code) {
+        return CellCodes.isValid(code) && CellCodes.symbol(code) == AnvilItem.SYMBOL;
     }
 
     private void drawLandingGhost(Graphics2D g2d, int x, int y, int cellSize) {
@@ -950,6 +970,12 @@ public class GameScreen extends JPanel implements Screen {
         int shapeY = y + (height - shapeHeight) / 2;
         int inset = cellInset(previewCellSize);
 
+        if (symbol == AnvilItem.SYMBOL) {
+            boolean[][] anvil = new boolean[maxRow - minRow + 1][maxCol - minCol + 1];
+            for (Cell cell : occupied) anvil[cell.row() - minRow][cell.col() - minCol] = true;
+            CellPainter.drawAnvil(g2d, anvil, shapeX, shapeY, previewCellSize, inset, symbol);
+            return;
+        }
         for (int index = 0; index < occupied.size(); index++) {
             var cell = occupied.get(index);
             int cellX = shapeX + (cell.col() - minCol) * previewCellSize;
@@ -962,19 +988,6 @@ public class GameScreen extends JPanel implements Screen {
         }
     }
 
-    private static void drawAnvilCell(Graphics2D g2d, int x, int y, int size) {
-        int inset = Math.max(1, size / 12);
-        int right = x + size - 1 - inset;
-        int bottom = y + size - 1 - inset;
-        g2d.setColor(ANVIL_COLOR);
-        g2d.fillRect(x + inset, y + inset, Math.max(1, size - inset * 2), Math.max(1, size - inset * 2));
-        g2d.setColor(ANVIL_HIGHLIGHT);
-        g2d.drawLine(x + inset, y + inset, right, y + inset);
-        g2d.drawLine(x + inset, y + inset, x + inset, bottom);
-        g2d.setColor(Color.BLACK);
-        g2d.drawLine(x + inset, bottom, right, bottom);
-        g2d.drawLine(right, y + inset, right, bottom);
-    }
 
     /** 빈칸이나 규칙에 없는 코드는 null. 잘못된 코드 하나 때문에 전체 화면 그리기가 중단되지 않게 한다. */
     private static TetrominoType typeFromCode(int code) {

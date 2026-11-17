@@ -43,6 +43,8 @@ class GameScreenTest {
     private static final int ONE_CELL = 40;
     /** 아이템 칸 테두리 색 (디자인 토큰 cream). */
     private static final int CREAM = 0xFFF6E8;
+    /** 무게추 실루엣 색 (디자인 토큰 steel). */
+    private static final int STEEL = 0x4A525E;
     private static final GameEngine.DropTimer IDLE = new GameEngine.DropTimer() {
         @Override public void start(int intervalMillis, Runnable tick) { }
         @Override public void stop() { }
@@ -152,21 +154,21 @@ class GameScreenTest {
     }
 
     @Test
-    void anvilUsesBlackMetalInThePreviewAndOnTheBoard() throws Exception {
+    void anvilUsesSteelInThePreviewAndOnTheBoard() throws Exception {
         edt(() -> {
             Fixture fixture = new Fixture();
             fixture.events().onNextBlocksChanged(
                     new int[]{CellCodes.cell(TetrominoType.J.id(), AnvilItem.SYMBOL)});
             BufferedImage preview = fixture.render();
             // 미리보기는 우측 패널 열, 보드 첫 줄은 좌측 상단에 있다. 레이아웃 세부 좌표에 묶이지 않게 영역으로 찾는다.
-            assertTrue(countColor(preview, new Rectangle(WIDTH / 2, 0, WIDTH / 2, HEIGHT / 4), 0x121418) > 0,
-                    "Anvil preview cells use the fixed black-metal color");
+            assertTrue(countColor(preview, new Rectangle(WIDTH / 2, 0, WIDTH / 2, HEIGHT / 4), STEEL) > 0,
+                    "Anvil preview uses the steel silhouette color");
 
             int[][] anvilBoard = board(Map.of(0, CellCodes.cell(TetrominoType.J.id(), AnvilItem.SYMBOL)));
             fixture.events().onBoardUpdated(new BoardSnapshot(anvilBoard));
             BufferedImage falling = fixture.render();
-            assertTrue(countColor(falling, new Rectangle(0, 0, WIDTH / 2, HEIGHT / 6), 0x121418) > 0,
-                    "Anvil cells on the board use the same fixed black-metal color");
+            assertTrue(countColor(falling, new Rectangle(0, 0, WIDTH / 2, HEIGHT / 6), STEEL) > 0,
+                    "Anvil cells on the board use the same steel color");
             fixture.dispose();
         });
     }

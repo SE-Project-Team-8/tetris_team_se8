@@ -5,6 +5,9 @@ import java.awt.Color;
 import java.awt.FontMetrics;
 import java.awt.Graphics2D;
 import java.awt.Stroke;
+import java.awt.geom.AffineTransform;
+import java.awt.geom.Area;
+import java.awt.geom.Path2D;
 import java.awt.geom.RoundRectangle2D;
 
 /**
@@ -26,6 +29,10 @@ public final class CellPainter {
     private static final Color EMPTY_SLOT = new Color(255, 255, 255, 9);
     /** 줄 삭제 팝 표정 색 (스펙 §3.1). */
     private static final Color POP_FACE = new Color(0xFFA94F);
+    private static final Color BOMB_FUSE = new Color(0x4A1B0C);
+    private static final Color FLAME_OUTER = new Color(0xD85A30);
+    private static final Color FLAME_INNER = new Color(0xFFA94F);
+    private static final Color FLAME_LETTER = new Color(0x4A1B0C);
 
     private CellPainter() {
     }
@@ -75,6 +82,139 @@ public final class CellPainter {
         fillCandy(g, x, y, size, color);
         UiPainter.strokeRoundRect(g, x, y, size, size, radius(size), UiColors.CREAM, Math.max(1.5f, size * 0.07f));
         drawLetter(g, x, y, size, symbol, UiColors.CELL_GLYPH, 0.45f);
+    }
+
+    /**
+     * 폭탄 아이템 칸 (스펙 §4 B): 모체 블럭색 + cream 테두리 위에 검은 구, 좌상단 하이라이트,
+     * 우상단 도화선과 노란 불꽃 점, 구 안의 작은 문자.
+     */
+    public static void drawBombItem(Graphics2D g, int x, int y, int size, Color color, char symbol) {
+        fillCandy(g, x, y, size, color);
+        UiPainter.strokeRoundRect(g, x, y, size, size, radius(size), UiColors.CREAM, Math.max(1.5f, size * 0.07f));
+        int ball = Math.round(size * 0.53f);
+        int ballX = x + (size - ball) / 2;
+        int ballY = y + (size - ball) / 2 + Math.round(size * 0.04f);
+        // 도화선: 구 오른쪽 위에서 비스듬히 뻗은 선 + 끝의 불꽃 점.
+        Stroke old = g.getStroke();
+        g.setStroke(new BasicStroke(Math.max(1.5f, size * 0.07f), BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+        g.setColor(BOMB_FUSE);
+        int fuseStartX = ballX + Math.round(ball * 0.78f);
+        int fuseStartY = ballY + Math.round(ball * 0.18f);
+        int fuseEndX = x + Math.round(size * 0.84f);
+        int fuseEndY = y + Math.round(size * 0.14f);
+        g.drawLine(fuseStartX, fuseStartY, fuseEndX, fuseEndY);
+        g.setStroke(old);
+        int spark = Math.max(2, Math.round(size * 0.14f));
+        g.setColor(UiColors.ACCENT);
+        g.fillOval(fuseEndX - spark / 2, fuseEndY - spark / 2, spark, spark);
+        g.setColor(UiColors.BACKGROUND);
+        g.fillOval(ballX, ballY, ball, ball);
+        g.setColor(new Color(255, 255, 255, 70));
+        g.fillOval(ballX + Math.round(ball * 0.18f), ballY + Math.round(ball * 0.14f),
+                Math.max(1, Math.round(ball * 0.28f)), Math.max(1, Math.round(ball * 0.2f)));
+        drawLetter(g, ballX, ballY, ball, symbol, UiColors.CREAM, 0.6f);
+    }
+
+    /**
+     * 피버 아이템 칸 (스펙 §4 F): 모체 블럭색 + cream 테두리 위에 위로 뾰족한 물방울 불꽃
+     * (45° 돌린 라운드 사각, 바깥 주황빨강·안쪽 주황)과 가운데 문자.
+     */
+    public static void drawFeverItem(Graphics2D g, int x, int y, int size, Color color, char symbol) {
+        fillCandy(g, x, y, size, color);
+        UiPainter.strokeRoundRect(g, x, y, size, size, radius(size), UiColors.CREAM, Math.max(1.5f, size * 0.07f));
+        double centerX = x + size / 2.0;
+        double centerY = y + size * 0.56;
+        fillFlame(g, centerX, centerY, size * 0.46, FLAME_OUTER);
+        fillFlame(g, centerX, centerY + size * 0.06, size * 0.30, FLAME_INNER);
+        g.setFont(UiFonts.mono(Math.max(8f, Math.round(size * 0.31f))));
+        FontMetrics fm = g.getFontMetrics();
+        g.setColor(FLAME_LETTER);
+        String text = String.valueOf(symbol);
+        g.drawString(text, (int) Math.round(centerX - fm.stringWidth(text) / 2.0),
+                (int) Math.round(centerY + (fm.getAscent() - fm.getDescent()) / 2.0 + size * 0.04));
+    }
+
+    // 꼭짓점 하나만 각진 라운드 사각을 45° 돌리면 위로 뾰족한 물방울 모양이 된다.
+    private static void fillFlame(Graphics2D g, double centerX, double centerY, double side, Color color) {
+        double r = side * 0.5;
+        Path2D.Double drop = new Path2D.Double();
+        // 왼쪽 위 모서리만 뾰족하고 나머지 세 모서리는 둥근 사각형.
+        drop.moveTo(-side / 2, -side / 2);
+        drop.lineTo(side / 2 - r, -side / 2);
+        drop.quadTo(side / 2, -side / 2, side / 2, -side / 2 + r);
+        drop.lineTo(side / 2, side / 2 - r);
+        drop.quadTo(side / 2, side / 2, side / 2 - r, side / 2);
+        drop.lineTo(-side / 2 + r, side / 2);
+        drop.quadTo(-side / 2, side / 2, -side / 2, side / 2 - r);
+        drop.closePath();
+        AffineTransform transform = new AffineTransform();
+        transform.translate(centerX, centerY);
+        transform.rotate(Math.toRadians(45));
+        g.setColor(color);
+        g.fill(transform.createTransformedShape(drop));
+    }
+
+    /**
+     * 무게추(모루) 실루엣 (스펙 §4 W). 모루 칸들을 한 덩어리로 이어 강철색으로 채우고 cream 외곽선을 두른다.
+     * 위가 비어 있는 칸에는 하이라이트를, 가로로 이어진 칸 사이에는 연한 구분선을 넣고,
+     * 텍스트 기반 요구에 따라 모든 칸에 문자를 그린다.
+     *
+     * @param cells 모루가 차지한 칸 [행][열] 마스크
+     * @param originX 마스크 (0, 0) 칸의 왼쪽 위 x
+     * @param originY 마스크 (0, 0) 칸의 왼쪽 위 y
+     * @param pitch 칸 간격
+     * @param inset 칸 안쪽 여백 (일반 셀과 같은 값)
+     */
+    public static void drawAnvil(Graphics2D g, boolean[][] cells, int originX, int originY, int pitch, int inset,
+                                 char symbol) {
+        int size = pitch - inset * 2;
+        int radius = radius(size);
+        Area body = new Area();
+        for (int row = 0; row < cells.length; row++) {
+            for (int col = 0; col < cells[row].length; col++) {
+                if (!cells[row][col]) continue;
+                int cellX = originX + col * pitch;
+                int cellY = originY + row * pitch;
+                // 이웃 칸 쪽으로는 모서리 반지름만큼 넘쳐 그려 이음새의 둥근 홈을 메운다.
+                double left = filled(cells, row, col - 1) ? cellX - radius : cellX + inset;
+                double right = filled(cells, row, col + 1) ? cellX + pitch + radius : cellX + pitch - inset;
+                double top = filled(cells, row - 1, col) ? cellY - radius : cellY + inset;
+                double bottom = filled(cells, row + 1, col) ? cellY + pitch + radius : cellY + pitch - inset;
+                body.add(new Area(new RoundRectangle2D.Double(left, top, right - left, bottom - top,
+                        radius * 2.0, radius * 2.0)));
+            }
+        }
+        g.setColor(UiColors.STEEL);
+        g.fill(body);
+
+        for (int row = 0; row < cells.length; row++) {
+            for (int col = 0; col < cells[row].length; col++) {
+                if (!cells[row][col]) continue;
+                int cellX = originX + col * pitch;
+                int cellY = originY + row * pitch;
+                if (!filled(cells, row - 1, col) && size >= MIN_FACE_SIZE) {
+                    g.setColor(UiColors.withAlpha(UiColors.STEEL_HIGHLIGHT, 0.9f));
+                    g.fillRoundRect(cellX + inset + Math.round(size * 0.18f), cellY + inset + Math.round(size * 0.12f),
+                            Math.round(size * 0.64f), Math.max(2, Math.round(size * 0.12f)), size / 4, size / 4);
+                }
+                if (filled(cells, row, col + 1)) {
+                    g.setColor(new Color(255, 255, 255, 41));
+                    int lineX = cellX + pitch;
+                    g.drawLine(lineX, cellY + inset + size / 5, lineX, cellY + pitch - inset - size / 5);
+                }
+                drawLetter(g, cellX + inset, cellY + inset, size, symbol, UiColors.CREAM, 0.38f);
+            }
+        }
+
+        Stroke old = g.getStroke();
+        g.setStroke(new BasicStroke(Math.max(1.5f, size * 0.07f)));
+        g.setColor(UiColors.CREAM);
+        g.draw(body);
+        g.setStroke(old);
+    }
+
+    private static boolean filled(boolean[][] cells, int row, int col) {
+        return row >= 0 && row < cells.length && col >= 0 && col < cells[row].length && cells[row][col];
     }
 
     /**
