@@ -48,6 +48,47 @@ public final class CellPainter {
     }
 
     /**
+     * 하드드롭 착지 순간의 눌린 블럭 (스펙 §3.3): 세로 15% 줄이고 가로를 살짝 넓혀 아래에 붙이며,
+     * 눈은 가로선 `- -`으로 감는다.
+     */
+    public static void drawSquashed(Graphics2D g, int x, int y, int size, Color color) {
+        int height = Math.round(size * 0.85f);
+        int width = Math.round(size * 1.06f);
+        int left = x - (width - size) / 2;
+        int top = y + size - height;
+        int arc = radius(size) * 2;
+        int shade = Math.max(1, Math.round(height * 0.11f));
+        g.setColor(UiColors.darker(color, 0.18f));
+        g.fillRoundRect(left, top, width, height, arc, arc);
+        g.setColor(color);
+        g.fillRoundRect(left, top, width, height - shade, arc, arc);
+        g.setColor(UiColors.CELL_GLYPH);
+        int centerX = x + size / 2;
+        if (size >= MIN_FACE_SIZE) {
+            int eyeOffset = Math.round(size * 0.11f);
+            int eyeWidth = Math.max(3, Math.round(size * 0.14f));
+            int eyeHeight = Math.max(1, Math.round(size * 0.05f));
+            int eyeY = top + Math.round(height * 0.38f);
+            g.fillRect(centerX - eyeOffset - eyeWidth / 2, eyeY, eyeWidth, eyeHeight);
+            g.fillRect(centerX + eyeOffset - eyeWidth / 2, eyeY, eyeWidth, eyeHeight);
+        }
+        g.setFont(UiFonts.mono(Math.max(8f, Math.round(size * 0.38f))));
+        FontMetrics fm = g.getFontMetrics();
+        g.drawString(MOUTH, centerX - fm.stringWidth(MOUTH) / 2, top + Math.round(height * 0.62f));
+    }
+
+    /**
+     * 하드드롭 잔상 한 칸: 표정 없이 블럭색 바탕만 반투명으로 그린다.
+     *
+     * @param alpha 0.0~1.0 불투명도
+     */
+    public static void drawTrail(Graphics2D g, int x, int y, int size, Color color, float alpha) {
+        int arc = radius(size) * 2;
+        g.setColor(UiColors.withAlpha(color, alpha));
+        g.fillRoundRect(x, y, size, size, arc, arc);
+    }
+
+    /**
      * 공격줄 한 칸: garbage 바탕 + {@code > <} 눈 + 입 문자.
      */
     public static void drawGarbage(Graphics2D g, int x, int y, int size) {

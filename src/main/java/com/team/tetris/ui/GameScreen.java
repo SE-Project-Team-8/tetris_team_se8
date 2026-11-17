@@ -81,6 +81,10 @@ public class GameScreen extends JPanel implements Screen {
     private static final Color SLOW_COLOR = new Color(0x5FD8F0);
     /** 보드 상태 틴트 불투명도 (스펙: 13%). */
     private static final float BOARD_TINT_ALPHA = 0.13f;
+    /** 하드드롭 잔상·착지 눌림·흔들림이 보이는 시간 (1~2프레임). */
+    private static final int HARD_DROP_EFFECT_MS = 110;
+    /** 잔상 개수와 각 잔상의 불투명도. 착지 위치에 가까울수록 진하다. */
+    private static final float[] TRAIL_ALPHAS = {0.15f, 0.30f, 0.50f};
     /** 한 번 누르면 한 번만 일어나야 하는 동작. 이동·회전은 누르고 있으면 계속 반복된다. */
     private static final Set<GameAction> ONE_PRESS_ACTIONS =
             EnumSet.of(GameAction.HARD_DROP, GameAction.PAUSE, GameAction.QUIT);
@@ -258,6 +262,20 @@ public class GameScreen extends JPanel implements Screen {
     private final Timer lineClearTimer = new Timer(LINE_CLEAR_FLASH_INTERVAL_MS, event -> advanceLineClearAnimation());
     private final Timer bestScoreTimer = new Timer(BEST_SCORE_TICK_MS, event -> advanceBestScoreAnimation());
     private final Timer itemEffectTimer = new Timer(ITEM_EFFECT_TICK_MS, event -> advanceItemEffectAnimation());
+    // 하드드롭 연출 상태. 타이머가 끝나면 비워 다음 리페인트에 원래 모습으로 돌아간다.
+    private int[][] dropTrail;
+    private int dropDistance;
+    private boolean[][] squashedCells;
+    private final Timer hardDropTimer = createOneShot(HARD_DROP_EFFECT_MS, () -> {
+        clearHardDropEffect();
+        repaint();
+    });
+
+    private static Timer createOneShot(int delayMs, Runnable action) {
+        Timer timer = new Timer(delayMs, event -> action.run());
+        timer.setRepeats(false);
+        return timer;
+    }
 
     public void setBestScore(int bestScore) {
         if (bestScore < -1) {
@@ -439,9 +457,49 @@ public class GameScreen extends JPanel implements Screen {
     private void handleAction(GameAction action) {
         // 하드 드롭 키를 누르고 있으면 자동 반복으로 다음 블록까지 연달아 떨어지므로 새로 누를 때만 받는다.
         if (ONE_PRESS_ACTIONS.contains(action) && HeldKeys.isAutoRepeat()) return;
+        // 하드드롭 연출에 쓸 출발 위치(낙하 블록)와 도착 위치(고스트)는 엔진이 블록을 고정하기 전에 잡아 둔다.
+        int[][] dropFrom = action == GameAction.HARD_DROP ? falling : null;
+        int[][] dropTo = action == GameAction.HARD_DROP ? landing : null;
         if (!engine.handle(action)) return;
+        if (dropFrom != null && dropTo != null) startHardDropEffect(dropFrom, dropTo);
         if (action == GameAction.PAUSE) router.showScreen(ScreenRouter.PAUSE);
         if (action == GameAction.QUIT) router.showScreen(ScreenRouter.MAIN_MENU);
+    }
+
+    /**
+     * 하드드롭 연출(스펙 §3.3)을 시작한다: 지나온 경로의 잔상 + 착지 칸 눌림 + 보드 1px 흔들림.
+     * 한 번만 울리는 타이머가 끝나면 지우므로 상시 애니메이션 루프가 없다.
+     */
+    private void startHardDropEffect(int[][] from, int[][] to) {
+        int fromTop = topRow(from);
+        int toTop = topRow(to);
+        if (fromTop < 0 || toTop <= fromTop) return;
+        dropTrail = from;
+        dropDistance = toTop - fromTop;
+        squashedCells = new boolean[GameConstants.BOARD_ROWS][GameConstants.BOARD_COLS];
+        for (int row = 0; row < to.length; row++) {
+            for (int col = 0; col < to[row].length; col++) {
+                squashedCells[row][col] = to[row][col] != BoardSnapshot.EMPTY;
+            }
+        }
+        hardDropTimer.restart();
+        repaint();
+    }
+
+    private void clearHardDropEffect() {
+        hardDropTimer.stop();
+        dropTrail = null;
+        squashedCells = null;
+        dropDistance = 0;
+    }
+
+    private static int topRow(int[][] cells) {
+        for (int row = 0; row < cells.length; row++) {
+            for (int value : cells[row]) {
+                if (value != BoardSnapshot.EMPTY) return row;
+            }
+        }
+        return -1;
     }
 
     private static int[] modifierCombinations() {
@@ -474,6 +532,7 @@ public class GameScreen extends JPanel implements Screen {
         lineClearTimer.stop();
         bestScoreTimer.stop();
         itemEffectTimer.stop();
+        clearHardDropEffect();
         flashingRows = new int[0];
         lineClearAnimating = false;
         bestScoreNotificationShown = false;
@@ -552,9 +611,13 @@ public class GameScreen extends JPanel implements Screen {
             int sideX = frameX + boardWidth + framePadding * 2 + gap;
 
             drawHeader(g2d, margin, width, headerHeight, scale);
+            // 하드드롭 착지 순간에는 보드 전체를 1px 아래로 흔든다. 연출이 끝나면 다음 리페인트에 제자리로 온다.
+            int shake = squashedCells != null ? Math.max(1, Math.round(scale)) : 0;
+            g2d.translate(0, shake);
             drawBoardFrame(g2d, frameX, frameY, boardWidth + framePadding * 2, boardHeight + framePadding * 2,
                     Math.round(BASE_FRAME_RADIUS * scale));
             drawBoard(g2d, boardX, boardY, pitch);
+            g2d.translate(0, -shake);
             drawSidebar(g2d, sideX, frameY, width - margin - sideX, scale);
             drawItemEffectNotification(g2d, boardX, boardY, boardWidth, boardHeight, scale);
             drawBestScoreNotification(g2d, boardX, boardY, boardWidth, boardHeight, scale);
@@ -744,12 +807,17 @@ public class GameScreen extends JPanel implements Screen {
                     hasAnvil = true;
                     continue;
                 }
+                if (isSquashed(row, col)) {
+                    drawSquashedCell(g2d, board[row][col], x + col * cellSize, y + row * cellSize, cellSize);
+                    continue;
+                }
                 drawBoardCell(g2d, board[row][col], x + col * cellSize, y + row * cellSize, cellSize);
             }
         }
         if (hasAnvil) {
             CellPainter.drawAnvil(g2d, anvil, x, y, cellSize, cellInset(cellSize), AnvilItem.SYMBOL);
         }
+        drawHardDropTrail(g2d, x, y, cellSize);
 
         if (flashingRows.length > 0) {
             drawLineClearPop(g2d, x, y, cellSize, width);
@@ -805,6 +873,47 @@ public class GameScreen extends JPanel implements Screen {
                 UiPainter.drawSparkle(g2d, x + width + sparkle / 2, rowY + pitch * 3 / 4, sparkle, UiColors.ACCENT);
                 int middle = x + pitch * (3 + row % 4) + pitch / 2;
                 UiPainter.drawSparkle(g2d, middle, rowY + pitch / 8, Math.round(sparkle * 0.7f), UiColors.ACCENT);
+            }
+        }
+    }
+
+    private boolean isSquashed(int row, int col) {
+        return squashedCells != null && squashedCells[row][col];
+    }
+
+    /** 착지 눌림은 표정 있는 기본 블럭에만 준다. 아이템 칸은 아이콘이 일그러지지 않게 그대로 그린다. */
+    private void drawSquashedCell(Graphics2D g2d, int code, int cellX, int cellY, int pitch) {
+        TetrominoType type = typeFromCode(code);
+        if (type == null || CellCodes.symbol(code) != CellCodes.NO_SYMBOL) {
+            drawBoardCell(g2d, code, cellX, cellY, pitch);
+            return;
+        }
+        int inset = cellInset(pitch);
+        CellPainter.drawSquashed(g2d, cellX + inset, cellY + inset, pitch - inset * 2,
+                new Color(colorScheme.rgbOf(type)));
+    }
+
+    /**
+     * 하드드롭 잔상: 출발 위치에서 착지 위치까지의 경로에 블록 모양을 세 번 겹쳐 그린다.
+     * 빈 칸에만 그려 이미 쌓인 블럭을 덮지 않는다.
+     */
+    private void drawHardDropTrail(Graphics2D g2d, int x, int y, int pitch) {
+        if (dropTrail == null || dropDistance <= 1) return;
+        int inset = cellInset(pitch);
+        int size = pitch - inset * 2;
+        for (int step = 0; step < TRAIL_ALPHAS.length; step++) {
+            int offset = Math.round(dropDistance * (step + 1) / (float) (TRAIL_ALPHAS.length + 1));
+            for (int row = 0; row < dropTrail.length; row++) {
+                for (int col = 0; col < dropTrail[row].length; col++) {
+                    TetrominoType type = typeFromCode(dropTrail[row][col]);
+                    int targetRow = row + offset;
+                    if (type == null || targetRow >= board.length
+                            || board[targetRow][col] != BoardSnapshot.EMPTY) {
+                        continue;
+                    }
+                    CellPainter.drawTrail(g2d, x + col * pitch + inset, y + targetRow * pitch + inset, size,
+                            new Color(colorScheme.rgbOf(type)), TRAIL_ALPHAS[step]);
+                }
             }
         }
     }
