@@ -10,7 +10,7 @@ import javax.swing.JButton;
  * 크기와 글자 크기는 창 배율에 맞춰 소유 화면이 {@link #setPreferredSize}와 {@link #setFontSize}로 정한다.
  */
 public class PillButton extends JButton {
-    private final boolean primary;
+    private boolean primary;
     private float fontSize = 18f;
 
     /**
@@ -24,6 +24,12 @@ public class PillButton extends JButton {
         setBorderPainted(false);
         setFocusPainted(false);
         setOpaque(false);
+    }
+
+    /** 강조 여부를 바꾼다. 대화상자처럼 포커스를 받은 버튼을 노랗게 보여 줄 때 쓴다. */
+    public void setPrimary(boolean primary) {
+        this.primary = primary;
+        repaint();
     }
 
     public void setFontSize(float fontSize) {

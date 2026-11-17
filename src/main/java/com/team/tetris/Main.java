@@ -8,7 +8,6 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
-import javax.swing.JOptionPane;
 import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
 
@@ -32,6 +31,7 @@ import com.team.tetris.ui.PauseScreen;
 import com.team.tetris.ui.ScoreboardScreen;
 import com.team.tetris.ui.ScreenRouter;
 import com.team.tetris.ui.SettingsScreen;
+import com.team.tetris.ui.theme.ThemedDialog;
 
 /** Composition root for the game engine, screens, settings, and ranking storage. */
 public final class Main {
@@ -108,8 +108,8 @@ public final class Main {
                         gameScreen.setBestScore(bestScore);
                     } catch (Exception failure) {
                         if (showError) {
-                            JOptionPane.showMessageDialog(router, "Could not load the best score.",
-                                    "Scoreboard error", JOptionPane.ERROR_MESSAGE);
+                            ThemedDialog.showMessage(router, "스코어보드 오류",
+                                    "최고 점수를 불러오지 못했습니다.", ThemedDialog.Tone.ERROR);
                         }
                     }
                 }
@@ -136,14 +136,15 @@ public final class Main {
             try {
                 return settingsRepository.load();
             } catch (IOException failure) {
-                int reset = JOptionPane.showConfirmDialog(null,
-                        "Could not load settings. Restore defaults?", "Settings error",
-                        JOptionPane.YES_NO_OPTION, JOptionPane.ERROR_MESSAGE);
-                if (reset == JOptionPane.YES_OPTION) {
+                boolean reset = ThemedDialog.showConfirm(null, "설정 오류",
+                        "설정을 불러오지 못했습니다.\n기본값으로 되돌릴까요?", ThemedDialog.Tone.ERROR,
+                        "기본값 복원", "그대로 시작");
+                if (reset) {
                     try {
                         return settingsRepository.reset();
                     } catch (IOException saveFailure) {
-                        JOptionPane.showMessageDialog(null, "Could not save default settings.");
+                        ThemedDialog.showMessage(null, "설정 오류", "기본 설정을 저장하지 못했습니다.",
+                                ThemedDialog.Tone.ERROR);
                     }
                 }
                 return GameSettings.defaults();
@@ -184,10 +185,9 @@ public final class Main {
                         gameOverScreen.setGameResult(score, level, lines, qualifies);
                         router.showScreen(ScreenRouter.GAME_OVER);
                     } catch (Exception failure) {
-                        int choice = JOptionPane.showOptionDialog(router,
-                                "Could not read saved scores.", "Scoreboard error",
-                                JOptionPane.DEFAULT_OPTION, JOptionPane.ERROR_MESSAGE, null,
-                                new String[]{"Retry", "Main Menu"}, "Retry");
+                        int choice = ThemedDialog.showOptions(router, "스코어보드 오류",
+                                "저장된 점수를 읽지 못했습니다.", ThemedDialog.Tone.ERROR, 0,
+                                "다시 시도", "메인 메뉴");
                         if (choice == 0) checkRanking(score, level, lines);
                         else router.showScreen(ScreenRouter.MAIN_MENU);
                     }

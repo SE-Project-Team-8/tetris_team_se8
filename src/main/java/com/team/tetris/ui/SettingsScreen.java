@@ -8,6 +8,7 @@ import com.team.tetris.settings.GameSettings;
 import com.team.tetris.settings.KeyBindings;
 import com.team.tetris.settings.SettingsRepository;
 import com.team.tetris.ui.theme.PillButton;
+import com.team.tetris.ui.theme.ThemedDialog;
 import com.team.tetris.ui.theme.UiColors;
 import com.team.tetris.ui.theme.UiFonts;
 import com.team.tetris.ui.theme.UiPainter;
@@ -18,7 +19,6 @@ import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
-import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.KeyStroke;
@@ -132,7 +132,7 @@ public final class SettingsScreen extends JPanel implements Screen {
                     for (var entry : selectedKeys.entrySet()) {
                         if (entry.getKey() != action && entry.getValue() == keyCode) {
                             showMessage("이미 다른 동작에 쓰이는 키입니다.", "키 중복",
-                                    JOptionPane.WARNING_MESSAGE);
+                                    ThemedDialog.Tone.WARNING);
                             // 충돌한 키(예: ESC)가 설정 화면의 단축키로 넘어가 화면을 닫지 않게 한다.
                             event.consume();
                             return;
@@ -245,7 +245,7 @@ public final class SettingsScreen extends JPanel implements Screen {
                     difficulty.getSelected()));
         } catch (IllegalArgumentException invalid) {
             showMessage("동작마다 서로 다른 키를 지정해 주세요.", "키 설정 오류",
-                    JOptionPane.WARNING_MESSAGE);
+                    ThemedDialog.Tone.WARNING);
         }
     }
 
@@ -264,7 +264,7 @@ public final class SettingsScreen extends JPanel implements Screen {
                     router.showScreen(ScreenRouter.MAIN_MENU);
                 } catch (Exception failure) {
                     showMessage("설정을 저장하지 못했습니다. 다시 시도해 주세요.", "설정 오류",
-                            JOptionPane.ERROR_MESSAGE);
+                            ThemedDialog.Tone.ERROR);
                 }
             }
         }.execute();
@@ -283,16 +283,17 @@ public final class SettingsScreen extends JPanel implements Screen {
                     settingsUpdated.accept(defaults);
                     router.showScreen(ScreenRouter.MAIN_MENU);
                 } catch (Exception failure) {
-                    JOptionPane.showMessageDialog(SettingsScreen.this,
-                            "기본 설정으로 되돌리지 못했습니다. 다시 시도해 주세요.");
+                    showMessage("기본 설정으로 되돌리지 못했습니다. 다시 시도해 주세요.", "설정 오류",
+                            ThemedDialog.Tone.ERROR);
                 }
             }
         }.execute();
     }
 
     private void resetScores() {
-        if (JOptionPane.showConfirmDialog(this, "저장된 점수를 모두 삭제할까요?", "점수 초기화",
-                JOptionPane.YES_NO_OPTION) != JOptionPane.YES_OPTION) return;
+        // 되돌릴 수 없는 작업이라 Enter를 바로 눌러도 지워지지 않게 처음 포커스를 "취소"에 둔다.
+        if (ThemedDialog.showOptions(this, "점수 초기화", "저장된 점수를 모두 삭제할까요?\n되돌릴 수 없습니다.",
+                ThemedDialog.Tone.WARNING, 1, "삭제", "취소") != 0) return;
         new SwingWorker<Void, Void>() {
             @Override protected Void doInBackground() throws Exception {
                 scoreboardRepository.reset();
@@ -303,10 +304,10 @@ public final class SettingsScreen extends JPanel implements Screen {
                 try {
                     get();
                     scoresReset.run();
-                    showMessage("점수를 초기화했습니다.", "점수 초기화", JOptionPane.INFORMATION_MESSAGE);
+                    showMessage("점수를 초기화했습니다.", "점수 초기화", ThemedDialog.Tone.INFO);
                 } catch (Exception failure) {
                     showMessage("점수를 초기화하지 못했습니다. 다시 시도해 주세요.", "스코어보드 오류",
-                            JOptionPane.ERROR_MESSAGE);
+                            ThemedDialog.Tone.ERROR);
                 }
             }
         }.execute();
@@ -354,8 +355,8 @@ public final class SettingsScreen extends JPanel implements Screen {
         };
     }
 
-    private void showMessage(String message, String title, int messageType) {
-        JOptionPane.showMessageDialog(this, message, title, messageType);
+    private void showMessage(String message, String title, ThemedDialog.Tone tone) {
+        ThemedDialog.showMessage(this, title, message, tone);
     }
 
     /** 글자 높이 기준으로 세로 가운데에 그리는 라벨. JLabel 기본 정렬은 Jua의 큰 줄 간격 때문에 위로 뜬다. */
