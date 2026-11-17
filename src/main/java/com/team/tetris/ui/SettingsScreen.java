@@ -9,6 +9,7 @@ import com.team.tetris.settings.KeyBindings;
 import com.team.tetris.settings.SettingsRepository;
 import com.team.tetris.ui.theme.PillButton;
 import com.team.tetris.ui.theme.ThemedDialog;
+import com.team.tetris.ui.theme.ThemedLabel;
 import com.team.tetris.ui.theme.UiColors;
 import com.team.tetris.ui.theme.UiFonts;
 import com.team.tetris.ui.theme.UiPainter;
@@ -82,8 +83,8 @@ public final class SettingsScreen extends JPanel implements Screen {
     private final List<PillButton> buttons = new ArrayList<>();
     private final List<SettingCard> cards = new ArrayList<>();
     private final JLabel title = new JLabel("설정");
-    private final JLabel keySection = new JLabel("조작 키  ·  칸을 누른 뒤 새 키를 입력하세요");
-    private final JLabel hint = new JLabel("←→ 값 변경  ·  Tab 다음 항목  ·  저장을 눌러야 적용됩니다  ·  Esc 메뉴로",
+    private final JLabel keySection = new ThemedLabel("조작 키  ·  칸을 누른 뒤 새 키를 입력하세요");
+    private final JLabel hint = new ThemedLabel("←→ 값 변경  ·  Tab 다음 항목  ·  저장을 눌러야 적용됩니다  ·  Esc 메뉴로",
             SwingConstants.CENTER);
     private final JPanel form = new JPanel();
     private final PropertyChangeListener focusRepaint = event -> repaint();

@@ -25,6 +25,7 @@ import javax.swing.event.DocumentListener;
 
 import com.team.tetris.common.Screen;
 import com.team.tetris.ui.theme.PillButton;
+import com.team.tetris.ui.theme.ThemedLabel;
 import com.team.tetris.ui.theme.UiColors;
 import com.team.tetris.ui.theme.UiFonts;
 import com.team.tetris.ui.theme.UiPainter;
@@ -59,7 +60,7 @@ public class NameInputScreen extends JPanel implements Screen {
 		titleLabel = new JLabel("이름을 입력하세요", SwingConstants.CENTER);
 		titleLabel.setForeground(UiColors.TEXT_PRIMARY);
 
-		promptLabel = new JLabel("TOP 10 기록!  스코어보드에 등록됩니다", SwingConstants.CENTER);
+		promptLabel = new ThemedLabel("TOP 10 기록!  스코어보드에 등록됩니다", SwingConstants.CENTER);
 		promptLabel.setForeground(UiColors.TEXT_SECONDARY);
 
 		nameField = new JTextField(16);
@@ -78,10 +79,10 @@ public class NameInputScreen extends JPanel implements Screen {
 		});
 		inputBox = new InputBox(nameField);
 
-		validationLabel = new JLabel(" ", SwingConstants.CENTER);
+		validationLabel = new ThemedLabel(" ", SwingConstants.CENTER);
 		validationLabel.setForeground(ERROR_COLOR);
 
-		hintLabel = new JLabel("최대 20자  ·  Enter 확정  ·  Esc 취소", SwingConstants.CENTER);
+		hintLabel = new ThemedLabel("최대 20자  ·  Enter 확정  ·  Esc 취소", SwingConstants.CENTER);
 		hintLabel.setForeground(UiColors.withAlpha(UiColors.TEXT_MUTED, 0.8f));
 
 		submitButton = new PillButton("등록", true);

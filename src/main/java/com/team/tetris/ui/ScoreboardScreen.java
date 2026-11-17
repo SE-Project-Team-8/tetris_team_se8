@@ -6,6 +6,7 @@ import com.team.tetris.common.Screen;
 import com.team.tetris.scoreboard.ScoreRecord;
 import com.team.tetris.scoreboard.ScoreboardRepository;
 import com.team.tetris.ui.theme.PillButton;
+import com.team.tetris.ui.theme.ThemedLabel;
 import com.team.tetris.ui.theme.UiColors;
 import com.team.tetris.ui.theme.UiFonts;
 import com.team.tetris.ui.theme.UiPainter;
@@ -70,9 +71,9 @@ public final class ScoreboardScreen extends JPanel implements Screen {
     private final JTable results = new JTable(tableModel);
     private final CardLayout contentLayout = new CardLayout();
     private final JPanel content = new JPanel(contentLayout);
-    private final JLabel status = new JLabel("", SwingConstants.CENTER);
+    private final JLabel status = new ThemedLabel("", SwingConstants.CENTER);
     private final JLabel title = new JLabel("스코어보드");
-    private final JLabel keys = new JLabel("←→ 난이도  ·  ↑↓ 모드  ·  Esc 메뉴로  ·  노란 테두리 = 방금 등록한 기록",
+    private final JLabel keys = new ThemedLabel("←→ 난이도  ·  ↑↓ 모드  ·  Esc 메뉴로  ·  노란 테두리 = 방금 등록한 기록",
             SwingConstants.CENTER);
     private final PillButton back = new PillButton("메뉴로", false);
     private final List<JLabel> modeTabs = new ArrayList<>();
@@ -364,7 +365,7 @@ public final class ScoreboardScreen extends JPanel implements Screen {
 
     /** IBM Plex Mono에는 ▶ 글리프가 없어 화살표만 본문 서체로 그린다. */
     private Font arrowFont() {
-        return UiFonts.body(bodyFont.getSize2D());
+        return UiFonts.system(bodyFont.getSize2D());
     }
 
     private int medalSize() {

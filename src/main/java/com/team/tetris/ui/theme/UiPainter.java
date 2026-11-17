@@ -185,7 +185,7 @@ public final class UiPainter {
      * @return 뱃지 폭(px). 옆에 다른 요소를 이어 붙일 때 쓴다.
      */
     public static int drawBadge(Graphics2D g, int x, int y, int height, String text, Color background, Color foreground) {
-        Font font = UiFonts.displayOrFallback(text, height * 0.6f);
+        Font font = UiFonts.display(height * 0.6f);
         FontMetrics fm = g.getFontMetrics(font);
         int padding = Math.round(height * 0.6f);
         int width = badgeWidth(g, height, text);
@@ -193,7 +193,7 @@ public final class UiPainter {
         g.fillRoundRect(x, y, width, height, height, height);
         g.setFont(font);
         g.setColor(foreground);
-        g.drawString(text, x + padding, centeredBaseline(fm, y, height));
+        drawText(g, text, x + padding, centeredBaseline(fm, y, height));
         return width;
     }
 
@@ -201,8 +201,8 @@ public final class UiPainter {
      * {@link #drawBadge}가 그릴 뱃지의 폭. 오른쪽 정렬할 때 먼저 잰다.
      */
     public static int badgeWidth(Graphics2D g, int height, String text) {
-        FontMetrics fm = g.getFontMetrics(UiFonts.displayOrFallback(text, height * 0.6f));
-        return fm.stringWidth(text) + Math.round(height * 0.6f) * 2;
+        FontMetrics fm = g.getFontMetrics(UiFonts.display(height * 0.6f));
+        return textWidth(fm, text) + Math.round(height * 0.6f) * 2;
     }
 
     /**
@@ -321,7 +321,27 @@ public final class UiPainter {
      * 기준선 y에 가로 가운데 정렬로 문자열을 그린다.
      */
     public static void drawCentered(Graphics2D g, String text, int centerX, int baselineY) {
-        FontMetrics fm = g.getFontMetrics();
-        g.drawString(text, centerX - fm.stringWidth(text) / 2, baselineY);
+        drawText(g, text, centerX - textWidth(g.getFontMetrics(), text) / 2, baselineY);
+    }
+
+    /**
+     * 현재 서체로 문자열을 그리되, 서체에 없는 글자(Jua의 ·, ← 등)만 시스템 서체로 바꿔 그린다.
+     */
+    public static void drawText(Graphics2D g, String text, int x, int baselineY) {
+        Font font = g.getFont();
+        if (text.isEmpty() || font.canDisplayUpTo(text) == -1) {
+            g.drawString(text, x, baselineY);
+        } else {
+            g.drawString(UiFonts.withFallback(text, font).getIterator(), x, baselineY);
+        }
+    }
+
+    /**
+     * {@link #drawText}로 그렸을 때의 폭.
+     */
+    public static int textWidth(FontMetrics fm, String text) {
+        Font font = fm.getFont();
+        if (font.canDisplayUpTo(text) == -1) return fm.stringWidth(text);
+        return UiFonts.width(text, font, fm.getFontRenderContext());
     }
 }

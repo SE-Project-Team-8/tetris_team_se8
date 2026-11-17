@@ -6,6 +6,7 @@ import java.awt.Component;
 import java.awt.Dialog;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
+import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
@@ -99,13 +100,14 @@ public final class ThemedDialog {
         card.setBorder(BorderFactory.createEmptyBorder(Math.round(24 * scale), padding, Math.round(22 * scale), padding));
         card.setLayout(new BorderLayout(0, Math.round(14 * scale)));
 
-        JLabel titleLabel = new JLabel(title, SwingConstants.CENTER);
-        titleLabel.setFont(UiFonts.displayOrFallback(title, Math.round(22 * scale)));
+        JLabel titleLabel = new ThemedLabel(title, SwingConstants.CENTER);
+        titleLabel.setFont(UiFonts.display(Math.round(22 * scale)));
         titleLabel.setForeground(tone.color);
         card.add(titleLabel, BorderLayout.NORTH);
 
-        JLabel messageLabel = new JLabel(wrapHtml(message, Math.round(320 * scale)), SwingConstants.CENTER);
-        messageLabel.setFont(UiFonts.body(Math.round(14 * scale)));
+        Font messageFont = UiFonts.body(Math.round(15 * scale));
+        JLabel messageLabel = new JLabel(wrapHtml(message, Math.round(320 * scale), messageFont), SwingConstants.CENTER);
+        messageLabel.setFont(messageFont);
         messageLabel.setForeground(UiColors.TEXT_PRIMARY);
         card.add(messageLabel, BorderLayout.CENTER);
 
@@ -196,10 +198,28 @@ public final class ThemedDialog {
     }
 
     // JLabel은 HTML이면 줄바꿈을 지원한다. 사용자 문자열이 섞일 수 있으므로 특수 문자를 이스케이프한다.
-    private static String wrapHtml(String message, int width) {
-        String escaped = message.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-                .replace("\n", "<br>");
-        return "<html><div style='text-align:center;width:" + width + "px'>" + escaped + "</div></html>";
+    // 본문 서체(Jua)에 없는 글자는 시스템 서체 span으로 감싸 네모로 보이지 않게 한다.
+    private static String wrapHtml(String message, int width, Font font) {
+        String fallbackFamily = UiFonts.system(font.getSize2D()).getFamily();
+        StringBuilder html = new StringBuilder("<html><div style='text-align:center;width:" + width + "px'>");
+        int index = 0;
+        while (index < message.length()) {
+            int codePoint = message.codePointAt(index);
+            index += Character.charCount(codePoint);
+            if (codePoint == '\n') {
+                html.append("<br>");
+                continue;
+            }
+            String text = Character.toString(codePoint)
+                    .replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+            if (font.canDisplay(codePoint)) {
+                html.append(text);
+            } else {
+                html.append("<span style='font-family:").append(fallbackFamily).append("'>")
+                        .append(text).append("</span>");
+            }
+        }
+        return html.append("</div></html>").toString();
     }
 
     private static boolean supportsTranslucency() {
