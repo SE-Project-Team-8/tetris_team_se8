@@ -63,6 +63,22 @@ public final class UiFonts {
         return MONO_CACHE.computeIfAbsent(size, Holder.MONO::deriveFont);
     }
 
+    /**
+     * 사용자 입력 문자열(플레이어 이름 등)을 그릴 서체. IBM Plex Mono에는 한글이 없고 번들 폰트는
+     * 다른 서체로 대체 렌더링되지 않으므로, 그릴 수 없는 글자가 있으면 굵은 본문 서체를 쓴다.
+     *
+     * @param text 그릴 문자열
+     * @param size 포인트 크기
+     * @return 문자열 전체를 그릴 수 있는 서체
+     */
+    public static Font monoOrFallback(String text, float size) {
+        Font mono = mono(size);
+        if (text == null || mono.canDisplayUpTo(text) == -1) {
+            return mono;
+        }
+        return body(size).deriveFont(Font.BOLD);
+    }
+
     // 클래스 로딩 시점까지 폰트 파일 읽기를 미룬다.
     private static final class Holder {
         static final Font DISPLAY = load(JUA_PATH, new Font(Font.SANS_SERIF, Font.BOLD, 12));

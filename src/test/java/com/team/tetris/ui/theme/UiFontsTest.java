@@ -19,6 +19,14 @@ class UiFontsTest {
     }
 
     @Test
+    void playerNamesFallBackWhenMonoCannotDrawThem() {
+        assertEquals("IBM Plex Mono", UiFonts.monoOrFallback("JOSE_01", 16f).getFamily());
+        String korean = "성빈";
+        assertEquals(-1, UiFonts.monoOrFallback(korean, 16f).canDisplayUpTo(korean),
+                "Korean names must not render as missing-glyph boxes");
+    }
+
+    @Test
     void displayFontRendersKoreanLabels() {
         assertEquals(-1, UiFonts.display(20f).canDisplayUpTo("게임 시작 스코어보드"));
     }
