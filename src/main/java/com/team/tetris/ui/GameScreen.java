@@ -51,6 +51,7 @@ import com.team.tetris.game.item.ItemRegistry;
 import com.team.tetris.game.item.StandaloneItem;
 import com.team.tetris.settings.KeyBindings;
 import com.team.tetris.ui.theme.CellPainter;
+import com.team.tetris.ui.theme.ThemedDialog;
 import com.team.tetris.ui.theme.UiColors;
 import com.team.tetris.ui.theme.UiFonts;
 import com.team.tetris.ui.theme.UiPainter;
@@ -457,6 +458,10 @@ public class GameScreen extends JPanel implements Screen {
     private void handleAction(GameAction action) {
         // 하드 드롭 키를 누르고 있으면 자동 반복으로 다음 블록까지 연달아 떨어지므로 새로 누를 때만 받는다.
         if (ONE_PRESS_ACTIONS.contains(action) && HeldKeys.isAutoRepeat()) return;
+        if (action == GameAction.QUIT && engine.getState() == GameState.RUNNING) {
+            confirmQuit();
+            return;
+        }
         // 하드드롭 연출에 쓸 출발 위치(낙하 블록)와 도착 위치(고스트)는 엔진이 블록을 고정하기 전에 잡아 둔다.
         int[][] dropFrom = action == GameAction.HARD_DROP ? falling : null;
         int[][] dropTo = action == GameAction.HARD_DROP ? landing : null;
@@ -464,6 +469,19 @@ public class GameScreen extends JPanel implements Screen {
         if (dropFrom != null && dropTo != null) startHardDropEffect(dropFrom, dropTo);
         if (action == GameAction.PAUSE) router.showScreen(ScreenRouter.PAUSE);
         if (action == GameAction.QUIT) router.showScreen(ScreenRouter.MAIN_MENU);
+    }
+
+    /** 나가기 키를 실수로 눌러 판을 잃지 않도록 게임을 멈추고 한 번 더 묻는다. */
+    private void confirmQuit() {
+        engine.pause();
+        int choice = ThemedDialog.showOptions(this, "메인 화면으로 나가기",
+                "메인 화면으로 나갈까요?\n현재 게임 내용은 저장되지 않고 초기화됩니다.",
+                ThemedDialog.Tone.WARNING, 1, "나가기", "계속하기");
+        if (choice == 0 && engine.handle(GameAction.QUIT)) {
+            router.showScreen(ScreenRouter.MAIN_MENU);
+        } else {
+            engine.resume();
+        }
     }
 
     /**
