@@ -104,7 +104,7 @@ class ScoreboardScreenTest {
             press(screen[0], KeyEvent.VK_RIGHT);
             waitForOnlyPlayer(screen[0], "ItemEasy"); // Hard에서 →는 Easy로 돌아간다.
             press(screen[0], KeyEvent.VK_UP);
-            waitForStatus(screen[0], "NO SCORES YET");
+            waitForStatus(screen[0], "아직 기록이 없어요");
         } finally {
             edt(() -> router[0].dispose());
         }
@@ -123,7 +123,7 @@ class ScoreboardScreenTest {
             router[0].setVisible(true);
             router[0].showScreen(ScreenRouter.SCOREBOARD);
         });
-        waitForStatus(screen[0], "NO SCORES YET");
+        waitForStatus(screen[0], "아직 기록이 없어요");
 
         Files.writeString(file, "version=99\ncount=0");
         edt(() -> screen[0].onShow());

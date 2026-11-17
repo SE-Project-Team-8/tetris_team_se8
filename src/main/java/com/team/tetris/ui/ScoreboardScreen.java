@@ -225,7 +225,7 @@ public final class ScoreboardScreen extends JPanel implements Screen {
                     List<ScoreRecord> records = get();
                     tableModel.setRecords(records);
                     if (records.isEmpty()) {
-                        status.setText("NO SCORES YET  ·  아직 기록이 없어요");
+                        status.setText("아직 기록이 없어요");
                         contentLayout.show(content, "status");
                     } else {
                         contentLayout.show(content, "table");
