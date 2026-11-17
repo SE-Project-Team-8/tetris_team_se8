@@ -167,7 +167,7 @@ public final class UiPainter {
             g2.setFont(UiFonts.display(fontSize));
             g2.setColor(textColor);
             FontMetrics fm = g2.getFontMetrics();
-            int textY = top + (height - fm.getHeight()) / 2 + fm.getAscent();
+            int textY = centeredBaseline(fm, top, height);
             int textX = centered
                     ? x + (width - fm.stringWidth(text)) / 2
                     : x + Math.round(height * 0.6f);
@@ -192,7 +192,7 @@ public final class UiPainter {
         g.fillRoundRect(x, y, width, height, height, height);
         g.setFont(font);
         g.setColor(foreground);
-        g.drawString(text, x + padding, y + (height - fm.getHeight()) / 2 + fm.getAscent());
+        g.drawString(text, x + padding, centeredBaseline(fm, y, height));
         return width;
     }
 
@@ -249,9 +249,18 @@ public final class UiPainter {
             String letter = String.valueOf(text.charAt(i));
             g.setColor(UiColors.CELL_GLYPH);
             g.drawString(letter, tx + (tile - fm.stringWidth(letter)) / 2,
-                    top + (tile - fm.getHeight()) / 2 + fm.getAscent());
+                    centeredBaseline(fm, top, tile));
         }
         return top + tile + shadow;
+    }
+
+    /**
+     * 높이 {@code height}인 영역에서 글자가 세로 가운데에 보이도록 하는 기준선 y.
+     * Jua처럼 줄 간격(leading)이 큰 글꼴은 getHeight() 기준으로 맞추면 글자가 위로 뜨므로
+     * 실제 글자 높이(ascent+descent)만으로 계산한다.
+     */
+    public static int centeredBaseline(FontMetrics fm, int top, int height) {
+        return top + (height + fm.getAscent() - fm.getDescent()) / 2;
     }
 
     /**
