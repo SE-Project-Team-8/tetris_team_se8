@@ -125,6 +125,7 @@ public final class Main {
         private void startGame(boolean itemMode) {
             currentMode = itemMode ? GameMode.ITEM : GameMode.NORMAL;
             boardDriver.setItemMode(itemMode);
+            gameScreen.setGameMode(currentMode);
             // No notice until this ranking's best score is loaded; the previous game's may differ.
             gameScreen.setBestScore(-1);
             refreshBestScore(false);

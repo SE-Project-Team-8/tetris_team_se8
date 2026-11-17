@@ -11,8 +11,8 @@ import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RadialGradientPaint;
-import java.awt.RenderingHints;
 import java.awt.event.ActionEvent;
+import java.awt.font.TextAttribute;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
 import java.awt.geom.Point2D;
@@ -20,7 +20,7 @@ import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
-import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.IntConsumer;
@@ -37,6 +37,7 @@ import com.team.tetris.block.Cell;
 import com.team.tetris.block.Rotation;
 import com.team.tetris.block.Tetromino;
 import com.team.tetris.block.TetrominoType;
+import com.team.tetris.common.GameMode;
 import com.team.tetris.common.Screen;
 import com.team.tetris.common.constants.GameConstants;
 import com.team.tetris.common.events.BoardSnapshot;
@@ -49,6 +50,10 @@ import com.team.tetris.game.item.AnvilItem;
 import com.team.tetris.game.item.ItemRegistry;
 import com.team.tetris.game.item.StandaloneItem;
 import com.team.tetris.settings.KeyBindings;
+import com.team.tetris.ui.theme.CellPainter;
+import com.team.tetris.ui.theme.UiColors;
+import com.team.tetris.ui.theme.UiFonts;
+import com.team.tetris.ui.theme.UiPainter;
 
 /**
  * 엔진의 이벤트를 화면에 그려 주고, 설정된 키를 게임 동작으로 변환한다.
@@ -57,11 +62,19 @@ import com.team.tetris.settings.KeyBindings;
 public class GameScreen extends JPanel implements Screen {
     /** Shift·Ctrl·Alt·Meta를 누른 모든 조합. 조작 키는 수정 키를 함께 누른 상태로도 연결한다. */
     private static final int[] MODIFIER_COMBINATIONS = modifierCombinations();
-    // 화면 크기와 관계없이 유지할 여백 및 상·하단 영역의 기준 크기다.
-    private static final int PADDING = 16;
-    private static final int PANEL_GAP = 16;
+    // 창 크기 M(600px) 기준 레이아웃 수치. 그릴 때 UiPainter.scale()을 곱한다.
+    private static final int BASE_MARGIN = 28;
+    private static final int BASE_HEADER_HEIGHT = 60;
+    private static final int BASE_FOOTER_HEIGHT = 36;
+    private static final int BASE_FRAME_PADDING = 10;
+    private static final int BASE_FRAME_RADIUS = 16;
+    private static final int BASE_PANEL_GAP = 14;
+    private static final int BASE_PREVIEW_CELL = 18;
+    /** 우측 정보 패널 열이 창 폭에서 차지하는 비율. */
+    private static final float SIDEBAR_RATIO = 0.38f;
+    /** 토스트가 헤더 아래에 오도록 하는 기준 높이. */
     private static final int HEADER_HEIGHT = 40;
-    private static final int FOOTER_HEIGHT = 36;
+    private static final Color ITEM_MODE_BADGE = new Color(0xB07FE8);
     private static final int[] LINE_CLEAR_FLASH_ALPHA = {255, 70, 255, 0};
     /** 한 번 누르면 한 번만 일어나야 하는 동작. 이동·회전은 누르고 있으면 계속 반복된다. */
     private static final Set<GameAction> ONE_PRESS_ACTIONS =
@@ -74,8 +87,6 @@ public class GameScreen extends JPanel implements Screen {
     private static final int ITEM_EFFECT_FADE_MS = 450;
     private static final int FEVER_NOTIFICATION_MS = 2_700;
     private static final int SLOW_DOWN_NOTIFICATION_MS = 2_000;
-    private static final Color BACKGROUND = new Color(ColorScheme.standard().emptyRgb());
-    private static final Color GRID_COLOR = new Color(255, 255, 255, 35);
     private static final Color BEST_SCORE_COLOR = new Color(255, 211, 64);
     private static final Color ANVIL_COLOR = new Color(18, 20, 24);
     private static final Color ANVIL_HIGHLIGHT = new Color(105, 112, 122);
@@ -221,6 +232,7 @@ public class GameScreen extends JPanel implements Screen {
     private int[] nextBlocks = new int[0];
     private int score;
     private ColorScheme colorScheme = ColorScheme.standard();
+    private GameMode gameMode = GameMode.NORMAL;
     private boolean gameOver;
     private int[] flashingRows = new int[0];
     private int flashFrame;
@@ -331,7 +343,7 @@ public class GameScreen extends JPanel implements Screen {
         this.gameOverAction = Objects.requireNonNull(gameOverAction, "gameOverAction");
         this.items = Objects.requireNonNull(items, "items");
 
-        setBackground(BACKGROUND);
+        setBackground(UiColors.BACKGROUND);
         setOpaque(true);
         setFocusable(true);
         updateKeyBindings(bindings);
@@ -391,7 +403,15 @@ public class GameScreen extends JPanel implements Screen {
         ColorScheme updatedScheme = Objects.requireNonNull(colorScheme, "colorScheme");
         onEdt(() -> {
             this.colorScheme = updatedScheme;
-            setBackground(new Color(updatedScheme.emptyRgb()));
+            repaint();
+        });
+    }
+
+    /** 헤더의 모드 뱃지에 쓸 현재 게임 방식. 새 판을 시작하기 전에 호출한다. */
+    public void setGameMode(GameMode gameMode) {
+        GameMode updatedMode = Objects.requireNonNull(gameMode, "gameMode");
+        onEdt(() -> {
+            this.gameMode = updatedMode;
             repaint();
         });
     }
@@ -502,44 +522,48 @@ public class GameScreen extends JPanel implements Screen {
         // Swing이 전달한 Graphics의 색상·폰트 상태를 오염시키지 않도록 복사본을 사용한다.
         Graphics2D g2d = (Graphics2D) graphics.create();
         try {
-            g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            g2d.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+            UiPainter.prepare(g2d);
 
             int width = getWidth();
             int height = getHeight();
-            int sideWidth = Math.min(144, Math.max(104, width / 3));
-            // 보드와 우측 정보 패널이 사용할 공간을 나눈 뒤, 보드 셀은 가로·세로에 모두 맞춘다.
-            int boardAreaWidth = width - (PADDING * 2) - sideWidth - PANEL_GAP;
-            int boardAreaHeight = height - HEADER_HEIGHT - FOOTER_HEIGHT - (PADDING * 2);
-            int cellSize = Math.max(8, Math.min(
-                    boardAreaWidth / GameConstants.BOARD_COLS,
-                    boardAreaHeight / GameConstants.BOARD_ROWS));
-            int boardWidth = cellSize * GameConstants.BOARD_COLS;
-            int boardHeight = cellSize * GameConstants.BOARD_ROWS;
-            int boardX = PADDING + Math.max(0, (boardAreaWidth - boardWidth) / 2);
-            int boardY = HEADER_HEIGHT + PADDING + Math.max(0, (boardAreaHeight - boardHeight) / 2);
-            int sideX = PADDING + boardAreaWidth + PANEL_GAP;
+            // 고정 수치는 M(600px) 기준이며 창 폭 배율을 곱해 S/M/L에서 같은 비율을 유지한다.
+            float scale = UiPainter.scale(width);
+            int margin = Math.round(BASE_MARGIN * scale);
+            int headerHeight = Math.round(BASE_HEADER_HEIGHT * scale);
+            int footerHeight = Math.round(BASE_FOOTER_HEIGHT * scale);
+            int framePadding = Math.round(BASE_FRAME_PADDING * scale);
+            int gap = Math.round(BASE_PANEL_GAP * scale);
+            // 보드와 우측 정보 패널이 사용할 공간을 나눈 뒤, 보드 칸 간격은 가로·세로에 모두 맞춘다.
+            int boardAreaWidth = width - margin * 2 - gap - Math.round(width * SIDEBAR_RATIO);
+            int boardAreaHeight = height - headerHeight - footerHeight - margin;
+            int pitch = Math.max(8, Math.min(
+                    (boardAreaWidth - framePadding * 2) / GameConstants.BOARD_COLS,
+                    (boardAreaHeight - framePadding * 2) / GameConstants.BOARD_ROWS));
+            int boardWidth = pitch * GameConstants.BOARD_COLS;
+            int boardHeight = pitch * GameConstants.BOARD_ROWS;
+            int frameX = margin;
+            int frameY = headerHeight;
+            int boardX = frameX + framePadding;
+            int boardY = frameY + framePadding;
+            int sideX = frameX + boardWidth + framePadding * 2 + gap;
 
-            g2d.setColor(Color.WHITE);
-            g2d.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 20));
-            g2d.drawString("TETRIS", PADDING, 27);
-
-            drawBoard(g2d, boardX, boardY, cellSize);
-            drawSidebar(g2d, sideX, HEADER_HEIGHT + PADDING, sideWidth);
+            drawHeader(g2d, margin, width, headerHeight, scale);
+            UiPainter.drawPanel(g2d, frameX, frameY, boardWidth + framePadding * 2, boardHeight + framePadding * 2,
+                    Math.round(BASE_FRAME_RADIUS * scale), UiColors.BOARD, UiColors.PANEL_BORDER, 2f);
+            drawBoard(g2d, boardX, boardY, pitch);
+            drawSidebar(g2d, sideX, frameY, width - margin - sideX, scale);
             drawItemSpotlight(g2d, boardX, boardY, boardWidth, boardHeight);
             drawItemEffectNotification(g2d, width);
             drawBestScoreNotification(g2d, width, height);
 
             if (engine.getState() != GameState.PAUSED) {
-                g2d.setColor(new Color(185, 193, 204));
-                g2d.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
-                String help = "Move : " + keyText(GameAction.MOVE_LEFT) + "/" + keyText(GameAction.MOVE_RIGHT)
-                        + "  Drop : " + keyText(GameAction.SOFT_DROP) + "  Rotate : "
-                        + keyText(GameAction.ROTATE_CLOCKWISE) + "  Hard Drop : " + keyText(GameAction.HARD_DROP)
-                        + "  Pause : " + keyText(GameAction.PAUSE) + "  Quit : " + keyText(GameAction.QUIT);
-                FontMetrics metrics = g2d.getFontMetrics();
-                int helpX = Math.max(PADDING, (width - metrics.stringWidth(help)) / 2);
-                g2d.drawString(help, helpX, height - 12);
+                g2d.setColor(UiColors.withAlpha(UiColors.TEXT_MUTED, 0.75f));
+                g2d.setFont(UiFonts.body(Math.round(12 * scale)));
+                String help = "이동 " + keyText(GameAction.MOVE_LEFT) + " " + keyText(GameAction.MOVE_RIGHT)
+                        + " " + keyText(GameAction.SOFT_DROP) + "  ·  회전 " + keyText(GameAction.ROTATE_CLOCKWISE)
+                        + "  ·  하드드롭 " + keyText(GameAction.HARD_DROP)
+                        + "  ·  일시정지 " + keyText(GameAction.PAUSE) + "  ·  나가기 " + keyText(GameAction.QUIT);
+                UiPainter.drawCentered(g2d, help, width / 2, height - footerHeight / 2);
             }
         } finally {
             // create()로 만든 Graphics 복사본은 사용 후 반드시 해제한다.
@@ -631,11 +655,39 @@ public class GameScreen extends JPanel implements Screen {
         g2d.setComposite(originalComposite);
     }
 
+    /** 화면 제목과 우측 상단의 모드·난이도 뱃지. */
+    private void drawHeader(Graphics2D g2d, int margin, int width, int headerHeight, float scale) {
+        g2d.setFont(UiFonts.display(Math.round(26 * scale)));
+        g2d.setColor(UiColors.TEXT_PRIMARY);
+        FontMetrics metrics = g2d.getFontMetrics();
+        int titleBaseline = (headerHeight - metrics.getHeight()) / 2 + metrics.getAscent();
+        g2d.drawString("TETRIS", margin, titleBaseline);
+
+        int badgeHeight = Math.round(22 * scale);
+        int badgeY = (headerHeight - badgeHeight) / 2;
+        int badgeGap = Math.round(6 * scale);
+        String difficulty = engine.getDifficulty().name();
+        Color[] difficultyColors = UiPainter.difficultyBadgeColors(difficulty);
+        int badgeX = width - margin - UiPainter.badgeWidth(g2d, badgeHeight, difficulty);
+        UiPainter.drawBadge(g2d, badgeX, badgeY, badgeHeight, difficulty, difficultyColors[0], difficultyColors[1]);
+        if (gameMode == GameMode.ITEM) {
+            String itemBadge = "아이템 모드";
+            badgeX -= badgeGap + UiPainter.badgeWidth(g2d, badgeHeight, itemBadge);
+            UiPainter.drawBadge(g2d, badgeX, badgeY, badgeHeight, itemBadge, ITEM_MODE_BADGE, UiColors.CREAM);
+        }
+    }
+
     private void drawBoard(Graphics2D g2d, int x, int y, int cellSize) {
         int width = cellSize * GameConstants.BOARD_COLS;
-        int height = cellSize * GameConstants.BOARD_ROWS;
-        g2d.setColor(new Color(colorScheme.emptyRgb()));
-        g2d.fillRect(x, y, width, height);
+
+        // 빈 칸도 옅은 슬롯으로 그려 보드의 칸 구분을 격자선 대신 보여 준다.
+        for (int row = 0; row < GameConstants.BOARD_ROWS; row++) {
+            for (int col = 0; col < GameConstants.BOARD_COLS; col++) {
+                int inset = cellInset(cellSize);
+                CellPainter.drawEmptySlot(g2d, x + col * cellSize + inset, y + row * cellSize + inset,
+                        cellSize - inset * 2);
+            }
+        }
 
         // 스냅샷의 숫자 ID를 종류로 바꿔 팔레트 색상과 블록 식별 문자를 함께 그린다.
         for (int row = 0; row < board.length; row++) {
@@ -669,38 +721,43 @@ public class GameScreen extends JPanel implements Screen {
         if (!lineClearAnimating && landing != null) {
             drawLandingGhost(g2d, x, y, cellSize);
         }
-
-        g2d.setColor(GRID_COLOR);
-        for (int col = 0; col <= GameConstants.BOARD_COLS; col++) {
-            int lineX = x + col * cellSize;
-            g2d.drawLine(lineX, y, lineX, y + height);
-        }
-        for (int row = 0; row <= GameConstants.BOARD_ROWS; row++) {
-            int lineY = y + row * cellSize;
-            g2d.drawLine(x, lineY, x + width, lineY);
-        }
-        g2d.setColor(new Color(185, 193, 204));
-        g2d.drawRect(x, y, width, height);
     }
 
-    private void drawBoardCell(Graphics2D g2d, int code, int cellX, int cellY, int cellSize) {
+    /** 칸 사이 간격. 셀을 칸보다 조금 작게 그려 뿌요처럼 낱알이 구분되게 한다. */
+    private static int cellInset(int pitch) {
+        return Math.max(1, Math.round(pitch * 0.04f));
+    }
+
+    private void drawBoardCell(Graphics2D g2d, int code, int cellX, int cellY, int pitch) {
+        // 빈칸·잘못된 코드는 symbol()이 예외를 던지므로 먼저 걸러 낸다.
+        if (!CellCodes.isValid(code)) {
+            return;
+        }
+        int inset = cellInset(pitch);
+        drawCell(g2d, code, CellCodes.symbol(code), cellX + inset, cellY + inset, pitch - inset * 2);
+    }
+
+    /**
+     * 셀 코드 하나를 그린다. 셀 코드는 색을 빌려 올 블록 종류와 아이템 문자를 함께 담는다.
+     * {@code symbol}이 없으면 표정 있는 기본 블럭, 있으면 아이템 칸으로 그린다.
+     */
+    private void drawCell(Graphics2D g2d, int code, char symbol, int x, int y, int size) {
         TetrominoType type = typeFromCode(code);
         if (type == null) {
             return;
         }
-        char symbol = CellCodes.symbol(code);
         if (symbol == AnvilItem.SYMBOL) {
-            drawAnvilCell(g2d, cellX, cellY, cellSize);
+            drawAnvilCell(g2d, x, y, size);
+            CellPainter.drawLetter(g2d, x, y, size, symbol, UiColors.CREAM, 0.45f);
+        } else if (symbol != CellCodes.NO_SYMBOL) {
+            CellPainter.drawItem(g2d, x, y, size, new Color(colorScheme.rgbOf(type)), symbol);
         } else {
-            // 셀 코드는 색을 빌려 올 블록 종류와 아이템 문자를 함께 담는다.
-            drawBlockCell(g2d, cellX, cellY, cellSize, type, colorScheme);
-        }
-        if (symbol != CellCodes.NO_SYMBOL) {
-            drawItemLetter(g2d, cellX, cellY, cellSize, String.valueOf(symbol));
+            CellPainter.drawBlock(g2d, x, y, size, new Color(colorScheme.rgbOf(type)));
         }
     }
 
     private void drawLandingGhost(Graphics2D g2d, int x, int y, int cellSize) {
+        int inset = cellInset(cellSize);
         for (int row = 0; row < landing.length; row++) {
             for (int col = 0; col < landing[row].length; col++) {
                 TetrominoType type = typeFromCode(landing[row][col]);
@@ -708,69 +765,55 @@ public class GameScreen extends JPanel implements Screen {
                 if (type == null || board[row][col] != BoardSnapshot.EMPTY) {
                     continue;
                 }
-                Color blockColor = new Color(colorScheme.rgbOf(type));
-                int cellX = x + col * cellSize;
-                int cellY = y + row * cellSize;
-                g2d.setColor(new Color(blockColor.getRed(), blockColor.getGreen(), blockColor.getBlue(), 75));
-                g2d.fillRect(cellX + 2, cellY + 2, Math.max(1, cellSize - 4), Math.max(1, cellSize - 4));
-                g2d.setColor(new Color(255, 255, 255, 180));
-                g2d.drawRect(cellX + 2, cellY + 2, Math.max(1, cellSize - 4), Math.max(1, cellSize - 4));
+                CellPainter.drawGhost(g2d, x + col * cellSize + inset, y + row * cellSize + inset,
+                        cellSize - inset * 2);
             }
         }
     }
 
-    private void drawSidebar(Graphics2D g2d, int x, int y, int width) {
-        g2d.setColor(new Color(190, 198, 208));
-        g2d.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 14));
-        g2d.drawString("NEXT", x, y + 14);
+    private void drawSidebar(Graphics2D g2d, int x, int y, int width, float scale) {
+        int gap = Math.round(12 * scale);
+        int radius = Math.round(12 * scale);
+        int nextHeight = Math.round(96 * scale);
+        int statHeight = Math.round(74 * scale);
 
-        int previewY = y + 24;
-        int previewHeight = 76;
+        UiPainter.drawPanel(g2d, x, y, width, nextHeight, radius);
+        drawPanelLabel(g2d, "NEXT", x, y, width, scale);
         // 미리보기 큐가 더 길어지더라도 현재 설정된 표시 개수만큼만 그린다.
         int previewCount = Math.min(nextBlocks.length, GameConstants.NEXT_QUEUE_SIZE);
+        int labelSpace = Math.round(28 * scale);
         for (int index = 0; index < previewCount; index++) {
-            g2d.setColor(new Color(255, 255, 255, 24));
-            g2d.fillRoundRect(x, previewY, width, previewHeight, 6, 6);
-            g2d.setColor(new Color(255, 255, 255, 60));
-            g2d.drawRoundRect(x, previewY, width, previewHeight, 6, 6);
-            drawPreview(g2d, nextBlocks[index], x, previewY, width, previewHeight);
-            previewY += previewHeight + 10;
+            drawPreview(g2d, nextBlocks[index], x, y + labelSpace, width, nextHeight - labelSpace, scale);
         }
 
-        int scoreY = Math.max(previewY + 14, y + 142);
-        g2d.setColor(new Color(190, 198, 208));
-        g2d.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 14));
-        g2d.drawString("SCORE", x, scoreY);
-        g2d.setColor(Color.WHITE);
-        g2d.setFont(new Font(Font.MONOSPACED, Font.BOLD, 20));
-        g2d.drawString(String.format(Locale.ROOT, "%06d", score), x, scoreY + 29);
-
-        int levelY = scoreY + 58;
-        g2d.setColor(new Color(190, 198, 208));
-        g2d.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 14));
-        g2d.drawString("LEVEL", x, levelY);
-        g2d.setColor(Color.WHITE);
-        g2d.setFont(new Font(Font.MONOSPACED, Font.BOLD, 20));
-        g2d.drawString(String.valueOf(engine.getLevel()), x, levelY + 29);
-
-        int difficultyY = levelY + 58;
-        g2d.setColor(new Color(190, 198, 208));
-        g2d.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 14));
-        g2d.drawString("DIFFICULTY", x, difficultyY);
-        g2d.setColor(Color.WHITE);
-        g2d.setFont(new Font(Font.MONOSPACED, Font.BOLD, 20));
-        g2d.drawString(engine.getDifficulty().label(), x, difficultyY + 29);
-
-        int linesY = difficultyY + 58;
-        g2d.setColor(new Color(190, 198, 208));
-        g2d.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 14));
-        g2d.drawString("LINES CLEARED", x, linesY);
-        g2d.setColor(Color.WHITE);
-        g2d.setFont(new Font(Font.MONOSPACED, Font.BOLD, 20));
-        g2d.drawString(String.valueOf(engine.getClearedLines()), x, linesY + 29);
+        int statY = y + nextHeight + gap;
+        drawStatPanel(g2d, "SCORE", String.format(Locale.US, "%,d", score), UiColors.CREAM,
+                x, statY, width, statHeight, scale);
+        statY += statHeight + gap;
+        drawStatPanel(g2d, "LINES", String.valueOf(engine.getClearedLines()), UiColors.LINES,
+                x, statY, width, statHeight, scale);
+        statY += statHeight + gap;
+        drawStatPanel(g2d, "LEVEL", String.valueOf(engine.getLevel()), UiColors.LEVEL,
+                x, statY, width, statHeight, scale);
     }
 
-    private void drawPreview(Graphics2D g2d, int code, int x, int y, int width, int height) {
+    private static void drawStatPanel(Graphics2D g2d, String label, String value, Color valueColor,
+            int x, int y, int width, int height, float scale) {
+        UiPainter.drawPanel(g2d, x, y, width, height, Math.round(12 * scale));
+        drawPanelLabel(g2d, label, x, y, width, scale);
+        g2d.setFont(UiFonts.mono(Math.round(26 * scale)));
+        g2d.setColor(valueColor);
+        UiPainter.drawCentered(g2d, value, x + width / 2, y + height - Math.round(16 * scale));
+    }
+
+    /** 패널 상단의 작은 대문자 라벨. 자간을 넓혀 목업의 라벨 질감을 낸다. */
+    private static void drawPanelLabel(Graphics2D g2d, String label, int x, int y, int width, float scale) {
+        g2d.setFont(UiFonts.body(Math.round(11 * scale)).deriveFont(Map.of(TextAttribute.TRACKING, 0.12f)));
+        g2d.setColor(UiColors.TEXT_MUTED);
+        UiPainter.drawCentered(g2d, label, x + width / 2, y + Math.round(22 * scale));
+    }
+
+    private void drawPreview(Graphics2D g2d, int code, int x, int y, int width, int height, float scale) {
         TetrominoType type = typeFromCode(code);
         if (type == null) {
             return;
@@ -782,7 +825,7 @@ public class GameScreen extends JPanel implements Screen {
         List<Cell> occupied = wholePieceItem
                 ? standaloneItemShape(symbol)
                 : new Tetromino(type, Rotation.SPAWN, 0, 0).cells();
-        drawPreviewShape(g2d, occupied, type, symbol, itemIndex, x, y, width, height);
+        drawPreviewShape(g2d, occupied, code, symbol, itemIndex, x, y, width, height, scale);
     }
 
     /** 블록형 아이템의 모양은 아이템 자신이 정한다. 목록에 없는 문자는 한 칸짜리로 그려 문자만이라도 보인다. */
@@ -796,58 +839,31 @@ public class GameScreen extends JPanel implements Screen {
      * 실제 점유 셀 범위만 찾아 영역 중앙에 맞춰 그린다. 각 블록의 회전 격자에는 빈 테두리가 있을 수 있다.
      * {@code symbol}이 있으면 {@code itemIndex} 칸에, 칸 번호가 없으면 모든 칸에 문자를 얹는다.
      */
-    private void drawPreviewShape(Graphics2D g2d, List<Cell> occupied, TetrominoType type,
-            char symbol, int itemIndex, int x, int y, int width, int height) {
+    private void drawPreviewShape(Graphics2D g2d, List<Cell> occupied, int code,
+            char symbol, int itemIndex, int x, int y, int width, int height, float scale) {
         int minRow = occupied.stream().mapToInt(Cell::row).min().orElse(0);
         int maxRow = occupied.stream().mapToInt(Cell::row).max().orElse(0);
         int minCol = occupied.stream().mapToInt(Cell::col).min().orElse(0);
         int maxCol = occupied.stream().mapToInt(Cell::col).max().orElse(0);
-        int previewCellSize = Math.min(16, Math.min(
+        int previewCellSize = Math.min(Math.round(BASE_PREVIEW_CELL * scale), Math.min(
                 (width - 20) / (maxCol - minCol + 1),
                 (height - 12) / (maxRow - minRow + 1)));
         int shapeWidth = previewCellSize * (maxCol - minCol + 1);
         int shapeHeight = previewCellSize * (maxRow - minRow + 1);
         int shapeX = x + (width - shapeWidth) / 2;
         int shapeY = y + (height - shapeHeight) / 2;
+        int inset = cellInset(previewCellSize);
 
         for (int index = 0; index < occupied.size(); index++) {
             var cell = occupied.get(index);
             int cellX = shapeX + (cell.col() - minCol) * previewCellSize;
             int cellY = shapeY + (cell.row() - minRow) * previewCellSize;
-            if (symbol == AnvilItem.SYMBOL) {
-                drawAnvilCell(g2d, cellX, cellY, previewCellSize);
-            } else {
-                drawBlockCell(g2d, cellX, cellY, previewCellSize, type, colorScheme);
-            }
+            // 블록형 아이템은 모든 칸에, 포함형은 붙은 칸 하나에만 문자를 얹는다.
             boolean lettered = symbol != CellCodes.NO_SYMBOL
                     && (itemIndex == CellCodes.NO_INDEX || index == itemIndex);
-            if (lettered) {
-                drawItemLetter(g2d, cellX, cellY, previewCellSize, String.valueOf(symbol));
-            }
+            drawCell(g2d, code, lettered ? symbol : CellCodes.NO_SYMBOL,
+                    cellX + inset, cellY + inset, previewCellSize - inset * 2);
         }
-    }
-
-    private static void drawItemLetter(Graphics2D g2d, int x, int y, int size, String letter) {
-        g2d.setFont(new Font(Font.MONOSPACED, Font.BOLD, Math.max(12, size * 2 / 3)));
-        FontMetrics metrics = g2d.getFontMetrics();
-        int letterX = x + (size - metrics.stringWidth(letter)) / 2;
-        int letterY = y + (size - metrics.getHeight()) / 2 + metrics.getAscent();
-        g2d.setColor(Color.BLACK);
-        g2d.drawString(letter, letterX - 1, letterY);
-        g2d.drawString(letter, letterX + 1, letterY);
-        g2d.drawString(letter, letterX, letterY - 1);
-        g2d.drawString(letter, letterX, letterY + 1);
-        g2d.setColor(Color.WHITE);
-        g2d.drawString(letter, letterX, letterY);
-    }
-
-    private static void drawBlockCell(Graphics2D g2d, int x, int y, int size,
-            TetrominoType type, ColorScheme scheme) {
-        Color blockColor = new Color(scheme.rgbOf(type));
-        g2d.setColor(blockColor);
-        g2d.fillRect(x + 1, y + 1, Math.max(1, size - 2), Math.max(1, size - 2));
-        g2d.setColor(new Color(0, 0, 0, 100));
-        g2d.drawRect(x + 1, y + 1, Math.max(1, size - 2), Math.max(1, size - 2));
     }
 
     private static void drawAnvilCell(Graphics2D g2d, int x, int y, int size) {
@@ -878,6 +894,7 @@ public class GameScreen extends JPanel implements Screen {
             case KeyEvent.VK_RIGHT -> "→";
             case KeyEvent.VK_UP -> "↑";
             case KeyEvent.VK_DOWN -> "↓";
+            case KeyEvent.VK_ESCAPE -> "Esc";
             default -> KeyEvent.getKeyText(keyBindings.keyFor(action));
         };
     }

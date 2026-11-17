@@ -6,7 +6,9 @@ import java.awt.GraphicsEnvironment;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Arrays;
+import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /**
@@ -23,6 +25,10 @@ public final class UiFonts {
     private static final String PLEX_MONO_PATH = "/fonts/IBMPlexMono-Bold.ttf";
     // 설치 여부가 환경마다 달라 번들하지 않는다. 앞에 있는 이름을 우선한다.
     private static final String[] BODY_CANDIDATES = {"Noto Sans KR", "Malgun Gothic", "맑은 고딕", "Apple SD Gothic Neo"};
+    // 셀마다 deriveFont를 부르면 매 프레임 수백 개의 Font가 생기므로 크기별로 재사용한다.
+    private static final Map<Float, Font> DISPLAY_CACHE = new ConcurrentHashMap<>();
+    private static final Map<Float, Font> BODY_CACHE = new ConcurrentHashMap<>();
+    private static final Map<Float, Font> MONO_CACHE = new ConcurrentHashMap<>();
 
     private UiFonts() {
     }
@@ -34,7 +40,7 @@ public final class UiFonts {
      * @return Jua 또는 대체 서체
      */
     public static Font display(float size) {
-        return Holder.DISPLAY.deriveFont(size);
+        return DISPLAY_CACHE.computeIfAbsent(size, Holder.DISPLAY::deriveFont);
     }
 
     /**
@@ -44,7 +50,7 @@ public final class UiFonts {
      * @return 설치된 한글 본문 서체 또는 SANS_SERIF
      */
     public static Font body(float size) {
-        return Holder.BODY.deriveFont(size);
+        return BODY_CACHE.computeIfAbsent(size, Holder.BODY::deriveFont);
     }
 
     /**
@@ -54,7 +60,7 @@ public final class UiFonts {
      * @return IBM Plex Mono Bold 또는 대체 서체
      */
     public static Font mono(float size) {
-        return Holder.MONO.deriveFont(size);
+        return MONO_CACHE.computeIfAbsent(size, Holder.MONO::deriveFont);
     }
 
     // 클래스 로딩 시점까지 폰트 파일 읽기를 미룬다.

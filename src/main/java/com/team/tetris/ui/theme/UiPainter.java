@@ -187,13 +187,21 @@ public final class UiPainter {
         Font font = UiFonts.display(height * 0.6f);
         FontMetrics fm = g.getFontMetrics(font);
         int padding = Math.round(height * 0.6f);
-        int width = fm.stringWidth(text) + padding * 2;
+        int width = badgeWidth(g, height, text);
         g.setColor(background);
         g.fillRoundRect(x, y, width, height, height, height);
         g.setFont(font);
         g.setColor(foreground);
         g.drawString(text, x + padding, y + (height - fm.getHeight()) / 2 + fm.getAscent());
         return width;
+    }
+
+    /**
+     * {@link #drawBadge}가 그릴 뱃지의 폭. 오른쪽 정렬할 때 먼저 잰다.
+     */
+    public static int badgeWidth(Graphics2D g, int height, String text) {
+        FontMetrics fm = g.getFontMetrics(UiFonts.display(height * 0.6f));
+        return fm.stringWidth(text) + Math.round(height * 0.6f) * 2;
     }
 
     /**
