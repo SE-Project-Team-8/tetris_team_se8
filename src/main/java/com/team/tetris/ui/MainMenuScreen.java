@@ -5,9 +5,7 @@ import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
-import java.awt.font.TextAttribute;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 
 import javax.swing.JPanel;
@@ -143,19 +141,13 @@ public class MainMenuScreen extends JPanel implements Screen {
     }
 
     /**
-     * 글자마다 블럭색 타일을 깐 로고와 팀 부제를 그린다.
+     * 글자마다 블럭색 타일을 깐 로고를 그린다.
      *
-     * @return 부제 아래 y. 메뉴 버튼은 그 아래부터 놓는다.
+     * @return 로고 아래 y. 메뉴 버튼은 그 아래부터 놓는다.
      */
     private static int drawTitle(Graphics2D g2d, int width, float scale) {
         int tile = Math.round(52 * scale);
-        int logoBottom = UiPainter.drawLogo(g2d, "TETRIS", width / 2, Math.round(60 * scale), tile, LOGO_COLORS);
-
-        g2d.setFont(UiFonts.display(Math.round(16 * scale)).deriveFont(Map.of(TextAttribute.TRACKING, 0.3f)));
-        g2d.setColor(UiColors.TEXT_SECONDARY);
-        int subtitleBaseline = logoBottom + Math.round(30 * scale);
-        UiPainter.drawCentered(g2d, "SEOULTECH SE TEAM 8", width / 2, subtitleBaseline);
-        return subtitleBaseline;
+        return UiPainter.drawLogo(g2d, "TETRIS", width / 2, Math.round(70 * scale), tile, LOGO_COLORS);
     }
 
     /**
@@ -166,7 +158,7 @@ public class MainMenuScreen extends JPanel implements Screen {
         int buttonHeight = Math.round(52 * scale);
         int gap = Math.round(14 * scale);
         int x = (width - buttonWidth) / 2;
-        int y = top + Math.round(48 * scale);
+        int y = top + Math.round(64 * scale);
         float fontSize = Math.round(19 * scale);
 
         for (int i = 0; i < menuItems.size(); i++) {
