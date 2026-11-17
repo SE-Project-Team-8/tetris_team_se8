@@ -31,6 +31,8 @@ public class GameOverScreen extends JPanel implements Screen {
     private int finalLinesCleared = 0;
     // 순위권 판정은 게임/스코어보드 쪽에서 수행하고 그 결과만 전달받는다.
     private boolean qualifiesForLeaderboard;
+    // 0: 이름 등록/스코어보드, 1: 메뉴로. 두 버튼 중 노란 강조가 들어갈 쪽이다.
+    private int selectedIndex = 0;
 
     public GameOverScreen(ScreenRouter router) {
         this.router = Objects.requireNonNull(router, "router");
@@ -53,6 +55,7 @@ public class GameOverScreen extends JPanel implements Screen {
 
     @Override
     public void onShow() {
+        selectedIndex = 0;
         requestFocusInWindow();
         repaint();
     }
@@ -63,16 +66,28 @@ public class GameOverScreen extends JPanel implements Screen {
     }
 
     private void handleKeyPress(int keyCode) {
-        if (keyCode == KeyEvent.VK_ENTER || keyCode == KeyEvent.VK_SPACE) {
-            // 순위권 점수라면 이름을 먼저 받고, 아니면 바로 전체 기록을 보여준다.
-            if (qualifiesForLeaderboard) {
-                router.showScreen(ScreenRouter.NAME_INPUT);
-            } else {
-                router.showScreen(ScreenRouter.SCOREBOARD);
+        switch (keyCode) {
+            case KeyEvent.VK_LEFT, KeyEvent.VK_A -> select(0);
+            case KeyEvent.VK_RIGHT, KeyEvent.VK_D -> select(1);
+            case KeyEvent.VK_ENTER, KeyEvent.VK_SPACE -> {
+                if (selectedIndex == 1) {
+                    router.showScreen(ScreenRouter.MAIN_MENU);
+                } else if (qualifiesForLeaderboard) {
+                    // 순위권 점수라면 이름을 먼저 받고, 아니면 바로 전체 기록을 보여준다.
+                    router.showScreen(ScreenRouter.NAME_INPUT);
+                } else {
+                    router.showScreen(ScreenRouter.SCOREBOARD);
+                }
             }
-        } else if (keyCode == KeyEvent.VK_ESCAPE) {
-            router.showScreen(ScreenRouter.MAIN_MENU);
+            case KeyEvent.VK_ESCAPE -> router.showScreen(ScreenRouter.MAIN_MENU);
+            default -> {
+            }
         }
+    }
+
+    private void select(int index) {
+        selectedIndex = index;
+        repaint();
     }
 
     @Override
@@ -123,24 +138,28 @@ public class GameOverScreen extends JPanel implements Screen {
                 y += bannerHeight + gap;
             }
 
-            // Enter가 실행할 동작을 노란 버튼으로, Esc 동작을 보조 버튼으로 보여 준다.
+            // ←→로 고른 버튼(Enter가 실행할 동작)을 노란 버튼으로 보여 준다.
             String primary = qualifiesForLeaderboard ? "이름 등록" : "스코어보드";
             int primaryWidth = Math.round(170 * scale);
             int secondaryWidth = Math.round(130 * scale);
             int buttonGap = Math.round(14 * scale);
             int buttonsX = centerX - (primaryWidth + buttonGap + secondaryWidth) / 2;
             UiPainter.drawPillButton(g2d, buttonsX, y, primaryWidth, buttonHeight, primary,
-                    UiPainter.ButtonState.SELECTED, true, Math.round(18 * scale));
+                    buttonState(0), true, Math.round(18 * scale));
             UiPainter.drawPillButton(g2d, buttonsX + primaryWidth + buttonGap, y, secondaryWidth, buttonHeight,
-                    "메뉴로", UiPainter.ButtonState.NORMAL, true, Math.round(18 * scale));
+                    "메뉴로", buttonState(1), true, Math.round(18 * scale));
 
             g2d.setColor(UiColors.withAlpha(UiColors.TEXT_MUTED, 0.75f));
             g2d.setFont(UiFonts.body(Math.round(13 * scale)));
-            UiPainter.drawCentered(g2d, "Enter " + primary + "  ·  Esc 메뉴로", centerX,
+            UiPainter.drawCentered(g2d, "←→ 선택  ·  Enter 확인  ·  Esc 메뉴로", centerX,
                     screenHeight - Math.round(36 * scale));
         } finally {
             g2d.dispose();
         }
+    }
+
+    private UiPainter.ButtonState buttonState(int index) {
+        return index == selectedIndex ? UiPainter.ButtonState.SELECTED : UiPainter.ButtonState.NORMAL;
     }
 
     /** FINAL SCORE 카드: 큰 점수 + 아래에 레벨·줄 수. */
@@ -171,6 +190,7 @@ public class GameOverScreen extends JPanel implements Screen {
         this.finalLevel = level;
         this.finalLinesCleared = linesCleared;
         this.qualifiesForLeaderboard = qualifiesForLeaderboard;
+        this.selectedIndex = 0;
         repaint();
     }
 }
