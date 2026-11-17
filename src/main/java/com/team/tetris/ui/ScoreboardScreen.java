@@ -5,12 +5,13 @@ import com.team.tetris.common.GameMode;
 import com.team.tetris.common.Screen;
 import com.team.tetris.scoreboard.ScoreRecord;
 import com.team.tetris.scoreboard.ScoreboardRepository;
+import com.team.tetris.ui.theme.PillButton;
+import com.team.tetris.ui.theme.UiColors;
+import com.team.tetris.ui.theme.UiFonts;
+import com.team.tetris.ui.theme.UiPainter;
 
 import javax.swing.AbstractAction;
 import javax.swing.BorderFactory;
-import javax.swing.Box;
-import javax.swing.BoxLayout;
-import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
@@ -30,11 +31,16 @@ import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.FontMetrics;
-import java.awt.GridLayout;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
+import java.awt.Rectangle;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.awt.font.TextAttribute;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Consumer;
@@ -43,19 +49,16 @@ import java.util.function.Function;
 /**
  * Persistent ranking view. Disk reads run off the event dispatch thread.
  * One mode and difficulty ranking is shown at a time; the arrow keys switch between them.
+ *
+ * 표(JTable)는 유지하고, 셀 렌더러가 행 전체를 덮는 둥근 카드의 자기 조각을 그려 행마다 카드처럼 보이게 한다.
  */
 public final class ScoreboardScreen extends JPanel implements Screen {
-    private static final Color BACKGROUND = Color.BLACK;
-    private static final Color PANEL_BACKGROUND = new Color(18, 22, 30);
-    private static final Color ROW_ALTERNATE = new Color(23, 28, 38);
-    private static final Color HIGHLIGHT_BACKGROUND = new Color(0, 65, 75);
-    private static final Color TAB_BACKGROUND = new Color(30, 36, 46);
-    private static final Color ACCENT = Color.CYAN;
-    private static final Color MUTED = new Color(155, 165, 180);
-    private static final int CELL_PADDING = 6;
-    private static final Font BODY_FONT = new Font(Font.MONOSPACED, Font.BOLD, 15);
-    private static final Font HEADER_FONT = new Font(Font.MONOSPACED, Font.BOLD, 15);
-    private static final Font TAB_FONT = new Font(Font.MONOSPACED, Font.BOLD, 13);
+    private static final Color HIGHLIGHT_FILL = new Color(0x3A3060);
+    private static final Color[] MEDAL_COLORS = {new Color(0xFFD34E), new Color(0xC9CBD6), new Color(0xE0A060)};
+    /** 창 크기 M(600px) 기준 수치. applyScale에서 배율을 곱한다. */
+    private static final int BASE_ROW_HEIGHT = 52;
+    private static final int BASE_CELL_PADDING = 6;
+    private static final int BASE_EDGE_PADDING = 18;
 
     private final ScreenRouter router;
     private final ScoreboardRepository repository;
@@ -64,63 +67,53 @@ public final class ScoreboardScreen extends JPanel implements Screen {
     private final CardLayout contentLayout = new CardLayout();
     private final JPanel content = new JPanel(contentLayout);
     private final JLabel status = new JLabel("", SwingConstants.CENTER);
+    private final JLabel title = new JLabel("스코어보드");
+    private final JLabel keys = new JLabel("←→ 난이도  ·  ↑↓ 모드  ·  Esc 메뉴로  ·  노란 테두리 = 방금 등록한 기록",
+            SwingConstants.CENTER);
+    private final PillButton back = new PillButton("메뉴로", false);
     private final List<JLabel> modeTabs = new ArrayList<>();
     private final List<JLabel> difficultyTabs = new ArrayList<>();
     private GameMode selectedMode = GameMode.NORMAL;
     private Difficulty selectedDifficulty = Difficulty.NORMAL;
     private int loadGeneration;
     private UUID highlightedId;
+    private float appliedScale = -1f;
+    // 배율이 바뀔 때 applyScale이 다시 계산하는 렌더링 수치.
+    private int cellPadding = BASE_CELL_PADDING;
+    private int edgePadding = BASE_EDGE_PADDING;
+    private int rowGap = 8;
+    private Font bodyFont = UiFonts.mono(17f);
+    private Font headerFont = UiFonts.body(11f);
 
     public ScoreboardScreen(ScreenRouter router, ScoreboardRepository repository) {
         this.router = Objects.requireNonNull(router, "router");
         this.repository = Objects.requireNonNull(repository, "repository");
-        setLayout(new BorderLayout(16, 16));
-        setBackground(BACKGROUND);
-        setBorder(BorderFactory.createEmptyBorder(22, 24, 18, 24));
+        setLayout(new BorderLayout(0, 14));
+        setBackground(UiColors.BACKGROUND);
         add(createHeader(), BorderLayout.NORTH);
 
         configureTable();
         JScrollPane resultScroll = new JScrollPane(results);
-        resultScroll.setBorder(BorderFactory.createLineBorder(new Color(45, 58, 72)));
-        resultScroll.getViewport().setBackground(PANEL_BACKGROUND);
-        content.setBackground(PANEL_BACKGROUND);
+        resultScroll.setBorder(BorderFactory.createEmptyBorder());
+        resultScroll.setOpaque(false);
+        resultScroll.getViewport().setBackground(UiColors.BACKGROUND);
+        content.setOpaque(false);
         content.add(resultScroll, "table");
 
-        status.setForeground(MUTED);
-        status.setFont(new Font(Font.MONOSPACED, Font.BOLD, 14));
-        status.setOpaque(true);
-        status.setBackground(PANEL_BACKGROUND);
+        status.setForeground(UiColors.TEXT_MUTED);
+        status.setOpaque(false);
         content.add(status, "status");
         add(content, BorderLayout.CENTER);
 
-        JPanel footer = new JPanel();
-        footer.setLayout(new BoxLayout(footer, BoxLayout.Y_AXIS));
-        footer.setPreferredSize(new Dimension(0, 100));
-        footer.setBackground(BACKGROUND);
-        footer.setBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, new Color(45, 58, 72)));
-        JPanel backRow = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 8));
-        backRow.setBackground(BACKGROUND);
-        JButton back = new JButton("Main Menu");
-        back.setFont(new Font(Font.MONOSPACED, Font.BOLD, 12));
-        back.setForeground(ACCENT);
-        back.setBackground(TAB_BACKGROUND);
-        back.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(new Color(65, 78, 94)),
-                BorderFactory.createEmptyBorder(8, 18, 8, 18)));
-        back.setFocusPainted(false);
-        back.setOpaque(true);
+        JPanel footer = new JPanel(new BorderLayout(0, 10));
+        footer.setOpaque(false);
+        JPanel backRow = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
+        backRow.setOpaque(false);
         back.addActionListener(event -> router.showScreen(ScreenRouter.MAIN_MENU));
         backRow.add(back);
-        JPanel keysRow = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 0));
-        keysRow.setBackground(BACKGROUND);
-        JLabel keys = new JLabel("←→ DIFFICULTY  ↑↓ MODE");
-        keys.setForeground(MUTED);
-        keys.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 11));
-        keysRow.add(keys);
-        footer.add(Box.createVerticalGlue());
-        footer.add(backRow);
-        footer.add(keysRow);
-        footer.add(Box.createVerticalGlue());
+        keys.setForeground(UiColors.withAlpha(UiColors.TEXT_MUTED, 0.8f));
+        footer.add(backRow, BorderLayout.NORTH);
+        footer.add(keys, BorderLayout.SOUTH);
         add(footer, BorderLayout.SOUTH);
 
         bindKey("ESCAPE", "back", () -> router.showScreen(ScreenRouter.MAIN_MENU));
@@ -131,6 +124,7 @@ public final class ScoreboardScreen extends JPanel implements Screen {
         bindKey("UP", "previousMode", () -> select(step(GameMode.values(), selectedMode, -1), selectedDifficulty));
         bindKey("DOWN", "nextMode", () -> select(step(GameMode.values(), selectedMode, 1), selectedDifficulty));
         updateTabs();
+        applyScale(1f);
     }
 
     public void highlight(UUID recordId) {
@@ -158,6 +152,37 @@ public final class ScoreboardScreen extends JPanel implements Screen {
         highlightedId = null;
     }
 
+    @Override
+    public void doLayout() {
+        // 창 크기(S/M/L)가 바뀌면 글자·행 높이·열 폭을 창 폭 배율에 맞춘다.
+        float scale = UiPainter.scale(Math.max(1, getWidth()));
+        if (scale != appliedScale) applyScale(scale);
+        super.doLayout();
+    }
+
+    private void applyScale(float scale) {
+        appliedScale = scale;
+        int margin = Math.round(40 * scale);
+        setBorder(BorderFactory.createEmptyBorder(Math.round(36 * scale), margin, Math.round(24 * scale), margin));
+        title.setFont(UiFonts.display(Math.round(30 * scale)));
+        status.setFont(UiFonts.body(Math.round(15 * scale)));
+        keys.setFont(UiFonts.body(Math.round(12 * scale)));
+        back.setFontSize(Math.round(17 * scale));
+        back.setPreferredSize(new Dimension(Math.round(130 * scale), Math.round(44 * scale)));
+        Font tabFont = UiFonts.display(Math.round(15 * scale));
+        for (JLabel tab : modeTabs) tab.setFont(tabFont);
+        for (JLabel tab : difficultyTabs) tab.setFont(UiFonts.display(Math.round(13 * scale)));
+
+        cellPadding = Math.round(BASE_CELL_PADDING * scale);
+        edgePadding = Math.round(BASE_EDGE_PADDING * scale);
+        rowGap = Math.round(8 * scale);
+        bodyFont = UiFonts.mono(Math.round(17 * scale));
+        headerFont = UiFonts.body(Math.round(11 * scale)).deriveFont(Map.of(TextAttribute.TRACKING, 0.15f));
+        results.setRowHeight(Math.round(BASE_ROW_HEIGHT * scale));
+        results.getTableHeader().setPreferredSize(new Dimension(0, Math.round(26 * scale)));
+        sizeColumns();
+    }
+
     private void loadScores() {
         int generation = ++loadGeneration;
         GameMode mode = selectedMode;
@@ -176,13 +201,13 @@ public final class ScoreboardScreen extends JPanel implements Screen {
                     List<ScoreRecord> records = get();
                     tableModel.setRecords(records);
                     if (records.isEmpty()) {
-                        status.setText("NO SCORES YET");
+                        status.setText("NO SCORES YET  ·  아직 기록이 없어요");
                         contentLayout.show(content, "status");
                     } else {
                         contentLayout.show(content, "table");
                     }
                 } catch (Exception failure) {
-                    status.setText("COULD NOT LOAD SCORES. RETURN TO THE MENU AND TRY AGAIN.");
+                    status.setText("COULD NOT LOAD SCORES  ·  메뉴로 돌아가 다시 시도해 주세요");
                     contentLayout.show(content, "status");
                 }
             }
@@ -203,44 +228,35 @@ public final class ScoreboardScreen extends JPanel implements Screen {
         return values[Math.floorMod(current.ordinal() + direction, values.length)];
     }
 
+    /** 제목 + 모드 탭(왼쪽)과 난이도 탭(오른쪽). */
     private JPanel createHeader() {
-        JPanel header = new JPanel(new BorderLayout(0, 4));
-        header.setBackground(BACKGROUND);
-        JLabel title = new JLabel("LEADERBOARD", JLabel.CENTER);
-        title.setForeground(Color.YELLOW);
-        title.setFont(new Font(Font.MONOSPACED, Font.BOLD, 28));
+        JPanel header = new JPanel(new BorderLayout(0, 18));
+        header.setOpaque(false);
+        title.setForeground(UiColors.TEXT_PRIMARY);
         header.add(title, BorderLayout.NORTH);
 
-        // 두 줄을 왼쪽 정렬로 묶고 그 묶음을 가운데에 둬서 탭 시작 위치를 맞춘다.
-        JPanel rows = new JPanel(new GridLayout(2, 1, 0, 2));
-        rows.setBackground(BACKGROUND);
-        rows.add(tabRow("MODE", GameMode.values(), GameMode::label,
-                mode -> select(mode, selectedDifficulty), modeTabs));
-        rows.add(tabRow("DIFFICULTY", Difficulty.values(), Difficulty::label,
-                difficulty -> select(selectedMode, difficulty), difficultyTabs));
-        JPanel selectors = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
-        selectors.setBackground(BACKGROUND);
-        selectors.add(rows);
-        header.add(selectors, BorderLayout.CENTER);
+        JPanel tabs = new JPanel(new BorderLayout());
+        tabs.setOpaque(false);
+        tabs.add(tabRow(GameMode.values(), ScoreboardScreen::modeLabel,
+                mode -> select(mode, selectedDifficulty), modeTabs, mode -> UiColors.ACCENT), BorderLayout.WEST);
+        tabs.add(tabRow(Difficulty.values(), difficulty -> difficulty.name(),
+                difficulty -> select(selectedMode, difficulty), difficultyTabs,
+                difficulty -> UiPainter.difficultyBadgeColors(difficulty.name())[0]), BorderLayout.EAST);
+        header.add(tabs, BorderLayout.CENTER);
         return header;
     }
 
-    /** 이름표와 값 탭 한 줄. 두 줄의 이름표 폭을 같게 해 탭 위치를 맞춘다. */
-    private <T> JPanel tabRow(String name, T[] values, Function<T, String> label, Consumer<T> choose,
-                              List<JLabel> tabs) {
-        JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
-        row.setBackground(BACKGROUND);
-        JLabel caption = new JLabel(name, SwingConstants.RIGHT);
-        caption.setForeground(MUTED);
-        caption.setFont(TAB_FONT);
-        FontMetrics metrics = caption.getFontMetrics(TAB_FONT);
-        caption.setPreferredSize(new Dimension(metrics.stringWidth("DIFFICULTY") + 8, metrics.getHeight() + 4));
-        row.add(caption);
+    private static String modeLabel(GameMode mode) {
+        return mode == GameMode.ITEM ? "아이템 모드" : "일반 모드";
+    }
+
+    /** 클릭으로도 고를 수 있는 알약 탭 한 줄. */
+    private static <T> JPanel tabRow(T[] values, Function<T, String> label, Consumer<T> choose,
+                                     List<JLabel> tabs, Function<T, Color> activeColor) {
+        JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        row.setOpaque(false);
         for (T value : values) {
-            JLabel tab = new JLabel(label.apply(value).toUpperCase(java.util.Locale.ROOT), SwingConstants.CENTER);
-            tab.setFont(TAB_FONT);
-            tab.setOpaque(true);
-            tab.setBorder(BorderFactory.createEmptyBorder(2, 8, 2, 8));
+            PillTab tab = new PillTab(label.apply(value), activeColor.apply(value));
             tab.addMouseListener(new MouseAdapter() {
                 @Override public void mouseClicked(MouseEvent event) {
                     choose.accept(value);
@@ -259,22 +275,19 @@ public final class ScoreboardScreen extends JPanel implements Screen {
 
     private static void paintTabs(List<JLabel> tabs, int selected) {
         for (int index = 0; index < tabs.size(); index++) {
-            boolean active = index == selected;
-            tabs.get(index).setBackground(active ? ACCENT : TAB_BACKGROUND);
-            tabs.get(index).setForeground(active ? Color.BLACK : MUTED);
+            ((PillTab) tabs.get(index)).setActive(index == selected);
         }
     }
 
     private void configureTable() {
         results.setFillsViewportHeight(true);
-        results.setRowHeight(36);
         results.setShowGrid(false);
         results.setIntercellSpacing(new Dimension(0, 0));
-        results.setBackground(PANEL_BACKGROUND);
-        results.setForeground(Color.WHITE);
-        results.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 15));
-        results.setSelectionBackground(PANEL_BACKGROUND);
-        results.setSelectionForeground(Color.WHITE);
+        results.setOpaque(false);
+        results.setBackground(UiColors.BACKGROUND);
+        results.setForeground(UiColors.CREAM);
+        results.setSelectionBackground(UiColors.BACKGROUND);
+        results.setSelectionForeground(UiColors.CREAM);
         results.setFocusable(false);
         results.setRowSelectionAllowed(false);
         results.setCellSelectionEnabled(false);
@@ -283,21 +296,24 @@ public final class ScoreboardScreen extends JPanel implements Screen {
         JTableHeader header = results.getTableHeader();
         header.setReorderingAllowed(false);
         header.setResizingAllowed(false);
-        header.setPreferredSize(new Dimension(0, 42));
-        header.setBackground(new Color(27, 33, 44));
-        header.setForeground(ACCENT);
-        header.setFont(HEADER_FONT);
-        header.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, new Color(55, 70, 88)));
+        header.setBackground(UiColors.BACKGROUND);
+        header.setBorder(BorderFactory.createEmptyBorder());
 
         for (int column = 0; column < tableModel.getColumnCount(); column++) {
-            int alignment = alignmentOf(column);
             var tableColumn = results.getColumnModel().getColumn(column);
-            tableColumn.setCellRenderer(new ScoreCellRenderer(alignment));
-            tableColumn.setHeaderRenderer(new HeaderRenderer(alignment));
+            tableColumn.setCellRenderer(new ScoreCellRenderer());
+            tableColumn.setHeaderRenderer(new HeaderRenderer());
+        }
+    }
+
+    private void sizeColumns() {
+        for (int column = 0; column < tableModel.getColumnCount(); column++) {
+            var tableColumn = results.getColumnModel().getColumn(column);
             if (column == ScoreTableModel.PLAYER) {
                 // 이름 열이 남는 폭을 모두 받고, 좁은 창(480px)에서는 이 열만 줄어든다.
                 tableColumn.setMinWidth(60);
                 tableColumn.setPreferredWidth(400);
+                tableColumn.setMaxWidth(Integer.MAX_VALUE);
             } else {
                 int width = fittedWidth(column);
                 tableColumn.setMinWidth(width);
@@ -309,11 +325,35 @@ public final class ScoreboardScreen extends JPanel implements Screen {
 
     /** 머리글과 가장 긴 값이 잘리지 않는 폭. 좁은 창에서도 RANK·SCORE가 보이게 한다. */
     private int fittedWidth(int column) {
-        String longest = column == ScoreTableModel.SCORE ? "999999" : "▶ 10";
-        FontMetrics body = results.getFontMetrics(BODY_FONT);
-        FontMetrics header = results.getFontMetrics(HEADER_FONT);
-        int widest = Math.max(header.stringWidth(tableModel.getColumnName(column)), body.stringWidth(longest));
-        return widest + CELL_PADDING * 2 + 2;
+        FontMetrics header = results.getFontMetrics(headerFont);
+        int content = column == ScoreTableModel.SCORE
+                ? results.getFontMetrics(bodyFont).stringWidth("999,999")
+                : rankContentWidth();
+        int widest = Math.max(header.stringWidth(tableModel.getColumnName(column)), content);
+        return widest + leftPadding(column) + rightPadding(column) + 2;
+    }
+
+    /** 순위 칸 내용 폭: 강조 화살표 + 메달 원. */
+    private int rankContentWidth() {
+        return results.getFontMetrics(arrowFont()).stringWidth("▶ ") + medalSize();
+    }
+
+    /** IBM Plex Mono에는 ▶ 글리프가 없어 화살표만 본문 서체로 그린다. */
+    private Font arrowFont() {
+        return UiFonts.body(bodyFont.getSize2D());
+    }
+
+    private int medalSize() {
+        return Math.round(results.getRowHeight() * 0.56f);
+    }
+
+    // 행 카드 안쪽 여백: 카드 양 끝 열은 넓게, 가운데 열 사이는 좁게.
+    private int leftPadding(int column) {
+        return column == 0 ? edgePadding : cellPadding;
+    }
+
+    private int rightPadding(int column) {
+        return column == ScoreTableModel.SCORE ? edgePadding : cellPadding;
     }
 
     /** RANK는 가운데, PLAYER는 왼쪽, SCORE는 오른쪽 정렬이다. */
@@ -325,49 +365,166 @@ public final class ScoreboardScreen extends JPanel implements Screen {
         };
     }
 
+    /**
+     * 한 칸을 그린다. 각 칸이 행 전체 폭의 카드를 자기 위치만큼 왼쪽으로 옮겨 그리므로,
+     * 잘린 조각이 이어져 행 하나가 둥근 카드 한 장으로 보인다.
+     */
     private final class ScoreCellRenderer extends DefaultTableCellRenderer {
-        private ScoreCellRenderer(int alignment) {
-            setHorizontalAlignment(alignment);
-            setFont(new Font(Font.MONOSPACED, Font.PLAIN, 15));
-        }
+        private int row;
+        private int column;
+        private boolean highlighted;
 
         @Override
         public Component getTableCellRendererComponent(JTable table, Object value, boolean selected,
                                                        boolean focused, int row, int column) {
             super.getTableCellRendererComponent(table, value, false, false, row, column);
+            this.row = row;
+            this.column = column;
             ScoreRecord record = tableModel.recordAt(row);
-            boolean highlighted = record.id().equals(highlightedId);
-            setBackground(highlighted ? HIGHLIGHT_BACKGROUND
-                    : row % 2 == 0 ? PANEL_BACKGROUND : ROW_ALTERNATE);
-            setForeground(highlighted ? ACCENT : column == 0 ? MUTED : Color.WHITE);
-            setFont(new Font(Font.MONOSPACED, highlighted ? Font.BOLD : Font.PLAIN, 15));
+            highlighted = record.id().equals(highlightedId);
+            setOpaque(false);
             setHorizontalAlignment(alignmentOf(column));
-            setBorder(BorderFactory.createEmptyBorder(0, CELL_PADDING, 0, CELL_PADDING));
-            if (column == 0) {
-                setText((highlighted ? "▶ " : "") + (row + 1));
+            setBorder(BorderFactory.createEmptyBorder(0, leftPadding(column), 0, rightPadding(column)));
+            switch (column) {
+                case 0 -> {
+                    setText((highlighted ? "▶ " : "") + (row + 1));
+                    setFont(bodyFont);
+                }
+                case ScoreTableModel.PLAYER -> {
+                    setText(record.name());
+                    setFont(UiFonts.monoOrFallback(record.name(), bodyFont.getSize2D()));
+                    setForeground(UiColors.CREAM);
+                }
+                default -> {
+                    setText(String.format(Locale.US, "%,d", record.score()));
+                    setFont(bodyFont);
+                    setForeground(UiColors.ACCENT);
+                }
             }
+            return this;
+        }
+
+        @Override
+        public Dimension getPreferredSize() {
+            if (column != 0) return super.getPreferredSize();
+            Dimension size = super.getPreferredSize();
+            return new Dimension(rankContentWidth() + leftPadding(0) + rightPadding(0), size.height);
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            Graphics2D g2d = (Graphics2D) g.create();
+            try {
+                UiPainter.prepare(g2d);
+                Rectangle cell = results.getCellRect(row, column, false);
+                int cardTop = rowGap / 2;
+                int cardHeight = getHeight() - rowGap;
+                int radius = Math.round(cardHeight * 0.3f);
+                if (highlighted) {
+                    UiPainter.drawPanel(g2d, -cell.x, cardTop, results.getWidth(), cardHeight, radius,
+                            HIGHLIGHT_FILL, UiColors.ACCENT, 2.5f);
+                } else {
+                    UiPainter.drawPanel(g2d, -cell.x, cardTop, results.getWidth(), cardHeight, radius,
+                            UiColors.PANEL, UiColors.PANEL_BORDER, 1f);
+                }
+                if (column == 0) {
+                    paintRank(g2d, cardTop, cardHeight);
+                    return;
+                }
+            } finally {
+                g2d.dispose();
+            }
+            super.paintComponent(g);
+        }
+
+        // 1~3위는 금·은·동 메달, 그 아래는 패널색 원. 방금 등록한 기록은 앞에 ▶를 붙인다.
+        private void paintRank(Graphics2D g2d, int cardTop, int cardHeight) {
+            int medal = medalSize();
+            int arrowWidth = getFontMetrics(arrowFont()).stringWidth("▶ ");
+            int contentX = leftPadding(0) + (getWidth() - leftPadding(0) - rightPadding(0)
+                    - rankContentWidth()) / 2;
+            int medalX = contentX + arrowWidth;
+            int medalY = cardTop + (cardHeight - medal) / 2;
+            if (highlighted) {
+                g2d.setFont(arrowFont());
+                g2d.setColor(UiColors.ACCENT);
+                g2d.drawString("▶", contentX, UiPainter.centeredBaseline(g2d.getFontMetrics(), medalY, medal));
+            }
+            boolean podium = row < MEDAL_COLORS.length;
+            Color medalColor = podium ? MEDAL_COLORS[row] : UiColors.PANEL_BORDER;
+            g2d.setColor(UiColors.darker(medalColor, 0.2f));
+            g2d.fillOval(medalX, medalY + 2, medal, medal);
+            g2d.setColor(medalColor);
+            g2d.fillOval(medalX, medalY, medal, medal);
+            String rank = String.valueOf(row + 1);
+            g2d.setFont(UiFonts.display(Math.round(medal * 0.6f)));
+            g2d.setColor(podium ? UiColors.TEXT_ON_ACCENT : UiColors.TEXT_SECONDARY);
+            UiPainter.drawCentered(g2d, rank, medalX + medal / 2,
+                    UiPainter.centeredBaseline(g2d.getFontMetrics(), medalY, medal));
+        }
+    }
+
+    private final class HeaderRenderer extends DefaultTableCellRenderer {
+        @Override
+        public Component getTableCellRendererComponent(JTable table, Object value, boolean selected,
+                                                       boolean focused, int row, int column) {
+            super.getTableCellRendererComponent(table, value, false, false, row, column);
+            setOpaque(true);
+            setForeground(UiColors.TEXT_MUTED);
+            setBackground(UiColors.BACKGROUND);
+            setFont(headerFont);
+            setHorizontalAlignment(alignmentOf(column));
+            setBorder(BorderFactory.createEmptyBorder(0, leftPadding(column), 0, rightPadding(column)));
             return this;
         }
     }
 
-    private static final class HeaderRenderer extends DefaultTableCellRenderer {
-        private HeaderRenderer(int alignment) {
-            setHorizontalAlignment(alignment);
-            setForeground(ACCENT);
-            setBackground(new Color(27, 33, 44));
-            setFont(HEADER_FONT);
+    /** 알약 모양 탭. 선택되면 지정 색으로 채우고, 아니면 패널색 + 테두리. */
+    private static final class PillTab extends JLabel {
+        private final Color activeColor;
+        private boolean active;
+
+        PillTab(String text, Color activeColor) {
+            super(text, SwingConstants.CENTER);
+            this.activeColor = activeColor;
+            setOpaque(false);
+        }
+
+        void setActive(boolean active) {
+            this.active = active;
+            setForeground(active ? UiColors.TEXT_ON_ACCENT : UiColors.TEXT_SECONDARY);
+            repaint();
         }
 
         @Override
-        public Component getTableCellRendererComponent(JTable table, Object value, boolean selected,
-                                                       boolean focused, int row, int column) {
-            super.getTableCellRendererComponent(table, value, false, false, row, column);
-            setForeground(ACCENT);
-            setBackground(new Color(27, 33, 44));
-            setFont(HEADER_FONT);
-            setHorizontalAlignment(alignmentOf(column));
-            setBorder(BorderFactory.createEmptyBorder(0, CELL_PADDING, 0, CELL_PADDING));
-            return this;
+        public Dimension getPreferredSize() {
+            FontMetrics metrics = getFontMetrics(getFont());
+            int height = Math.round(metrics.getAscent() * 2.1f);
+            return new Dimension(metrics.stringWidth(getText()) + height, height);
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            Graphics2D g2d = (Graphics2D) g.create();
+            try {
+                UiPainter.prepare(g2d);
+                int height = getHeight() - 3;
+                if (active) {
+                    g2d.setColor(UiColors.darker(activeColor, 0.18f));
+                    g2d.fillRoundRect(0, 3, getWidth(), height, height, height);
+                    g2d.setColor(activeColor);
+                    g2d.fillRoundRect(0, 0, getWidth(), height, height, height);
+                } else {
+                    UiPainter.drawPanel(g2d, 0, 0, getWidth(), height, height / 2,
+                            UiColors.PANEL, UiColors.PANEL_BORDER, 2f);
+                }
+                g2d.setFont(getFont());
+                g2d.setColor(getForeground());
+                UiPainter.drawCentered(g2d, getText(), getWidth() / 2,
+                        UiPainter.centeredBaseline(g2d.getFontMetrics(), 0, height));
+            } finally {
+                g2d.dispose();
+            }
         }
     }
 

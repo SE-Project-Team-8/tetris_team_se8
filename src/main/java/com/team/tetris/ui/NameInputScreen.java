@@ -15,7 +15,6 @@ import java.util.function.Consumer;
 
 import javax.swing.AbstractAction;
 import javax.swing.BorderFactory;
-import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTextField;
@@ -25,6 +24,7 @@ import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 
 import com.team.tetris.common.Screen;
+import com.team.tetris.ui.theme.PillButton;
 import com.team.tetris.ui.theme.UiColors;
 import com.team.tetris.ui.theme.UiFonts;
 import com.team.tetris.ui.theme.UiPainter;
@@ -41,7 +41,7 @@ public class NameInputScreen extends JPanel implements Screen {
 	private final JTextField nameField;
 	private final JLabel validationLabel;
 	private final JLabel hintLabel;
-	private final JButton submitButton;
+	private final PillButton submitButton;
 	private String submittedName;
 
 	public NameInputScreen(ScreenRouter router, Consumer<String> onSubmit) {
@@ -84,7 +84,7 @@ public class NameInputScreen extends JPanel implements Screen {
 		hintLabel = new JLabel("최대 20자  ·  Enter 확정  ·  Esc 취소", SwingConstants.CENTER);
 		hintLabel.setForeground(UiColors.withAlpha(UiColors.TEXT_MUTED, 0.8f));
 
-		submitButton = new PillButton("등록");
+		submitButton = new PillButton("등록", true);
 		submitButton.addActionListener(event -> submitName());
 
 		GridBagConstraints constraints = new GridBagConstraints();
@@ -169,6 +169,8 @@ public class NameInputScreen extends JPanel implements Screen {
 		updateNameFont();
 		validationLabel.setFont(UiFonts.body(Math.round(13 * scale)));
 		hintLabel.setFont(UiFonts.body(Math.round(13 * scale)));
+		submitButton.setFontSize(Math.round(19 * scale));
+		submitButton.setPreferredSize(new Dimension(Math.round(150 * scale), Math.round(50 * scale)));
 		super.doLayout();
 	}
 
@@ -237,42 +239,4 @@ public class NameInputScreen extends JPanel implements Screen {
 		}
 	}
 
-	/** 노란 알약 버튼. 마우스 클릭과 Enter가 같은 제출 동작을 쓴다. */
-	private final class PillButton extends JButton {
-		PillButton(String label) {
-			super(label);
-			setContentAreaFilled(false);
-			setBorderPainted(false);
-			setFocusPainted(false);
-			setOpaque(false);
-		}
-
-		@Override
-		public Dimension getPreferredSize() {
-			float scale = scale();
-			return new Dimension(Math.round(150 * scale), Math.round(50 * scale));
-		}
-
-		@Override
-		protected void paintComponent(Graphics g) {
-			Graphics2D g2d = (Graphics2D) g.create();
-			try {
-				UiPainter.prepare(g2d);
-				UiPainter.ButtonState state;
-				if (!isEnabled()) {
-					state = UiPainter.ButtonState.DISABLED;
-				} else if (getModel().isPressed()) {
-					state = UiPainter.ButtonState.PRESSED;
-				} else {
-					state = UiPainter.ButtonState.SELECTED;
-				}
-				// 확대·음영이 버튼 영역 밖으로 잘리지 않게 약간 안쪽에 그린다.
-				int inset = Math.round(getHeight() * 0.08f);
-				UiPainter.drawPillButton(g2d, inset, 0, getWidth() - inset * 2, getHeight() - inset,
-						getText(), state, true, Math.round(19 * scale()));
-			} finally {
-				g2d.dispose();
-			}
-		}
-	}
 }
