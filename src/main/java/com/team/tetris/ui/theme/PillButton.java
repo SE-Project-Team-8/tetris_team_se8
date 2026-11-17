@@ -2,8 +2,14 @@ package com.team.tetris.ui.theme;
 
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.event.ActionEvent;
+import java.awt.event.FocusAdapter;
+import java.awt.event.FocusEvent;
+import java.util.List;
 
+import javax.swing.AbstractAction;
 import javax.swing.JButton;
+import javax.swing.KeyStroke;
 
 /**
  * 알약형 Swing 버튼. 마우스 클릭과 키보드가 같은 ActionListener를 쓰는 화면(이름 입력, 스코어보드)에서 쓴다.
@@ -35,6 +41,39 @@ public class PillButton extends JButton {
     public void setFontSize(float fontSize) {
         this.fontSize = fontSize;
         repaint();
+    }
+
+    /**
+     * 키보드 포커스를 받은 동안만 노란 강조 버튼으로 그리고 Enter로도 누를 수 있게 한다.
+     * 버튼 여러 개가 나란한 화면에서 강조가 "지금 Enter가 누를 버튼" 하나에만 보이게 할 때 쓴다.
+     */
+    public void enableFocusHighlight() {
+        addFocusListener(new FocusAdapter() {
+            @Override public void focusGained(FocusEvent event) { setPrimary(true); }
+            @Override public void focusLost(FocusEvent event) { setPrimary(false); }
+        });
+        // JButton은 기본으로 Space만 받으므로 같은 눌림 동작을 Enter에도 연결한다.
+        getInputMap(WHEN_FOCUSED).put(KeyStroke.getKeyStroke("ENTER"), "pressed");
+        getInputMap(WHEN_FOCUSED).put(KeyStroke.getKeyStroke("released ENTER"), "released");
+    }
+
+    /**
+     * 나란한 버튼들 사이를 ←→로 오가게 한다. 양 끝에서는 더 움직이지 않는다.
+     */
+    public static void linkArrowKeys(List<PillButton> row) {
+        for (int index = 0; index < row.size(); index++) {
+            PillButton button = row.get(index);
+            PillButton previous = row.get(Math.max(0, index - 1));
+            PillButton next = row.get(Math.min(row.size() - 1, index + 1));
+            button.getInputMap(WHEN_FOCUSED).put(KeyStroke.getKeyStroke("LEFT"), "focusPrevious");
+            button.getInputMap(WHEN_FOCUSED).put(KeyStroke.getKeyStroke("RIGHT"), "focusNext");
+            button.getActionMap().put("focusPrevious", new AbstractAction() {
+                @Override public void actionPerformed(ActionEvent event) { previous.requestFocusInWindow(); }
+            });
+            button.getActionMap().put("focusNext", new AbstractAction() {
+                @Override public void actionPerformed(ActionEvent event) { next.requestFocusInWindow(); }
+            });
+        }
     }
 
     @Override

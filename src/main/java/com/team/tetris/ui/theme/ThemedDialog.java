@@ -14,8 +14,6 @@ import java.awt.GraphicsDevice;
 import java.awt.GraphicsEnvironment;
 import java.awt.Window;
 import java.awt.event.ActionEvent;
-import java.awt.event.FocusAdapter;
-import java.awt.event.FocusEvent;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -128,10 +126,7 @@ public final class ThemedDialog {
                 dialog.dispose();
             });
             // 포커스가 있는 버튼이 Enter로 실행될 버튼이므로 노랗게 강조한다.
-            button.addFocusListener(new FocusAdapter() {
-                @Override public void focusGained(FocusEvent event) { button.setPrimary(true); }
-                @Override public void focusLost(FocusEvent event) { button.setPrimary(false); }
-            });
+            button.enableFocusHighlight();
             buttons.add(button);
             buttonRow.add(button);
         }

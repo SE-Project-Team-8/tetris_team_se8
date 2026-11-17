@@ -169,11 +169,11 @@ public final class SettingsScreen extends JPanel implements Screen {
         footer.setOpaque(false);
         JPanel buttonRow = new JPanel(new FlowLayout(FlowLayout.CENTER, 8, 0));
         buttonRow.setOpaque(false);
-        PillButton save = addButton(buttonRow, "저장", true);
-        save.addActionListener(event -> saveSelected());
-        addButton(buttonRow, "기본값 복원", false).addActionListener(event -> resetSettings());
-        addButton(buttonRow, "점수 초기화", false).addActionListener(event -> resetScores());
-        addButton(buttonRow, "뒤로", false).addActionListener(event -> router.showScreen(ScreenRouter.MAIN_MENU));
+        addButton(buttonRow, "저장").addActionListener(event -> saveSelected());
+        addButton(buttonRow, "기본값 복원").addActionListener(event -> resetSettings());
+        addButton(buttonRow, "점수 초기화").addActionListener(event -> resetScores());
+        addButton(buttonRow, "뒤로").addActionListener(event -> router.showScreen(ScreenRouter.MAIN_MENU));
+        PillButton.linkArrowKeys(buttons);
         hint.setForeground(UiColors.withAlpha(UiColors.TEXT_MUTED, 0.8f));
         footer.add(buttonRow, BorderLayout.NORTH);
         footer.add(hint, BorderLayout.SOUTH);
@@ -325,8 +325,10 @@ public final class SettingsScreen extends JPanel implements Screen {
         form.add(Box.createVerticalStrut(10));
     }
 
-    private PillButton addButton(JPanel row, String label, boolean primary) {
-        PillButton button = new PillButton(label, primary);
+    // 노란 강조는 키보드 포커스가 있는 버튼 하나에만 보인다. 위쪽 설정 칸에 포커스가 있으면 모두 꺼진다.
+    private PillButton addButton(JPanel row, String label) {
+        PillButton button = new PillButton(label, false);
+        button.enableFocusHighlight();
         buttons.add(button);
         row.add(button);
         return button;
