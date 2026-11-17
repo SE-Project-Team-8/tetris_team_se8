@@ -15,8 +15,11 @@ import java.awt.geom.RoundRectangle2D;
  * 아이템 칸의 고유 문자가 그 문자다.
  */
 public final class CellPainter {
-    /** 이보다 작은 셀은 눈을 생략하고 문자만 그린다. */
-    public static final int MIN_FACE_SIZE = 20;
+    /**
+     * 이보다 작은 셀은 눈을 생략하고 문자만 그린다. 스펙은 20px이지만 S 창(테두리 제외 폭 약 464px)의
+     * 보드 셀이 19px이라 표정이 사라지므로, 눈이 2px 이상으로 그려지는 12px까지 낮춘다.
+     */
+    public static final int MIN_FACE_SIZE = 12;
 
     private static final String MOUTH = "_";
     private static final Color HIGHLIGHT = new Color(255, 255, 255, 128);
