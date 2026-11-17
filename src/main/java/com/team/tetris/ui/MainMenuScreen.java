@@ -30,7 +30,7 @@ public class MainMenuScreen extends JPanel implements Screen {
 
     // 창 크기 L(600px) 기준 수치. 그릴 때 UiPainter.scale()을 곱한다.
     private static final int LOGO_TILE = 52;
-    private static final int LOGO_TO_MENU_GAP = 56;
+    private static final int LOGO_TO_MENU_GAP = 68;
     private static final int BUTTON_HEIGHT = 52;
     private static final int BUTTON_GAP = 14;
 
