@@ -34,6 +34,8 @@ import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Rectangle;
+import java.awt.event.ComponentAdapter;
+import java.awt.event.ComponentEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.font.TextAttribute;
@@ -55,10 +57,12 @@ import java.util.function.Function;
 public final class ScoreboardScreen extends JPanel implements Screen {
     private static final Color HIGHLIGHT_FILL = new Color(0x3A3060);
     private static final Color[] MEDAL_COLORS = {new Color(0xFFD34E), new Color(0xC9CBD6), new Color(0xE0A060)};
-    /** 창 크기 M(600px) 기준 수치. applyScale에서 배율을 곱한다. */
+    /** 창 크기 L(600px) 기준 수치. applyScale에서 배율을 곱한다. */
     private static final int BASE_ROW_HEIGHT = 52;
     private static final int BASE_CELL_PADDING = 6;
     private static final int BASE_EDGE_PADDING = 18;
+    /** 한 순위표에 보이는 기록 수 (요구사항: 상위 10명). */
+    private static final int VISIBLE_ROWS = 10;
 
     private final ScreenRouter router;
     private final ScoreboardRepository repository;
@@ -97,6 +101,13 @@ public final class ScoreboardScreen extends JPanel implements Screen {
         resultScroll.setBorder(BorderFactory.createEmptyBorder());
         resultScroll.setOpaque(false);
         resultScroll.getViewport().setBackground(UiColors.BACKGROUND);
+        // 순위는 최대 10개다. 스크롤 대신 보이는 높이를 10등분해 행 높이를 정한다.
+        resultScroll.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_NEVER);
+        resultScroll.getViewport().addComponentListener(new ComponentAdapter() {
+            @Override public void componentResized(ComponentEvent event) {
+                fitRows(event.getComponent().getHeight());
+            }
+        });
         content.setOpaque(false);
         content.add(resultScroll, "table");
 
@@ -179,7 +190,20 @@ public final class ScoreboardScreen extends JPanel implements Screen {
         bodyFont = UiFonts.mono(Math.round(17 * scale));
         headerFont = UiFonts.body(Math.round(11 * scale)).deriveFont(Map.of(TextAttribute.TRACKING, 0.15f));
         results.setRowHeight(Math.round(BASE_ROW_HEIGHT * scale));
+        // 뷰포트 크기가 그대로면 크기 변경 알림이 오지 않으므로 여기서도 10행에 맞춘다.
+        if (results.getParent() != null) fitRows(results.getParent().getHeight());
         results.getTableHeader().setPreferredSize(new Dimension(0, Math.round(26 * scale)));
+        sizeColumns();
+    }
+
+    /** 보이는 높이에 10행이 모두 들어가도록 행 높이를 줄인다. 넉넉하면 기준 높이를 넘지 않는다. */
+    private void fitRows(int viewportHeight) {
+        if (viewportHeight <= 0) return;
+        int rowHeight = Math.max(24, Math.min(Math.round(BASE_ROW_HEIGHT * appliedScale),
+                viewportHeight / VISIBLE_ROWS));
+        if (rowHeight == results.getRowHeight()) return;
+        results.setRowHeight(rowHeight);
+        // 순위 메달 크기가 행 높이를 따르므로 순위 열 폭도 다시 맞춘다.
         sizeColumns();
     }
 

@@ -62,7 +62,7 @@ import com.team.tetris.ui.theme.UiPainter;
 public class GameScreen extends JPanel implements Screen {
     /** Shift·Ctrl·Alt·Meta를 누른 모든 조합. 조작 키는 수정 키를 함께 누른 상태로도 연결한다. */
     private static final int[] MODIFIER_COMBINATIONS = modifierCombinations();
-    // 창 크기 M(600px) 기준 레이아웃 수치. 그릴 때 UiPainter.scale()을 곱한다.
+    // 창 크기 L(600px) 기준 레이아웃 수치. 그릴 때 UiPainter.scale()을 곱한다.
     private static final int BASE_MARGIN = 28;
     private static final int BASE_HEADER_HEIGHT = 60;
     private static final int BASE_FOOTER_HEIGHT = 36;
@@ -526,7 +526,7 @@ public class GameScreen extends JPanel implements Screen {
 
             int width = getWidth();
             int height = getHeight();
-            // 고정 수치는 M(600px) 기준이며 창 폭 배율을 곱해 S/M/L에서 같은 비율을 유지한다.
+            // 고정 수치는 L(600px) 기준이며 창 폭 배율을 곱해 S/M/L에서 같은 비율을 유지한다.
             float scale = UiPainter.scale(width);
             int margin = Math.round(BASE_MARGIN * scale);
             int headerHeight = Math.round(BASE_HEADER_HEIGHT * scale);

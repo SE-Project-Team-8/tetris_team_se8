@@ -27,8 +27,8 @@ public class PauseScreen extends JPanel implements Screen {
     private final Supplier<KeyBindings> bindings;
     private final KeyEventDispatcher resumeKeyDispatcher;
 
-    /** 게임 화면을 가린 듯한 어두운 바탕 (background 토큰을 더 어둡게). */
-    private static final Color DIMMED_BACKGROUND = new Color(0x140F28);
+    /** 아래 게임 화면을 어둡게 덮는 반투명 막 (background 토큰을 더 어둡게, 알파 0.72). */
+    private static final Color DIMMED_OVERLAY = new Color(0x14, 0x0F, 0x28, 184);
     private static final Color CARD_SHADOW = new Color(0, 0, 0, 70);
 
     // 일시정지 메뉴 항목
@@ -54,7 +54,7 @@ public class PauseScreen extends JPanel implements Screen {
             }
             return false;
         };
-        setBackground(DIMMED_BACKGROUND);
+        setBackground(DIMMED_OVERLAY);
         setFocusable(true);
         setOpaque(false);
 
@@ -150,16 +150,12 @@ public class PauseScreen extends JPanel implements Screen {
 
             int screenWidth = getWidth();
             int screenHeight = getHeight();
-            // 수치는 창 크기 M(600px) 기준이며 창 폭 배율을 곱한다.
+            // 수치는 창 크기 L(600px) 기준이며 창 폭 배율을 곱한다.
             float scale = UiPainter.scale(screenWidth);
 
-            // 게임 화면을 어둡게 가린 느낌: 어두운 바탕 + 보드 자리의 흐린 윤곽.
-            g2d.setColor(DIMMED_BACKGROUND);
+            // 이 화면은 게임 화면 위 레이어에 겹쳐 뜬다. 반투명으로 덮어 멈춘 판이 어둡게 비쳐 보이게 한다.
+            g2d.setColor(DIMMED_OVERLAY);
             g2d.fillRect(0, 0, screenWidth, screenHeight);
-            int margin = Math.round(28 * scale);
-            UiPainter.strokeRoundRect(g2d, margin, Math.round(60 * scale), Math.round(300 * scale),
-                    screenHeight - Math.round(60 * scale) - margin * 2, Math.round(16 * scale),
-                    UiColors.withAlpha(UiColors.PANEL_BORDER, 0.35f), 2f);
 
             // 가운데 카드: 노란 테두리 패널 + 그림자.
             int buttonHeight = Math.round(46 * scale);

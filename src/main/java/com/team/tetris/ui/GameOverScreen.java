@@ -87,7 +87,7 @@ public class GameOverScreen extends JPanel implements Screen {
             int screenWidth = getWidth();
             int screenHeight = getHeight();
             int centerX = screenWidth / 2;
-            // 수치는 창 크기 M(600px) 기준이며 창 폭 배율을 곱한다.
+            // 수치는 창 크기 L(600px) 기준이며 창 폭 배율을 곱한다.
             float scale = UiPainter.scale(screenWidth);
 
             UiPainter.fillBackground(g2d, screenWidth, screenHeight);

@@ -17,7 +17,7 @@ import java.util.Locale;
  * 상태를 갖지 않으며 호출자가 넘긴 Graphics2D에만 그린다.
  */
 public final class UiPainter {
-    /** 디자인 기준 폭. 창 크기 M(600px)을 배율 1.0으로 본다. */
+    /** 디자인 기준 폭. 창 크기 L(600px)을 배율 1.0으로 본다. */
     public static final float BASE_WIDTH = 600f;
 
     private static final float SELECTED_SCALE = 1.05f;
@@ -53,7 +53,7 @@ public final class UiPainter {
      * 화면 폭에 맞춘 배율. S/M/L 창에서 같은 레이아웃을 유지하기 위해 모든 고정 수치에 곱한다.
      *
      * @param width 컴포넌트 폭(px)
-     * @return M 크기 기준 배율
+     * @return L 크기 기준 배율
      */
     public static float scale(int width) {
         return Math.max(0.5f, width / BASE_WIDTH);
