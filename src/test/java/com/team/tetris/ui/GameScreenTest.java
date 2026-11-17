@@ -41,7 +41,6 @@ class GameScreenTest {
     private static final int HEIGHT = 772;
     /** 600×772에서 보드 칸은 33px이다. 한 칸 안의 변화인지 넉넉하게 판단한다. */
     private static final int ONE_CELL = 40;
-    private static final int WHITE = 0xFFFFFF;
     /** 아이템 칸 테두리 색 (디자인 토큰 cream). */
     private static final int CREAM = 0xFFF6E8;
     private static final GameEngine.DropTimer IDLE = new GameEngine.DropTimer() {
@@ -100,7 +99,7 @@ class GameScreenTest {
             Rectangle flashed = difference(full, flash);
             assertNotNull(flashed);
             assertTrue(flashed.width > flashed.height * 5, "The whole row flashes: " + flashed);
-            assertTrue(countColor(flash, flashed, WHITE) > 0);
+            assertTrue(countColor(flash, flashed, CREAM) > 0, "Cleared cells pop to cream before disappearing");
 
             fixture.events().onBoardUpdated(new BoardSnapshot(after));
             fixture.events().onLandingUpdated(null, new BoardSnapshot(board(Map.of(18, TetrominoType.O.id()))));
@@ -135,13 +134,13 @@ class GameScreenTest {
             fixture.events().onFeverActivated(10);
             BufferedImage fever = fixture.render();
             assertNotNull(difference(normal, fever), "Fever activation adds its toast and spotlight");
-            assertTrue(countColor(fever, new Rectangle(0, 0, WIDTH, HEIGHT), 0xFFD340) > 0,
+            assertTrue(countColor(fever, new Rectangle(0, 0, WIDTH, HEIGHT), 0xFFD34E) > 0,
                     "Fever notification uses its gold accent");
 
             fixture.events().onSlowDownActivated(3, 2);
             BufferedImage slowDown = fixture.render();
             assertNotNull(difference(fever, slowDown), "Slow-down activation updates the notification");
-            assertTrue(countColor(slowDown, new Rectangle(0, 0, WIDTH, HEIGHT), 0x64E6FF) > 0,
+            assertTrue(countColor(slowDown, new Rectangle(0, 0, WIDTH, HEIGHT), 0x5FD8F0) > 0,
                     "Slow-down notification uses its cyan accent");
 
             fixture.events().onSlowDownActivated(1, 1);

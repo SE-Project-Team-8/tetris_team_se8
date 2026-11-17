@@ -79,6 +79,21 @@ public final class UiFonts {
         return body(size).deriveFont(Font.BOLD);
     }
 
+    /**
+     * 뱃지처럼 기호(×, ▼ 등)가 섞일 수 있는 제목용 서체. Jua에 없는 글자가 있으면 굵은 본문 서체를 쓴다.
+     *
+     * @param text 그릴 문자열
+     * @param size 포인트 크기
+     * @return 문자열 전체를 그릴 수 있는 서체
+     */
+    public static Font displayOrFallback(String text, float size) {
+        Font display = display(size);
+        if (text == null || display.canDisplayUpTo(text) == -1) {
+            return display;
+        }
+        return body(size).deriveFont(Font.BOLD);
+    }
+
     // 클래스 로딩 시점까지 폰트 파일 읽기를 미룬다.
     private static final class Holder {
         static final Font DISPLAY = load(JUA_PATH, new Font(Font.SANS_SERIF, Font.BOLD, 12));

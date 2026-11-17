@@ -9,6 +9,7 @@ import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.Stroke;
 import java.awt.geom.AffineTransform;
+import java.awt.geom.Path2D;
 import java.awt.geom.RoundRectangle2D;
 import java.util.Locale;
 
@@ -184,7 +185,7 @@ public final class UiPainter {
      * @return 뱃지 폭(px). 옆에 다른 요소를 이어 붙일 때 쓴다.
      */
     public static int drawBadge(Graphics2D g, int x, int y, int height, String text, Color background, Color foreground) {
-        Font font = UiFonts.display(height * 0.6f);
+        Font font = UiFonts.displayOrFallback(text, height * 0.6f);
         FontMetrics fm = g.getFontMetrics(font);
         int padding = Math.round(height * 0.6f);
         int width = badgeWidth(g, height, text);
@@ -200,7 +201,7 @@ public final class UiPainter {
      * {@link #drawBadge}가 그릴 뱃지의 폭. 오른쪽 정렬할 때 먼저 잰다.
      */
     public static int badgeWidth(Graphics2D g, int height, String text) {
-        FontMetrics fm = g.getFontMetrics(UiFonts.display(height * 0.6f));
+        FontMetrics fm = g.getFontMetrics(UiFonts.displayOrFallback(text, height * 0.6f));
         return fm.stringWidth(text) + Math.round(height * 0.6f) * 2;
     }
 
@@ -252,6 +253,59 @@ public final class UiPainter {
                     centeredBaseline(fm, top, tile));
         }
         return top + tile + shadow;
+    }
+
+    /**
+     * 네 갈래 반짝이(✦). 번들 서체에 글리프가 없어 도형으로 그린다. 줄 삭제 팝·피버 토스트에 쓴다.
+     *
+     * @param radius 중심에서 뾰족한 끝까지 거리(px)
+     */
+    public static void drawSparkle(Graphics2D g, int centerX, int centerY, int radius, Color color) {
+        float inner = radius * 0.32f;
+        Path2D.Float star = new Path2D.Float();
+        for (int point = 0; point < 8; point++) {
+            double angle = Math.PI / 4 * point - Math.PI / 2;
+            float distance = point % 2 == 0 ? radius : inner;
+            float px = centerX + (float) Math.cos(angle) * distance;
+            float py = centerY + (float) Math.sin(angle) * distance;
+            if (point == 0) star.moveTo(px, py);
+            else star.lineTo(px, py);
+        }
+        star.closePath();
+        g.setColor(color);
+        g.fill(star);
+    }
+
+    /**
+     * 다섯 갈래 별(★). 피버 토스트 제목 양옆 장식.
+     */
+    public static void drawStar(Graphics2D g, int centerX, int centerY, int radius, Color color) {
+        float inner = radius * 0.45f;
+        Path2D.Float star = new Path2D.Float();
+        for (int point = 0; point < 10; point++) {
+            double angle = Math.PI / 5 * point - Math.PI / 2;
+            float distance = point % 2 == 0 ? radius : inner;
+            float px = centerX + (float) Math.cos(angle) * distance;
+            float py = centerY + (float) Math.sin(angle) * distance;
+            if (point == 0) star.moveTo(px, py);
+            else star.lineTo(px, py);
+        }
+        star.closePath();
+        g.setColor(color);
+        g.fill(star);
+    }
+
+    /**
+     * 아래를 향한 삼각형(▼). 슬로우다운 토스트·LEVEL 감소 표시.
+     */
+    public static void drawDownTriangle(Graphics2D g, int centerX, int centerY, int size, Color color) {
+        Path2D.Float triangle = new Path2D.Float();
+        triangle.moveTo(centerX - size / 2f, centerY - size * 0.4f);
+        triangle.lineTo(centerX + size / 2f, centerY - size * 0.4f);
+        triangle.lineTo(centerX, centerY + size * 0.45f);
+        triangle.closePath();
+        g.setColor(color);
+        g.fill(triangle);
     }
 
     /**

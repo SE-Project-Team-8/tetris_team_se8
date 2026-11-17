@@ -10,12 +10,10 @@ import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
-import java.awt.RadialGradientPaint;
 import java.awt.event.ActionEvent;
 import java.awt.font.TextAttribute;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
-import java.awt.geom.Point2D;
 import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.List;
@@ -72,10 +70,15 @@ public class GameScreen extends JPanel implements Screen {
     private static final int BASE_PREVIEW_CELL = 18;
     /** 우측 정보 패널 열이 창 폭에서 차지하는 비율. */
     private static final float SIDEBAR_RATIO = 0.38f;
-    /** 토스트가 헤더 아래에 오도록 하는 기준 높이. */
-    private static final int HEADER_HEIGHT = 40;
     private static final Color ITEM_MODE_BADGE = new Color(0xB07FE8);
-    private static final int[] LINE_CLEAR_FLASH_ALPHA = {255, 70, 255, 0};
+    /** 줄 삭제 팝 단계. 프레임 간격(65ms)마다 하나씩 넘어가며, 마지막 단계 뒤에 압축된 보드를 보여 준다. */
+    private enum LineClearStage { POP, POP_HOLD, FADE, CLEARED }
+    private static final LineClearStage[] LINE_CLEAR_STAGES = LineClearStage.values();
+    /** 아이템 토스트 종류. 보드 색조와 헤더 뱃지를 정한다. */
+    private enum ItemEffectKind { FEVER, SLOW }
+    private static final Color SLOW_COLOR = new Color(0x5FD8F0);
+    /** 보드 상태 틴트 불투명도 (스펙: 13%). */
+    private static final float BOARD_TINT_ALPHA = 0.13f;
     /** 한 번 누르면 한 번만 일어나야 하는 동작. 이동·회전은 누르고 있으면 계속 반복된다. */
     private static final Set<GameAction> ONE_PRESS_ACTIONS =
             EnumSet.of(GameAction.HARD_DROP, GameAction.PAUSE, GameAction.QUIT);
@@ -200,17 +203,17 @@ public class GameScreen extends JPanel implements Screen {
 
         @Override
         public void onFeverActivated(int seconds) {
-            showItemEffect("★ FEVER TIME! ★", "2X SCORE  ·  " + seconds + " SECONDS",
-                    BEST_SCORE_COLOR, FEVER_NOTIFICATION_MS, true);
+            showItemEffect("FEVER TIME!", "2X SCORE  ·  " + seconds + " SECONDS",
+                    UiColors.ACCENT, FEVER_NOTIFICATION_MS, ItemEffectKind.FEVER);
         }
 
         @Override
         public void onSlowDownActivated(int previousLevel, int currentLevel) {
-            String title = currentLevel < previousLevel ? "LEVEL DOWN!" : "SPEED AT MINIMUM";
+            String title = currentLevel < previousLevel ? "SLOW DOWN" : "MIN SPEED";
             String subtitle = currentLevel < previousLevel
                     ? "LEVEL " + previousLevel + "  →  " + currentLevel
                     : "LEVEL " + currentLevel + " CANNOT DROP";
-            showItemEffect(title, subtitle, new Color(100, 230, 255), SLOW_DOWN_NOTIFICATION_MS, false);
+            showItemEffect(title, subtitle, SLOW_COLOR, SLOW_DOWN_NOTIFICATION_MS, ItemEffectKind.SLOW);
         }
 
         @Override
@@ -243,7 +246,8 @@ public class GameScreen extends JPanel implements Screen {
     private String itemEffectTitle;
     private String itemEffectSubtitle;
     private Color itemEffectColor;
-    private boolean itemSpotlightActive;
+    /** 지금 떠 있는 아이템 토스트 종류. 슬로우다운 색조는 토스트가 떠 있는 동안만 보인다. */
+    private ItemEffectKind itemEffectKind;
     private int itemEffectElapsedMs;
     private int itemEffectDurationMs;
     private int[][] pendingBoard;
@@ -282,12 +286,12 @@ public class GameScreen extends JPanel implements Screen {
         repaint();
     }
 
-    private void showItemEffect(String title, String subtitle, Color color, int durationMs, boolean spotlight) {
+    private void showItemEffect(String title, String subtitle, Color color, int durationMs, ItemEffectKind kind) {
         onEdt(() -> {
             itemEffectTitle = title;
             itemEffectSubtitle = subtitle;
             itemEffectColor = color;
-            itemSpotlightActive = spotlight;
+            itemEffectKind = kind;
             itemEffectElapsedMs = 0;
             itemEffectDurationMs = durationMs;
             itemEffectTimer.restart();
@@ -301,14 +305,14 @@ public class GameScreen extends JPanel implements Screen {
             itemEffectTitle = null;
             itemEffectSubtitle = null;
             itemEffectColor = null;
-            itemSpotlightActive = false;
+            itemEffectKind = null;
             itemEffectTimer.stop();
         }
         repaint();
     }
 
     private void advanceLineClearAnimation() {
-        if (flashFrame + 1 >= LINE_CLEAR_FLASH_ALPHA.length) {
+        if (flashFrame + 1 >= LINE_CLEAR_STAGES.length) {
             flashingRows = new int[0];
             lineClearAnimating = false;
             if (pendingBoard != null) {
@@ -477,7 +481,7 @@ public class GameScreen extends JPanel implements Screen {
         itemEffectTitle = null;
         itemEffectSubtitle = null;
         itemEffectColor = null;
-        itemSpotlightActive = false;
+        itemEffectKind = null;
         itemEffectElapsedMs = 0;
         itemEffectDurationMs = 0;
         pendingBoard = null;
@@ -548,13 +552,12 @@ public class GameScreen extends JPanel implements Screen {
             int sideX = frameX + boardWidth + framePadding * 2 + gap;
 
             drawHeader(g2d, margin, width, headerHeight, scale);
-            UiPainter.drawPanel(g2d, frameX, frameY, boardWidth + framePadding * 2, boardHeight + framePadding * 2,
-                    Math.round(BASE_FRAME_RADIUS * scale), UiColors.BOARD, UiColors.PANEL_BORDER, 2f);
+            drawBoardFrame(g2d, frameX, frameY, boardWidth + framePadding * 2, boardHeight + framePadding * 2,
+                    Math.round(BASE_FRAME_RADIUS * scale));
             drawBoard(g2d, boardX, boardY, pitch);
             drawSidebar(g2d, sideX, frameY, width - margin - sideX, scale);
-            drawItemSpotlight(g2d, boardX, boardY, boardWidth, boardHeight);
-            drawItemEffectNotification(g2d, width);
-            drawBestScoreNotification(g2d, width, height);
+            drawItemEffectNotification(g2d, boardX, boardY, boardWidth, boardHeight, scale);
+            drawBestScoreNotification(g2d, boardX, boardY, boardWidth, boardHeight, scale);
 
             if (engine.getState() != GameState.PAUSED) {
                 g2d.setColor(UiColors.withAlpha(UiColors.TEXT_MUTED, 0.75f));
@@ -571,25 +574,33 @@ public class GameScreen extends JPanel implements Screen {
         }
     }
 
-    private void drawItemSpotlight(Graphics2D g2d, int x, int y, int width, int height) {
-        if (!itemSpotlightActive) return;
-        float fade = itemEffectFade();
-        double sweep = Math.sin(itemEffectElapsedMs / 420.0) * width * 0.18;
-        Point2D center = new Point2D.Double(x + width / 2.0 + sweep, y + height * 0.42);
-        float radius = Math.max(width, height) * 0.72f;
-        Graphics2D glow = (Graphics2D) g2d.create();
-        try {
-            glow.setComposite(AlphaComposite.SrcOver);
-            glow.setPaint(new RadialGradientPaint(center, radius, new float[]{0f, 0.55f, 1f},
-                    new Color[]{
-                            new Color(255, 205, 45, Math.round(68 * fade)),
-                            new Color(255, 205, 45, Math.round(24 * fade)),
-                            new Color(255, 205, 45, 0)
-                    }));
-            glow.fillRect(x, y, width, height);
-        } finally {
-            glow.dispose();
+    /** 지금 보드에 입힐 상태 색. 피버는 점수 배율이 켜진 동안, 슬로우다운은 토스트가 떠 있는 동안이다. */
+    private Color boardStateColor() {
+        if (engine.getScoreMultiplier() > 1) return UiColors.PLAYER2;
+        if (itemEffectKind == ItemEffectKind.SLOW) return SLOW_COLOR;
+        return null;
+    }
+
+    /**
+     * 보드 프레임. 피버·슬로우다운 중에는 13% 색조 + 상태색 테두리와 바깥 글로우를 입힌다.
+     * 정적 오버레이 한 장이라 상시 애니메이션 비용이 없다.
+     */
+    private void drawBoardFrame(Graphics2D g2d, int x, int y, int width, int height, int radius) {
+        Color state = boardStateColor();
+        if (state == null) {
+            UiPainter.drawPanel(g2d, x, y, width, height, radius, UiColors.BOARD, UiColors.PANEL_BORDER, 2f);
+            return;
         }
+        // 바깥 글로우: 테두리 밖으로 점점 옅어지는 링 두 겹.
+        for (int ring = 2; ring >= 1; ring--) {
+            int spread = ring * 4;
+            UiPainter.strokeRoundRect(g2d, x - spread, y - spread, width + spread * 2, height + spread * 2,
+                    radius + spread, UiColors.withAlpha(state, 0.10f * (3 - ring)), 4f);
+        }
+        UiPainter.drawPanel(g2d, x, y, width, height, radius, UiColors.BOARD, null, 0f);
+        g2d.setColor(UiColors.withAlpha(state, BOARD_TINT_ALPHA));
+        g2d.fillRoundRect(x, y, width, height, radius * 2, radius * 2);
+        UiPainter.strokeRoundRect(g2d, x, y, width, height, radius, state, 3f);
     }
 
     private float itemEffectFade() {
@@ -599,39 +610,59 @@ public class GameScreen extends JPanel implements Screen {
         return Math.max(0f, (float) (itemEffectDurationMs - itemEffectElapsedMs) / ITEM_EFFECT_FADE_MS);
     }
 
-    private void drawItemEffectNotification(Graphics2D g2d, int width) {
+    /**
+     * 아이템 토스트: 보드 위쪽 가운데의 패널 카드 + 상태색 테두리 + Jua 제목 + 고정폭 부제.
+     * 피버는 제목 양옆에 별, 슬로우다운은 제목 앞에 ▼를 도형으로 그린다.
+     */
+    private void drawItemEffectNotification(Graphics2D g2d, int boardX, int boardY, int boardWidth,
+            int boardHeight, float scale) {
         if (itemEffectTitle == null) return;
         Graphics2D toast = (Graphics2D) g2d.create();
         try {
             toast.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, itemEffectFade()));
-            toast.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 21));
-            FontMetrics titleMetrics = toast.getFontMetrics();
-            toast.setFont(new Font(Font.MONOSPACED, Font.BOLD, 12));
-            FontMetrics subtitleMetrics = toast.getFontMetrics();
-            int boxWidth = Math.min(width - 32, Math.max(titleMetrics.stringWidth(itemEffectTitle),
-                    subtitleMetrics.stringWidth(itemEffectSubtitle)) + 40);
-            int boxHeight = 68;
-            int boxX = (width - boxWidth) / 2;
-            int boxY = HEADER_HEIGHT + 18;
+            Font titleFont = UiFonts.display(Math.round(22 * scale));
+            Font subtitleFont = UiFonts.monoOrFallback(itemEffectSubtitle, Math.round(12 * scale));
+            FontMetrics titleMetrics = toast.getFontMetrics(titleFont);
+            FontMetrics subtitleMetrics = toast.getFontMetrics(subtitleFont);
+            int icon = Math.round(16 * scale);
+            int iconGap = Math.round(8 * scale);
+            int titleWidth = titleMetrics.stringWidth(itemEffectTitle);
+            int decoratedWidth = titleWidth + (itemEffectKind == ItemEffectKind.FEVER ? (icon + iconGap) * 2
+                    : itemEffectKind == ItemEffectKind.SLOW ? icon + iconGap : 0);
+            int boxWidth = Math.min(boardWidth - Math.round(16 * scale),
+                    Math.max(decoratedWidth, subtitleMetrics.stringWidth(itemEffectSubtitle)) + Math.round(48 * scale));
+            int boxHeight = Math.round(74 * scale);
+            int centerX = boardX + boardWidth / 2;
+            int boxX = centerX - boxWidth / 2;
+            int boxY = boardY + Math.round(boardHeight * 0.2f);
 
-            toast.setColor(new Color(8, 12, 18, 225));
-            toast.fillRoundRect(boxX, boxY, boxWidth, boxHeight, 14, 14);
+            UiPainter.drawPanel(toast, boxX, boxY, boxWidth, boxHeight, Math.round(16 * scale),
+                    UiColors.PANEL, itemEffectColor, 3f);
+            int titleBaseline = boxY + Math.round(33 * scale);
+            int titleX = centerX - decoratedWidth / 2;
+            int iconCenterY = titleBaseline - titleMetrics.getAscent() / 2 + Math.round(2 * scale);
+            if (itemEffectKind == ItemEffectKind.FEVER) {
+                UiPainter.drawStar(toast, titleX + icon / 2, iconCenterY, icon / 2, itemEffectColor);
+                UiPainter.drawStar(toast, titleX + decoratedWidth - icon / 2, iconCenterY, icon / 2, itemEffectColor);
+                titleX += icon + iconGap;
+            } else if (itemEffectKind == ItemEffectKind.SLOW) {
+                UiPainter.drawDownTriangle(toast, titleX + icon / 2, iconCenterY, icon, itemEffectColor);
+                titleX += icon + iconGap;
+            }
+            toast.setFont(titleFont);
             toast.setColor(itemEffectColor);
-            toast.drawRoundRect(boxX, boxY, boxWidth, boxHeight, 14, 14);
-            toast.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 21));
-            titleMetrics = toast.getFontMetrics();
-            toast.drawString(itemEffectTitle, (width - titleMetrics.stringWidth(itemEffectTitle)) / 2,
-                    boxY + 29);
-            toast.setFont(new Font(Font.MONOSPACED, Font.BOLD, 12));
-            subtitleMetrics = toast.getFontMetrics();
-            toast.drawString(itemEffectSubtitle, (width - subtitleMetrics.stringWidth(itemEffectSubtitle)) / 2,
-                    boxY + 51);
+            toast.drawString(itemEffectTitle, titleX, titleBaseline);
+            toast.setFont(subtitleFont);
+            toast.setColor(UiColors.TEXT_SECONDARY);
+            UiPainter.drawCentered(toast, itemEffectSubtitle, centerX, boxY + boxHeight - Math.round(17 * scale));
         } finally {
             toast.dispose();
         }
     }
 
-    private void drawBestScoreNotification(Graphics2D g2d, int width, int height) {
+    /** 최고 점수 갱신 알림: 보드 위쪽에 노란 글자를 잠깐 띄웠다가 흐리게 사라진다. */
+    private void drawBestScoreNotification(Graphics2D g2d, int boardX, int boardY, int boardWidth,
+            int boardHeight, float scale) {
         if (!bestScoreNotificationShown
                 || bestScoreElapsedMs >= BEST_SCORE_HOLD_MS + BEST_SCORE_FADE_MS) {
             return;
@@ -643,15 +674,14 @@ public class GameScreen extends JPanel implements Screen {
         }
         var originalComposite = g2d.getComposite();
         g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, Math.max(0f, alpha)));
-        g2d.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 30));
-        String message = "Best Score!";
-        FontMetrics metrics = g2d.getFontMetrics();
-        int messageX = (width - metrics.stringWidth(message)) / 2;
-        int messageY = Math.max(HEADER_HEIGHT + 20, height / 5);
-        g2d.setColor(new Color(105, 65, 0));
-        g2d.drawString(message, messageX + 2, messageY + 2);
+        g2d.setFont(UiFonts.display(Math.round(30 * scale)));
+        String message = "BEST SCORE!";
+        int centerX = boardX + boardWidth / 2;
+        int messageY = boardY + Math.round(boardHeight * 0.12f);
+        g2d.setColor(UiColors.darker(BEST_SCORE_COLOR, 0.6f));
+        UiPainter.drawCentered(g2d, message, centerX + 2, messageY + 2);
         g2d.setColor(BEST_SCORE_COLOR);
-        g2d.drawString(message, messageX, messageY);
+        UiPainter.drawCentered(g2d, message, centerX, messageY);
         g2d.setComposite(originalComposite);
     }
 
@@ -675,6 +705,20 @@ public class GameScreen extends JPanel implements Screen {
             badgeX -= badgeGap + UiPainter.badgeWidth(g2d, badgeHeight, itemBadge);
             UiPainter.drawBadge(g2d, badgeX, badgeY, badgeHeight, itemBadge, ITEM_MODE_BADGE, UiColors.CREAM);
         }
+        // 피버·슬로우다운 중에는 상태 뱃지를 맨 앞에 붙인다.
+        String stateBadge = null;
+        Color stateColor = null;
+        if (engine.getScoreMultiplier() > 1) {
+            stateBadge = "FEVER ×" + engine.getScoreMultiplier();
+            stateColor = UiColors.PLAYER2;
+        } else if (itemEffectKind == ItemEffectKind.SLOW) {
+            stateBadge = "SLOW";
+            stateColor = SLOW_COLOR;
+        }
+        if (stateBadge != null) {
+            badgeX -= badgeGap + UiPainter.badgeWidth(g2d, badgeHeight, stateBadge);
+            UiPainter.drawBadge(g2d, badgeX, badgeY, badgeHeight, stateBadge, stateColor, UiColors.TEXT_ON_ACCENT);
+        }
     }
 
     private void drawBoard(Graphics2D g2d, int x, int y, int cellSize) {
@@ -697,13 +741,7 @@ public class GameScreen extends JPanel implements Screen {
         }
 
         if (flashingRows.length > 0) {
-            int alpha = LINE_CLEAR_FLASH_ALPHA[flashFrame];
-            g2d.setComposite(AlphaComposite.SrcOver);
-            g2d.setColor(new Color(255, 255, 255, alpha));
-            for (int row : flashingRows) {
-                g2d.fillRect(x + 1, y + row * cellSize + 1,
-                        Math.max(1, width - 2), Math.max(1, cellSize - 2));
-            }
+            drawLineClearPop(g2d, x, y, cellSize, width);
         }
 
         if (lineClearAnimating && pendingFalling != null) {
@@ -720,6 +758,43 @@ public class GameScreen extends JPanel implements Screen {
 
         if (!lineClearAnimating && landing != null) {
             drawLandingGhost(g2d, x, y, cellSize);
+        }
+    }
+
+    /**
+     * 줄 삭제 팝 (스펙 §3.1): 지워질 줄이 cream으로 변하며 `^ ^` 웃고 양옆에 반짝이가 뜬다 →
+     * 옅어지며 사라진다 → 빈 줄로 보인 뒤 압축된 보드로 바뀐다. 여러 줄이면 모든 줄이 동시에 팝한다.
+     */
+    private void drawLineClearPop(Graphics2D g2d, int x, int y, int pitch, int width) {
+        LineClearStage stage = LINE_CLEAR_STAGES[flashFrame];
+        int inset = cellInset(pitch);
+        int size = pitch - inset * 2;
+        for (int row : flashingRows) {
+            int rowY = y + row * pitch;
+            // 원래 블럭을 보드색으로 덮고 그 위에 단계별 모습을 그린다.
+            g2d.setColor(UiColors.BOARD);
+            g2d.fillRect(x, rowY, width, pitch);
+            for (int col = 0; col < GameConstants.BOARD_COLS; col++) {
+                int cellX = x + col * pitch + inset;
+                switch (stage) {
+                    case POP, POP_HOLD -> CellPainter.drawPop(g2d, cellX, rowY + inset, size);
+                    case FADE -> {
+                        CellPainter.drawEmptySlot(g2d, cellX, rowY + inset, size);
+                        g2d.setColor(UiColors.withAlpha(UiColors.CREAM, 0.4f));
+                        int arc = CellPainter.radius(size) * 2;
+                        g2d.fillRoundRect(cellX, rowY + inset, size, size, arc, arc);
+                    }
+                    case CLEARED -> CellPainter.drawEmptySlot(g2d, cellX, rowY + inset, size);
+                }
+            }
+            if (stage == LineClearStage.POP || stage == LineClearStage.POP_HOLD) {
+                // 줄 양끝과 가운데 근처에 반짝이 셋. 위치는 줄 번호로 정해 프레임마다 흔들리지 않는다.
+                int sparkle = Math.max(3, Math.round(pitch * 0.28f));
+                UiPainter.drawSparkle(g2d, x - sparkle / 2, rowY + pitch / 4, sparkle, UiColors.ACCENT);
+                UiPainter.drawSparkle(g2d, x + width + sparkle / 2, rowY + pitch * 3 / 4, sparkle, UiColors.ACCENT);
+                int middle = x + pitch * (3 + row % 4) + pitch / 2;
+                UiPainter.drawSparkle(g2d, middle, rowY + pitch / 8, Math.round(sparkle * 0.7f), UiColors.ACCENT);
+            }
         }
     }
 
@@ -787,23 +862,44 @@ public class GameScreen extends JPanel implements Screen {
         }
 
         int statY = y + nextHeight + gap;
+        // 피버 중에는 점수 옆에 배율, 슬로우다운으로 내려간 단계가 있으면 레벨 옆에 ▼단계를 붙인다.
+        int multiplier = engine.getScoreMultiplier();
         drawStatPanel(g2d, "SCORE", String.format(Locale.US, "%,d", score), UiColors.CREAM,
-                x, statY, width, statHeight, scale);
+                multiplier > 1 ? "×" + multiplier : null, UiColors.PLAYER2, x, statY, width, statHeight, scale);
         statY += statHeight + gap;
         drawStatPanel(g2d, "LINES", String.valueOf(engine.getClearedLines()), UiColors.LINES,
-                x, statY, width, statHeight, scale);
+                null, null, x, statY, width, statHeight, scale);
         statY += statHeight + gap;
-        drawStatPanel(g2d, "LEVEL", String.valueOf(engine.getLevel()), UiColors.LEVEL,
-                x, statY, width, statHeight, scale);
+        int slowdown = engine.getSlowdownSteps();
+        drawStatPanel(g2d, "LEVEL", String.valueOf(engine.getLevel()), slowdown > 0 ? SLOW_COLOR : UiColors.LEVEL,
+                slowdown > 0 ? "▼" + slowdown : null, SLOW_COLOR, x, statY, width, statHeight, scale);
     }
 
+    /**
+     * 라벨 + 큰 수치 패널. {@code chip}이 있으면 수치 오른쪽에 작은 알약 표시를 붙인다.
+     */
     private static void drawStatPanel(Graphics2D g2d, String label, String value, Color valueColor,
-            int x, int y, int width, int height, float scale) {
+            String chip, Color chipColor, int x, int y, int width, int height, float scale) {
         UiPainter.drawPanel(g2d, x, y, width, height, Math.round(12 * scale));
         drawPanelLabel(g2d, label, x, y, width, scale);
         g2d.setFont(UiFonts.mono(Math.round(26 * scale)));
+        FontMetrics valueMetrics = g2d.getFontMetrics();
+        int baseline = y + height - Math.round(16 * scale);
+        if (chip == null) {
+            g2d.setColor(valueColor);
+            UiPainter.drawCentered(g2d, value, x + width / 2, baseline);
+            return;
+        }
+        int chipHeight = Math.round(20 * scale);
+        int chipGap = Math.round(8 * scale);
+        int chipWidth = UiPainter.badgeWidth(g2d, chipHeight, chip);
+        int valueWidth = valueMetrics.stringWidth(value);
+        int startX = x + (width - valueWidth - chipGap - chipWidth) / 2;
         g2d.setColor(valueColor);
-        UiPainter.drawCentered(g2d, value, x + width / 2, y + height - Math.round(16 * scale));
+        g2d.drawString(value, startX, baseline);
+        int chipY = baseline - valueMetrics.getAscent() / 2 - chipHeight / 2 + Math.round(2 * scale);
+        UiPainter.drawBadge(g2d, startX + valueWidth + chipGap, chipY, chipHeight, chip, chipColor,
+                UiColors.TEXT_ON_ACCENT);
     }
 
     /** 패널 상단의 작은 대문자 라벨. 자간을 넓혀 목업의 라벨 질감을 낸다. */

@@ -24,6 +24,8 @@ public final class CellPainter {
     private static final String MOUTH = "_";
     private static final Color HIGHLIGHT = new Color(255, 255, 255, 128);
     private static final Color EMPTY_SLOT = new Color(255, 255, 255, 9);
+    /** 줄 삭제 팝 표정 색 (스펙 §3.1). */
+    private static final Color POP_FACE = new Color(0xFFA94F);
 
     private CellPainter() {
     }
@@ -73,6 +75,28 @@ public final class CellPainter {
         fillCandy(g, x, y, size, color);
         UiPainter.strokeRoundRect(g, x, y, size, size, radius(size), UiColors.CREAM, Math.max(1.5f, size * 0.07f));
         drawLetter(g, x, y, size, symbol, UiColors.CELL_GLYPH, 0.45f);
+    }
+
+    /**
+     * 줄 삭제 팝 한 칸: cream 단색 + 주황 `^ ^` 눈과 입. 지워지기 직전 블럭이 웃는 모습이다.
+     */
+    public static void drawPop(Graphics2D g, int x, int y, int size) {
+        int arc = radius(size) * 2;
+        g.setColor(UiColors.CREAM);
+        g.fillRoundRect(x, y, size, size, arc, arc);
+        int centerX = x + size / 2;
+        g.setColor(POP_FACE);
+        if (size >= MIN_FACE_SIZE) {
+            g.setFont(UiFonts.mono(Math.max(8f, Math.round(size * 0.30f))));
+            FontMetrics fm = g.getFontMetrics();
+            int eyeOffset = Math.round(size * 0.13f);
+            int baseline = y + Math.round(size * 0.36f) + fm.getAscent() / 2;
+            g.drawString("^", centerX - eyeOffset - fm.stringWidth("^") / 2, baseline);
+            g.drawString("^", centerX + eyeOffset - fm.stringWidth("^") / 2, baseline);
+        }
+        g.setFont(UiFonts.mono(Math.max(8f, Math.round(size * 0.38f))));
+        FontMetrics fm = g.getFontMetrics();
+        g.drawString(MOUTH, centerX - fm.stringWidth(MOUTH) / 2, y + Math.round(size * 0.60f));
     }
 
     /**
