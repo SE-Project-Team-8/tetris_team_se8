@@ -174,11 +174,11 @@ public final class SettingsScreen extends JPanel implements Screen {
         addButton(buttonRow, "점수 초기화").addActionListener(event -> resetScores());
         addButton(buttonRow, "뒤로").addActionListener(event -> router.showScreen(ScreenRouter.MAIN_MENU));
         PillButton.linkArrowKeys(buttons);
-        // 저장 안내는 저장 버튼 바로 위에, 조작 방법은 맨 아래에 따로 둔다.
+        // 저장 안내는 버튼 바로 아래에, 조작 방법은 맨 아래에 따로 둔다.
         notice.setForeground(UiColors.TEXT_SECONDARY);
         hint.setForeground(UiColors.withAlpha(UiColors.TEXT_MUTED, 0.8f));
-        footer.add(notice, BorderLayout.NORTH);
-        footer.add(buttonRow, BorderLayout.CENTER);
+        footer.add(buttonRow, BorderLayout.NORTH);
+        footer.add(notice, BorderLayout.CENTER);
         footer.add(hint, BorderLayout.SOUTH);
         add(footer, BorderLayout.SOUTH);
 
