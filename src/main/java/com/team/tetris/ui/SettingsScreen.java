@@ -85,7 +85,7 @@ public final class SettingsScreen extends JPanel implements Screen {
     private final JLabel title = new JLabel("설정");
     private final JLabel keySection = new ThemedLabel("조작 키  ·  칸을 누른 뒤 새 키를 입력하세요");
     private final JLabel notice = new ThemedLabel("변경한 내용은 저장을 눌러야 적용됩니다", SwingConstants.CENTER);
-    private final JLabel hint = new ThemedLabel("←→ 값 변경  ·  Tab 다음 항목  ·  Esc 메뉴로", SwingConstants.CENTER);
+    private final JLabel hint = new ThemedLabel("←→ 값 변경  ·  Tab 다음 항목  ·  Esc 나가기", SwingConstants.CENTER);
     private final JPanel form = new JPanel();
     private final PropertyChangeListener focusRepaint = event -> repaint();
     private float appliedScale = -1f;

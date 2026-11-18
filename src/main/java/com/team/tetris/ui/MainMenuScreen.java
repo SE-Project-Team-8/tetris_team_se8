@@ -11,6 +11,7 @@ import java.util.Objects;
 import javax.swing.JPanel;
 
 import com.team.tetris.common.Screen;
+import com.team.tetris.ui.theme.ThemedDialog;
 import com.team.tetris.ui.theme.UiColors;
 import com.team.tetris.ui.theme.UiFonts;
 import com.team.tetris.ui.theme.UiPainter;
@@ -46,7 +47,7 @@ public class MainMenuScreen extends JPanel implements Screen {
         new MenuItem("아이템 모드", startItemMode),
         new MenuItem("설정", () -> router.showScreen(ScreenRouter.SETTINGS)),
         new MenuItem("스코어보드", () -> router.showScreen(ScreenRouter.SCOREBOARD)),
-        new MenuItem("종료", () -> System.exit(0))
+        new MenuItem("게임 종료", this::confirmExit)
     );
 
         setBackground(UiColors.BACKGROUND);
@@ -107,6 +108,14 @@ public class MainMenuScreen extends JPanel implements Screen {
      */
     private void executeSelectedMenu() {
         menuItems.get(selectedIndex).action().run();
+    }
+
+    /** 실수로 Enter를 눌러 바로 꺼지지 않도록 한 번 더 묻는다. 처음 선택은 "취소"다. */
+    private void confirmExit() {
+        if (ThemedDialog.showOptions(this, "게임 종료", "게임을 종료할까요?",
+                ThemedDialog.Tone.WARNING, 1, "종료", "취소") == 0) {
+            System.exit(0);
+        }
     }
 
     @Override
