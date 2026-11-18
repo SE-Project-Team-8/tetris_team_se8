@@ -14,15 +14,17 @@ import java.util.Set;
  * 실제 화면의 적록·청황 색각 구분을 별도로 확인해야 한다.
  */
 public final class ColorScheme {
-    private static final int EMPTY_RGB = 0x10141C;
+    // 빈 칸은 디자인 토큰의 board 색이다. 값은 docs/design/design-tokens.json과 일치시킨다.
+    private static final int EMPTY_RGB = 0x1A1430;
+    // 뿌요풍 캔디 팔레트. 출처: docs/design/design-tokens.json의 blocks.normal.
     private static final ColorScheme STANDARD = new ColorScheme(Map.of(
-            TetrominoType.I, 0x00FFFF,
-            TetrominoType.O, 0xFFFF00,
-            TetrominoType.T, 0xFF00FF,
-            TetrominoType.S, 0x00FF00,
-            TetrominoType.Z, 0xFF0000,
-            TetrominoType.J, 0x0000FF,
-            TetrominoType.L, 0xFFA500), EMPTY_RGB);
+            TetrominoType.I, 0x4FC3E8,
+            TetrominoType.O, 0xFFD34E,
+            TetrominoType.T, 0xB07FE8,
+            TetrominoType.S, 0x6FD66F,
+            TetrominoType.Z, 0xFF7F7F,
+            TetrominoType.J, 0x5C8BF2,
+            TetrominoType.L, 0xFFA94F), EMPTY_RGB);
 
     // Okabe–Ito 팔레트의 일곱 유채색. 검정은 빈 배경과 혼동할 수 있어 종류 색에서 제외한다.
     // 출처: https://jfly.uni-koeln.de/color/ (Color Universal Design, Figure 16).

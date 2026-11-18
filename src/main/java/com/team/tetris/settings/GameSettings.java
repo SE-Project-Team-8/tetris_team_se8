@@ -8,7 +8,8 @@ import java.util.Objects;
 public record GameSettings(ScreenSize screenSize, ColorBlindMode colorBlindMode, KeyBindings keyBindings,
                            Difficulty difficulty) {
     public enum ScreenSize {
-        SMALL(480, 640), MEDIUM(600, 800), LARGE(750, 1000);
+        // LARGE가 디자인 기준 크기(배율 1.0)다. 노트북 화면에서도 창이 넘치지 않도록 800px 높이를 상한으로 둔다.
+        SMALL(480, 640), MEDIUM(540, 720), LARGE(600, 800);
 
         private final int width;
         private final int height;

@@ -41,7 +41,10 @@ class GameScreenTest {
     private static final int HEIGHT = 772;
     /** 600×772에서 보드 칸은 33px이다. 한 칸 안의 변화인지 넉넉하게 판단한다. */
     private static final int ONE_CELL = 40;
-    private static final int WHITE = 0xFFFFFF;
+    /** 아이템 칸 테두리 색 (디자인 토큰 cream). */
+    private static final int CREAM = 0xFFF6E8;
+    /** 무게추 실루엣 색 (디자인 토큰 steel). */
+    private static final int STEEL = 0x4A525E;
     private static final GameEngine.DropTimer IDLE = new GameEngine.DropTimer() {
         @Override public void start(int intervalMillis, Runnable tick) { }
         @Override public void stop() { }
@@ -98,7 +101,7 @@ class GameScreenTest {
             Rectangle flashed = difference(full, flash);
             assertNotNull(flashed);
             assertTrue(flashed.width > flashed.height * 5, "The whole row flashes: " + flashed);
-            assertTrue(countColor(flash, flashed, WHITE) > 0);
+            assertTrue(countColor(flash, flashed, CREAM) > 0, "Cleared cells pop to cream before disappearing");
 
             fixture.events().onBoardUpdated(new BoardSnapshot(after));
             fixture.events().onLandingUpdated(null, new BoardSnapshot(board(Map.of(18, TetrominoType.O.id()))));
@@ -109,7 +112,7 @@ class GameScreenTest {
             Rectangle piece = difference(flash, withPiece);
             assertNotNull(piece, "The next piece the engine already spawned stays visible during the flash");
             assertTrue(piece.y < HEIGHT / 3 && piece.width < ONE_CELL, "Only the spawned cell is added: " + piece);
-            assertTrue(countColor(withPiece, piece, WHITE) > 0, "Its L letter comes from the pending board");
+            assertTrue(countColor(withPiece, piece, CREAM) > 0, "Its L item border comes from the pending board");
         });
         Thread.sleep(700);
         edt(() -> {
@@ -133,13 +136,13 @@ class GameScreenTest {
             fixture.events().onFeverActivated(10);
             BufferedImage fever = fixture.render();
             assertNotNull(difference(normal, fever), "Fever activation adds its toast and spotlight");
-            assertTrue(countColor(fever, new Rectangle(0, 0, WIDTH, HEIGHT), 0xFFD340) > 0,
+            assertTrue(countColor(fever, new Rectangle(0, 0, WIDTH, HEIGHT), 0xFFD34E) > 0,
                     "Fever notification uses its gold accent");
 
             fixture.events().onSlowDownActivated(3, 2);
             BufferedImage slowDown = fixture.render();
             assertNotNull(difference(fever, slowDown), "Slow-down activation updates the notification");
-            assertTrue(countColor(slowDown, new Rectangle(0, 0, WIDTH, HEIGHT), 0x64E6FF) > 0,
+            assertTrue(countColor(slowDown, new Rectangle(0, 0, WIDTH, HEIGHT), 0x5FD8F0) > 0,
                     "Slow-down notification uses its cyan accent");
 
             fixture.events().onSlowDownActivated(1, 1);
@@ -151,20 +154,21 @@ class GameScreenTest {
     }
 
     @Test
-    void anvilUsesBlackMetalInThePreviewAndOnTheBoard() throws Exception {
+    void anvilUsesSteelInThePreviewAndOnTheBoard() throws Exception {
         edt(() -> {
             Fixture fixture = new Fixture();
             fixture.events().onNextBlocksChanged(
                     new int[]{CellCodes.cell(TetrominoType.J.id(), AnvilItem.SYMBOL)});
             BufferedImage preview = fixture.render();
-            assertTrue(countColor(preview, new Rectangle(496, 102, 32, 32), 0x121418) > 0,
-                    "Anvil preview cells use the fixed black-metal color");
+            // 미리보기는 우측 패널 열, 보드 첫 줄은 좌측 상단에 있다. 레이아웃 세부 좌표에 묶이지 않게 영역으로 찾는다.
+            assertTrue(countColor(preview, new Rectangle(WIDTH / 2, 0, WIDTH / 2, HEIGHT / 4), STEEL) > 0,
+                    "Anvil preview uses the steel silhouette color");
 
             int[][] anvilBoard = board(Map.of(0, CellCodes.cell(TetrominoType.J.id(), AnvilItem.SYMBOL)));
             fixture.events().onBoardUpdated(new BoardSnapshot(anvilBoard));
             BufferedImage falling = fixture.render();
-            assertTrue(countColor(falling, new Rectangle(55, 58, 33, 33), 0x121418) > 0,
-                    "Anvil cells on the board use the same fixed black-metal color");
+            assertTrue(countColor(falling, new Rectangle(0, 0, WIDTH / 2, HEIGHT / 6), STEEL) > 0,
+                    "Anvil cells on the board use the same steel color");
             fixture.dispose();
         });
     }

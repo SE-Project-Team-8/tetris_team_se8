@@ -1,13 +1,10 @@
 package com.team.tetris.ui;
 
 import java.awt.Color;
-import java.awt.Font;
-import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.KeyboardFocusManager;
 import java.awt.KeyEventDispatcher;
-import java.awt.RenderingHints;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.util.Objects;
@@ -19,6 +16,9 @@ import com.team.tetris.common.Screen;
 import com.team.tetris.game.GameAction;
 import com.team.tetris.game.GameEngine;
 import com.team.tetris.settings.KeyBindings;
+import com.team.tetris.ui.theme.UiColors;
+import com.team.tetris.ui.theme.UiFonts;
+import com.team.tetris.ui.theme.UiPainter;
 
 // 일시정지 화면
 public class PauseScreen extends JPanel implements Screen {
@@ -27,11 +27,15 @@ public class PauseScreen extends JPanel implements Screen {
     private final Supplier<KeyBindings> bindings;
     private final KeyEventDispatcher resumeKeyDispatcher;
 
+    /** 아래 게임 화면을 어둡게 덮는 반투명 막 (background 토큰을 더 어둡게, 알파 0.72). */
+    private static final Color DIMMED_OVERLAY = new Color(0x14, 0x0F, 0x28, 184);
+    private static final Color CARD_SHADOW = new Color(0, 0, 0, 70);
+
     // 일시정지 메뉴 항목
     private final String[] menuItems = {
-        "Resume",
-        "Main Menu",
-        "Exit"
+        "계속하기",
+        "메인 화면으로 나가기",
+        "게임 종료"
     };
 
     private int selectedIndex = 0; // 현재 선택된 메뉴 인덱스
@@ -50,7 +54,7 @@ public class PauseScreen extends JPanel implements Screen {
             }
             return false;
         };
-        setBackground(Color.BLACK);
+        setBackground(DIMMED_OVERLAY);
         setFocusable(true);
         setOpaque(false);
 
@@ -132,63 +136,67 @@ public class PauseScreen extends JPanel implements Screen {
         router.showScreen(ScreenRouter.MAIN_MENU);
     }
 
+    private static String keyName(int keyCode) {
+        return keyCode == KeyEvent.VK_ESCAPE ? "Esc" : KeyEvent.getKeyText(keyCode);
+    }
+
     @Override
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
 
         Graphics2D g2d = (Graphics2D) g.create();
         try {
-            g2d.setColor(new Color(0, 0, 0, 160));
-            g2d.fillRect(0, 0, getWidth(), getHeight());
-
-            g2d.setRenderingHint(
-                    RenderingHints.KEY_TEXT_ANTIALIASING,
-                    RenderingHints.VALUE_TEXT_ANTIALIAS_ON
-            );
+            UiPainter.prepare(g2d);
 
             int screenWidth = getWidth();
             int screenHeight = getHeight();
+            // 수치는 창 크기 L(600px) 기준이며 창 폭 배율을 곱한다.
+            float scale = UiPainter.scale(screenWidth);
 
-            // 타이틀 렌더링
-            g2d.setColor(Color.YELLOW);
-            g2d.setFont(new Font(Font.MONOSPACED, Font.BOLD, 28));
-            String title = "PAUSED";
-            FontMetrics fmTitle = g2d.getFontMetrics();
-            int titleX = (screenWidth - fmTitle.stringWidth(title)) / 2;
-            g2d.drawString(title, titleX, screenHeight / 4);
+            // 이 화면은 게임 화면 위 레이어에 겹쳐 뜬다. 반투명으로 덮어 멈춘 판이 어둡게 비쳐 보이게 한다.
+            g2d.setColor(DIMMED_OVERLAY);
+            g2d.fillRect(0, 0, screenWidth, screenHeight);
 
-            // 메뉴 항목 렌더링
-            g2d.setFont(new Font(Font.MONOSPACED, Font.BOLD, 20));
-            FontMetrics fmMenu = g2d.getFontMetrics();
-            int startY = screenHeight / 2 - 20;
-            int lineSpacing = 40;
+            // 가운데 카드: 노란 테두리 패널 + 그림자.
+            int buttonHeight = Math.round(46 * scale);
+            int buttonGap = Math.round(12 * scale);
+            int padding = Math.round(40 * scale);
+            int titleSpace = Math.round(86 * scale);
+            int footerSpace = Math.round(52 * scale);
+            int cardWidth = Math.round(screenWidth * 0.56f);
+            int cardHeight = titleSpace + menuItems.length * buttonHeight
+                    + (menuItems.length - 1) * buttonGap + footerSpace;
+            int cardX = (screenWidth - cardWidth) / 2;
+            int cardY = (screenHeight - cardHeight) / 2;
+            int radius = Math.round(22 * scale);
+            g2d.setColor(CARD_SHADOW);
+            g2d.fillRoundRect(cardX - 6, cardY + 8, cardWidth + 12, cardHeight + 12, radius * 2 + 12, radius * 2 + 12);
+            UiPainter.drawPanel(g2d, cardX, cardY, cardWidth, cardHeight, radius,
+                    UiColors.PANEL, UiColors.ACCENT, 3f);
 
+            g2d.setFont(UiFonts.display(Math.round(30 * scale)));
+            g2d.setColor(UiColors.ACCENT);
+            UiPainter.drawCentered(g2d, "일시정지", screenWidth / 2, cardY + Math.round(58 * scale));
+
+            int buttonX = cardX + padding;
+            int buttonWidth = cardWidth - padding * 2;
+            int buttonY = cardY + titleSpace;
             for (int i = 0; i < menuItems.length; i++) {
-                String itemText = menuItems[i];
-
-                if (i == selectedIndex) {
-                    g2d.setColor(Color.CYAN);
-                    itemText = "▶ " + itemText;
-                } else {
-                    g2d.setColor(Color.WHITE);
-                    itemText = "  " + itemText;
-                }
-
-                int itemX = (screenWidth - fmMenu.stringWidth(itemText)) / 2
-                        - fmMenu.charWidth(' ');
-                g2d.drawString(itemText, itemX, startY + (i * lineSpacing));
+                UiPainter.ButtonState state = i == selectedIndex
+                        ? UiPainter.ButtonState.SELECTED
+                        : UiPainter.ButtonState.NORMAL;
+                UiPainter.drawPillButton(g2d, buttonX, buttonY, buttonWidth, buttonHeight,
+                        menuItems[i], state, false, Math.round(18 * scale));
+                buttonY += buttonHeight + buttonGap;
             }
 
-            // 하단 안내 문구
-            g2d.setColor(Color.GRAY);
-            g2d.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+            // 카드 하단 안내 문구. 사용자가 바꾼 키를 그대로 보여 준다.
             KeyBindings keys = bindings.get();
-            String helpText = "[UP/DOWN] Move  [ENTER/SPACE] Select  ["
-                    + KeyEvent.getKeyText(keys.keyFor(GameAction.PAUSE)) + "] Resume  ["
-                    + KeyEvent.getKeyText(keys.keyFor(GameAction.QUIT)) + "] Menu";
-            FontMetrics fmHelp = g2d.getFontMetrics();
-            int helpX = (screenWidth - fmHelp.stringWidth(helpText)) / 2;
-            g2d.drawString(helpText, helpX, screenHeight - 20);
+            String helpText = keyName(keys.keyFor(GameAction.PAUSE)) + " 키로 바로 재개  ·  "
+                    + keyName(keys.keyFor(GameAction.QUIT)) + " 메인 화면으로";
+            g2d.setFont(UiFonts.body(Math.round(12 * scale)));
+            g2d.setColor(UiColors.withAlpha(UiColors.TEXT_MUTED, 0.8f));
+            UiPainter.drawCentered(g2d, helpText, screenWidth / 2, cardY + cardHeight - Math.round(22 * scale));
         } finally {
             g2d.dispose();
         }

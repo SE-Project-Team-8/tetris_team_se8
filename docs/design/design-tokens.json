@@ -1,0 +1,25 @@
+{
+  "blocks": {
+    "normal":     { "I": "#4FC3E8", "O": "#FFD34E", "T": "#B07FE8", "S": "#6FD66F", "Z": "#FF7F7F", "J": "#5C8BF2", "L": "#FFA94F" },
+    "colorblind": { "I": "#56B4E9", "O": "#F0E442", "T": "#CC79A7", "S": "#009E73", "Z": "#D55E00", "J": "#0072B2", "L": "#E69F00" }
+  },
+  "ui": {
+    "background": "#241C3B",
+    "panel": "#332A52",
+    "board": "#1A1430",
+    "cream": "#FFF6E8",
+    "garbage": "#8E8C96",
+    "steel": "#4A525E",
+    "steelHighlight": "#697078",
+    "player1": "#4FC3E8",
+    "player2": "#FF7F7F",
+    "accent": "#FFD34E",
+    "textPrimary": "#FFF6E8",
+    "textSecondary": "#B8AFD6",
+    "textMuted": "#9C92BE",
+    "ghostOutline": "#6E5F9E",
+    "panelBorder": "#4A3D73"
+  },
+  "cellGlyphColor": "rgba(20,14,38,0.78)",
+  "garbageGlyphColor": "rgba(20,14,38,0.55)"
+}
