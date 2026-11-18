@@ -17,7 +17,7 @@ import com.team.tetris.ui.theme.UiColors;
 import com.team.tetris.ui.theme.UiFonts;
 import com.team.tetris.ui.theme.UiPainter;
 
-/** 게임 결과를 보여주고 입력에 따라 이름 입력, 스코어보드 또는 메뉴로 이동하는 화면. */
+/** 게임 결과를 보여주고 입력에 따라 이름 입력, 스코어보드 또는 메인 화면으로 이동하는 화면. */
 public class GameOverScreen extends JPanel implements Screen {
     /** GAMEOVER 로고 타일 색 순서 (목업 기준). 장식이라 팔레트 모드와 무관하게 고정한다. */
     private static final Color[] LOGO_COLORS = {
@@ -31,7 +31,7 @@ public class GameOverScreen extends JPanel implements Screen {
     private int finalLinesCleared = 0;
     // 순위권 판정은 게임/스코어보드 쪽에서 수행하고 그 결과만 전달받는다.
     private boolean qualifiesForLeaderboard;
-    // 0: 이름 등록/스코어보드, 1: 메뉴로. 두 버튼 중 노란 강조가 들어갈 쪽이다.
+    // 0: 이름 등록/스코어보드, 1: 메인 화면으로. 두 버튼 중 노란 강조가 들어갈 쪽이다.
     private int selectedIndex = 0;
 
     public GameOverScreen(ScreenRouter router) {
@@ -141,17 +141,17 @@ public class GameOverScreen extends JPanel implements Screen {
             // ←→로 고른 버튼(Enter가 실행할 동작)을 노란 버튼으로 보여 준다.
             String primary = qualifiesForLeaderboard ? "이름 등록" : "스코어보드";
             int primaryWidth = Math.round(170 * scale);
-            int secondaryWidth = Math.round(130 * scale);
+            int secondaryWidth = Math.round(170 * scale);
             int buttonGap = Math.round(14 * scale);
             int buttonsX = centerX - (primaryWidth + buttonGap + secondaryWidth) / 2;
             UiPainter.drawPillButton(g2d, buttonsX, y, primaryWidth, buttonHeight, primary,
                     buttonState(0), true, Math.round(18 * scale));
             UiPainter.drawPillButton(g2d, buttonsX + primaryWidth + buttonGap, y, secondaryWidth, buttonHeight,
-                    "메뉴로", buttonState(1), true, Math.round(18 * scale));
+                    "메인 화면으로", buttonState(1), true, Math.round(18 * scale));
 
             g2d.setColor(UiColors.withAlpha(UiColors.TEXT_MUTED, 0.75f));
             g2d.setFont(UiFonts.body(Math.round(13 * scale)));
-            UiPainter.drawCentered(g2d, "←→ 선택  ·  Enter 확인  ·  Esc 메뉴로", centerX,
+            UiPainter.drawCentered(g2d, "←→ 선택  ·  Enter 확인  ·  Esc 메인 화면으로", centerX,
                     screenHeight - Math.round(36 * scale));
         } finally {
             g2d.dispose();

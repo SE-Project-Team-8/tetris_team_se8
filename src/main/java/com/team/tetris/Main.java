@@ -213,7 +213,7 @@ public final class Main {
                         }
                         router.showScreen(ScreenRouter.SCOREBOARD);
                     } catch (Exception failure) {
-                        nameInputScreen.showError("Could not save score. Check the name and retry.");
+                        nameInputScreen.showError("점수를 저장하지 못했습니다. 다시 시도해 주세요.");
                     }
                 }
             }.execute();

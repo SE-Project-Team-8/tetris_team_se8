@@ -34,7 +34,7 @@ public class PauseScreen extends JPanel implements Screen {
     // 일시정지 메뉴 항목
     private final String[] menuItems = {
         "계속하기",
-        "메뉴로 나가기",
+        "메인 화면으로 나가기",
         "게임 종료"
     };
 
@@ -193,7 +193,7 @@ public class PauseScreen extends JPanel implements Screen {
             // 카드 하단 안내 문구. 사용자가 바꾼 키를 그대로 보여 준다.
             KeyBindings keys = bindings.get();
             String helpText = keyName(keys.keyFor(GameAction.PAUSE)) + " 키로 바로 재개  ·  "
-                    + keyName(keys.keyFor(GameAction.QUIT)) + " 메뉴로";
+                    + keyName(keys.keyFor(GameAction.QUIT)) + " 메인 화면으로";
             g2d.setFont(UiFonts.body(Math.round(12 * scale)));
             g2d.setColor(UiColors.withAlpha(UiColors.TEXT_MUTED, 0.8f));
             UiPainter.drawCentered(g2d, helpText, screenWidth / 2, cardY + cardHeight - Math.round(22 * scale));

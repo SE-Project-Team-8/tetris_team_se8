@@ -1,29 +1,5 @@
 package com.team.tetris.ui;
 
-import com.team.tetris.common.Difficulty;
-import com.team.tetris.common.GameMode;
-import com.team.tetris.common.Screen;
-import com.team.tetris.scoreboard.ScoreRecord;
-import com.team.tetris.scoreboard.ScoreboardRepository;
-import com.team.tetris.ui.theme.PillButton;
-import com.team.tetris.ui.theme.ThemedLabel;
-import com.team.tetris.ui.theme.UiColors;
-import com.team.tetris.ui.theme.UiFonts;
-import com.team.tetris.ui.theme.UiPainter;
-
-import javax.swing.AbstractAction;
-import javax.swing.BorderFactory;
-import javax.swing.JComponent;
-import javax.swing.JLabel;
-import javax.swing.JPanel;
-import javax.swing.JScrollPane;
-import javax.swing.JTable;
-import javax.swing.KeyStroke;
-import javax.swing.SwingConstants;
-import javax.swing.SwingWorker;
-import javax.swing.table.AbstractTableModel;
-import javax.swing.table.DefaultTableCellRenderer;
-import javax.swing.table.JTableHeader;
 import java.awt.BorderLayout;
 import java.awt.CardLayout;
 import java.awt.Color;
@@ -49,6 +25,31 @@ import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
+import javax.swing.AbstractAction;
+import javax.swing.BorderFactory;
+import javax.swing.JComponent;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.JTable;
+import javax.swing.KeyStroke;
+import javax.swing.SwingConstants;
+import javax.swing.SwingWorker;
+import javax.swing.table.AbstractTableModel;
+import javax.swing.table.DefaultTableCellRenderer;
+import javax.swing.table.JTableHeader;
+
+import com.team.tetris.common.Difficulty;
+import com.team.tetris.common.GameMode;
+import com.team.tetris.common.Screen;
+import com.team.tetris.scoreboard.ScoreRecord;
+import com.team.tetris.scoreboard.ScoreboardRepository;
+import com.team.tetris.ui.theme.PillButton;
+import com.team.tetris.ui.theme.ThemedLabel;
+import com.team.tetris.ui.theme.UiColors;
+import com.team.tetris.ui.theme.UiFonts;
+import com.team.tetris.ui.theme.UiPainter;
+
 /**
  * Persistent ranking view. Disk reads run off the event dispatch thread.
  * One mode and difficulty ranking is shown at a time; the arrow keys switch between them.
@@ -73,7 +74,7 @@ public final class ScoreboardScreen extends JPanel implements Screen {
     private final JPanel content = new JPanel(contentLayout);
     private final JLabel status = new ThemedLabel("", SwingConstants.CENTER);
     private final JLabel title = new JLabel("스코어보드");
-    private final JLabel keys = new ThemedLabel("←→ 난이도  ·  ↑↓ 모드  ·  Esc 메인 화면으로",
+    private final JLabel keys = new ThemedLabel("←→ 난이도  ·  ↑↓ 모드  ·  Esc 나가기",
             SwingConstants.CENTER);
     private final PillButton back = new PillButton("메인 화면으로", false);
     private final List<JLabel> modeTabs = new ArrayList<>();
@@ -235,7 +236,7 @@ public final class ScoreboardScreen extends JPanel implements Screen {
                         contentLayout.show(content, "table");
                     }
                 } catch (Exception failure) {
-                    status.setText("COULD NOT LOAD SCORES  ·  메뉴로 돌아가 다시 시도해 주세요");
+                    status.setText("기록을 불러오지 못했어요  ·  메인 화면에서 다시 시도해 주세요");
                     contentLayout.show(content, "status");
                 }
             }

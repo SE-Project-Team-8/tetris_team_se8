@@ -127,7 +127,7 @@ class ScoreboardScreenTest {
 
         Files.writeString(file, "version=99\ncount=0");
         edt(() -> screen[0].onShow());
-        waitForStatus(screen[0], "COULD NOT LOAD SCORES");
+        waitForStatus(screen[0], "기록을 불러오지 못했어요");
         edt(() -> router[0].dispose());
     }
 
