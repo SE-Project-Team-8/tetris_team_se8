@@ -84,8 +84,8 @@ public final class SettingsScreen extends JPanel implements Screen {
     private final List<SettingCard> cards = new ArrayList<>();
     private final JLabel title = new JLabel("설정");
     private final JLabel keySection = new ThemedLabel("조작 키  ·  칸을 누른 뒤 새 키를 입력하세요");
-    private final JLabel hint = new ThemedLabel("←→ 값 변경  ·  Tab 다음 항목  ·  저장을 눌러야 적용됩니다  ·  Esc 메뉴로",
-            SwingConstants.CENTER);
+    private final JLabel notice = new ThemedLabel("변경한 내용은 저장을 눌러야 적용됩니다", SwingConstants.CENTER);
+    private final JLabel hint = new ThemedLabel("←→ 값 변경  ·  Tab 다음 항목  ·  Esc 메뉴로", SwingConstants.CENTER);
     private final JPanel form = new JPanel();
     private final PropertyChangeListener focusRepaint = event -> repaint();
     private float appliedScale = -1f;
@@ -174,8 +174,11 @@ public final class SettingsScreen extends JPanel implements Screen {
         addButton(buttonRow, "점수 초기화").addActionListener(event -> resetScores());
         addButton(buttonRow, "뒤로").addActionListener(event -> router.showScreen(ScreenRouter.MAIN_MENU));
         PillButton.linkArrowKeys(buttons);
+        // 저장 안내는 저장 버튼 바로 위에, 조작 방법은 맨 아래에 따로 둔다.
+        notice.setForeground(UiColors.TEXT_SECONDARY);
         hint.setForeground(UiColors.withAlpha(UiColors.TEXT_MUTED, 0.8f));
-        footer.add(buttonRow, BorderLayout.NORTH);
+        footer.add(notice, BorderLayout.NORTH);
+        footer.add(buttonRow, BorderLayout.CENTER);
         footer.add(hint, BorderLayout.SOUTH);
         add(footer, BorderLayout.SOUTH);
 
@@ -217,6 +220,7 @@ public final class SettingsScreen extends JPanel implements Screen {
         setBorder(BorderFactory.createEmptyBorder(Math.round(36 * scale), margin, Math.round(22 * scale), margin));
         title.setFont(UiFonts.display(Math.round(30 * scale)));
         keySection.setFont(UiFonts.body(Math.round(13 * scale)));
+        notice.setFont(UiFonts.body(Math.round(13 * scale)));
         hint.setFont(UiFonts.body(Math.round(12 * scale)));
         for (JLabel label : rowLabels) label.setFont(UiFonts.display(Math.round(18 * scale)));
         for (JLabel label : keyLabels) label.setFont(UiFonts.display(Math.round(15 * scale)));
