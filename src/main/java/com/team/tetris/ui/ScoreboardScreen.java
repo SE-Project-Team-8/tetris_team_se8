@@ -73,9 +73,9 @@ public final class ScoreboardScreen extends JPanel implements Screen {
     private final JPanel content = new JPanel(contentLayout);
     private final JLabel status = new ThemedLabel("", SwingConstants.CENTER);
     private final JLabel title = new JLabel("스코어보드");
-    private final JLabel keys = new ThemedLabel("←→ 난이도  ·  ↑↓ 모드  ·  Esc 메뉴로  ·  노란 테두리 = 방금 등록한 기록",
+    private final JLabel keys = new ThemedLabel("←→ 난이도  ·  ↑↓ 모드  ·  Esc 메인 화면으로",
             SwingConstants.CENTER);
-    private final PillButton back = new PillButton("메뉴로", false);
+    private final PillButton back = new PillButton("메인 화면으로", false);
     private final List<JLabel> modeTabs = new ArrayList<>();
     private final List<JLabel> difficultyTabs = new ArrayList<>();
     private GameMode selectedMode = GameMode.NORMAL;
@@ -180,7 +180,10 @@ public final class ScoreboardScreen extends JPanel implements Screen {
         status.setFont(UiFonts.body(Math.round(15 * scale)));
         keys.setFont(UiFonts.body(Math.round(12 * scale)));
         back.setFontSize(Math.round(17 * scale));
-        back.setPreferredSize(new Dimension(Math.round(130 * scale), Math.round(44 * scale)));
+        // 누르는 동안 앞에 "> "가 붙으므로 그만큼 여유를 둔다.
+        int backTextWidth = back.getFontMetrics(UiFonts.display(Math.round(17 * scale))).stringWidth("> " + back.getText());
+        back.setPreferredSize(new Dimension(Math.max(Math.round(130 * scale), backTextWidth + Math.round(44 * scale)),
+                Math.round(44 * scale)));
         Font tabFont = UiFonts.display(Math.round(15 * scale));
         for (JLabel tab : modeTabs) tab.setFont(tabFont);
         for (JLabel tab : difficultyTabs) tab.setFont(UiFonts.display(Math.round(13 * scale)));
