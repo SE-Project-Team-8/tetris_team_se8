@@ -68,7 +68,7 @@ KeyboardFocusManager.getCurrentKeyboardFocusManager().addKeyEventDispatcher(forw
 
 | 알림 | 내용 |
 | --- | --- |
-| `onBoardUpdated(BoardSnapshot)` | 20×10 보드(낙하 블럭 포함). 받은 회색 칸의 코드는 `CellCodes.GARBAGE` |
+| `onBoardUpdated(BoardSnapshot)` | 20×10 보드(낙하 블럭 포함). 받은 회색 칸의 코드는 `CellCodes.GARBAGE`이며 `CellCodes.isGarbage(code)`로 먼저 걸러 낸다 (`isValid`는 이 코드에 false다) |
 | `onLandingUpdated(falling, landing)` | 낙하 블럭과 착지 예고 칸 |
 | `onLinesCleared(rows, boardBeforeClear)` | 줄 삭제 표시용 |
 | `onScoreChanged(int)` | 점수 |

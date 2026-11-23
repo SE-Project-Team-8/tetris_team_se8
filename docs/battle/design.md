@@ -3,6 +3,7 @@
 근거: `requirements-analysis.md`, `rules.md`. 대상 코드는 2026-11-23 기준 `main`(`f316647`)이다.
 
 > 구현 전 초안이다. 새 클래스·메서드 이름은 계획이며, 구현하면서 바뀌면 이 문서를 고친다.
+> 파일 배치와 커밋 단위는 `work-plan.md`에 있다. 코드 초안을 쓰며 계획과 달라진 곳도 거기 표로 정리했다.
 
 ## 1. 설계 원칙
 
@@ -18,7 +19,7 @@
 | `GameEngine.lockAndAdvance()` | 고정 → 줄 삭제 → 점수 → 아이템 효과 → `spawn()` | 줄 삭제와 생성 사이에 공격을 보내고 받는 지점이 없다 (LB-F07) |
 | `GameEngine.LockResult` | 삭제 행 번호와 삭제 전 보드 스냅샷 | 방금 고정한 블럭이 어느 칸이었는지 알 수 없어 공격 줄 모양을 만들 수 없다 (LB-F05) |
 | `block.Board` | 칸을 `TetrominoType[][]`으로 저장. 아래에 줄을 끼워 넣는 기능 없음 | 회색 칸을 표현할 값이 없다 (LB-F08) |
-| `common.events.CellCodes` | 블럭 ID 0~6만 유효. 8진 자리의 7은 비어 있음 | 화면에 회색 칸을 전달할 코드가 없다 |
+| `common.events.CellCodes` | 블럭 ID 0~6과 아이템 문자만 표현. 기존 테스트가 7 이상을 잘못된 코드로 검사한다 | 화면에 회색 칸을 전달할 코드가 없다 |
 | `common.GameMode` | `NORMAL`, `ITEM`. `ScoreboardRepository`가 `valueOf`로 읽고 `ScoreboardScreen`이 `values()`를 돌며 탭을 만듦 | 여기에 대전 방식을 넣으면 스코어보드에 대전 탭이 생긴다 (LB-F15 위반) |
 | `ui.GameScreen` | 1,153줄. 보드 그리기·줄 삭제 연출·키 입력이 엔진 하나에 묶여 있음 | 보드 그리기를 두 번 쓸 수 없다. 키 바인딩은 `KeyBindings` 한 벌만 받는다 |
 | `ui.PauseScreen` | `GameEngine` 하나와 `ScreenRouter.GAME`으로 돌아가는 동작이 고정 | 대전에서는 두 엔진을 멈추고 대전 화면으로 돌아가야 한다 |
@@ -30,11 +31,11 @@
 ```text
 common/battle/                  (새 패키지 — block·game·ui·P2P가 함께 쓰는 값)
 ├── GarbageLine                 공격 줄 한 줄 (10칸 채움 여부)
+├── Player                      P1, P2
 └── VersusMode                  NORMAL, ITEM, TIME_LIMIT
 
 game/versus/                    (새 패키지 — 화면 없는 대전 규칙)
 ├── GarbageQueue                공격 대기열 (최대 10줄)
-├── AttackLink                  엔진이 공격을 보내고 받는 통로
 ├── VersusMatch                 엔진 2개·대기열 2개·승패·제한 시간
 ├── VersusListener              대전 알림 (대기열·레벨·남은 시간·일시정지·결과)
 ├── MatchResult                 승자(P1/P2/무승부)와 종료 사유
@@ -42,7 +43,7 @@ game/versus/                    (새 패키지 — 화면 없는 대전 규칙)
 
 block/Board                     (변경) 회색 칸 저장, 아래에 줄 삽입
 game/BlockBoardDriver           (변경) 공격 줄 계산, 삽입 위임, 스냅샷에 회색 코드
-game/GameEngine                 (변경) AttackLink 연결 지점, LockResult에 공격 줄
+game/GameEngine                 (변경) AttackLink(엔진이 공격을 보내고 받는 통로), LockResult에 공격 줄
 common/events/CellCodes         (변경) GARBAGE 코드
 
 settings/                       (변경 — input.md 4절)
@@ -61,7 +62,7 @@ ui/SettingsScreen               대전 P1·P2 키 영역
 
 ### 3.1 `GarbageLine`, `GarbageQueue`
 
-- `GarbageLine`: 한 줄의 10칸 중 어느 칸이 차 있는지를 담는 불변 값. 데이터 표현은 P2P와 공유하므로 `integration.md` 1절에서 정한다.
+- `GarbageLine`: 한 줄의 10칸 중 어느 칸이 차 있는지를 담는 불변 값. 데이터 표현은 P2P와 공유하므로 `integration.md` 1절에서 정한다. 칸이 하나도 없는 줄과 꽉 찬 줄은 만들 수 없다.
 - `GarbageQueue`: 위에서 아래 순서의 줄 목록.
   - `offer(lines)`: `rules.md` 3절 규칙대로 받고, 실제로 받은 줄 수를 돌려준다. 이미 10줄이면 0.
   - `drain()`: 전부 꺼내고 비운다. 보드 삽입 직전에 부른다.
@@ -89,11 +90,11 @@ ui/SettingsScreen               대전 P1·P2 키 영역
 
 `BoardDriver` 인터페이스에는 `default boolean insertGarbage(List<GarbageLine>)`(기본 구현은 아무 일도 안 함)를 추가한다.
 
-**표시.** `CellCodes.GARBAGE = 7`을 추가하고 `isValid`가 받아들이게 한다. `BlockBoardDriver.snapshot()`은 회색 칸에 이 코드를 넣는다. 화면은 `UiColors.GARBAGE`·`GARBAGE_GLYPH`(이미 정의됨)와 `> <` 문자로 그린다(`design-spec.md` 셀 표). 색 대신 문자로도 구분되므로 색맹 모드에서도 성립한다(LB-I05).
+**표시.** `CellCodes.GARBAGE`(-2)와 `isGarbage(code)`를 추가한다. 블럭 종류도 아이템 문자도 없는 칸이라 `isValid`가 다루는 코드 범위 밖에 둔다(기존 `CellCodesTest`가 7 이상을 잘못된 코드로 검사하므로 빈 자리 7은 쓰지 않는다). `BlockBoardDriver.snapshot()`은 회색 칸에 이 코드를 넣는다. 화면은 `UiColors.GARBAGE`·`GARBAGE_GLYPH`(이미 정의됨)와 `> <` 문자로 그린다(`design-spec.md` 셀 표). 색 대신 문자로도 구분되므로 색맹 모드에서도 성립한다(LB-I05).
 
 ### 3.3 엔진 연결 지점
 
-`GameEngine`이 대전 상대를 모르게, 좁은 통로 하나만 받는다. 아이템의 `GameEffects`와 같은 방식이다.
+`GameEngine`이 대전 상대를 모르게, 좁은 통로 하나만 받는다. 아이템의 `GameEffects`와 같은 방식이다. `BoardDriver`·`DropTimer`처럼 `GameEngine` 안쪽 인터페이스로 둔다(`game`과 `game.versus`가 서로를 import하는 순환을 피한다).
 
 ```java
 /** 엔진이 대전 상대와 공격 줄을 주고받는 통로. 1인 모드는 NONE을 쓴다. */
@@ -133,7 +134,7 @@ public interface AttackLink {
   - 아이템 등장 규칙(`ItemPolicy`)은 드라이버가 각자 가지므로 플레이어별 누적 10줄이 따로 세어진다. `ItemRegistry`는 함께 쓴다.
 - **조작**: `start(mode)`, `handle(player, action)`, `pause()`, `resume()`, `stop()`. 일시정지·재개·중단은 두 엔진에 함께 건다.
 - **승패**: 각 엔진의 `onGameOver`를 받아, 먼저 끝난 쪽을 패자로 정하고 상대 엔진을 `stop()`한 뒤 `MatchResult`를 한 번만 알린다.
-- **제한 시간**: `TIME_LIMIT`에서 1초 간격으로 남은 시간을 줄인다. 엔진의 `DropTimer`를 주입받아 테스트에서 시간을 직접 넘긴다. 일시정지 중에는 멈춘다. 0이 되면 두 엔진을 멈추고 점수를 비교한다.
+- **제한 시간**: `TIME_LIMIT`에서 1초 간격으로 남은 시간을 줄인다. 엔진의 `DropTimer`를 주입받아 테스트에서 시간을 직접 넘긴다. 실제 게임은 `GameEngine.newSwingTimer()`로 얻는다. 일시정지 중에는 멈춘다. 0이 되면 두 엔진을 멈추고 점수를 비교한다.
 - **알림**: 플레이어별 `GameEventListener`(보드·점수·다음 블럭 등 기존 이벤트 그대로)와 대전 알림 `VersusListener`. 목록은 `ui-contract.md` 4절.
 
 플레이어별 표시 정보가 기존 `GameEventListener` 그대로 흐르므로, 화면의 플레이어 패널은 상대가 로컬 엔진인지 네트워크인지 구분하지 않는다. P2P 통합의 접점이다(`integration.md` 2절).
