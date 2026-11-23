@@ -11,14 +11,14 @@
 
 **이 표가 작업의 기준이다.** 어느 기기에서든 여기를 보고 이어서 한다. 커밋할 때 해당 줄의 상태를 같은 커밋에서 고치고, 커밋한 뒤 바로 푸시한다.
 
-마지막 갱신: 2026-11-24 — 커밋 3 완료.
+마지막 갱신: 2026-11-24 — 커밋 4 완료. 코드 초안은 모두 커밋으로 옮김.
 
 | # | 커밋 | 상태 | 메모 |
 | --- | --- | --- | --- |
 | 1 | 공격 줄 값과 공격 대기열 | 완료 | `Player` 테스트는 `GarbageLineTest`에 함께 둠 |
 | 2 | 보드에 회색 줄 저장과 아래 삽입 | 완료 | |
 | 3 | 줄 삭제 결과에 공격 줄 모양 | 완료 | |
-| 4 | 엔진에 공격을 보내고 받는 지점 | 초안 | 본 코드 있음, 테스트 없음 |
+| 4 | 엔진에 공격을 보내고 받는 지점 | 완료 | 초안의 `GameEngine.newSwingTimer()`는 쓰는 곳이 생기는 커밋 6으로 미룸 |
 | 5 | 대전 한 판을 진행하는 `VersusMatch` | 대기 | |
 | 6 | 시간제한 대전과 아이템 대전 | 대기 | |
 | 7 | 연결 지점 문서를 구현에 맞춤 | 대기 | |
@@ -32,7 +32,7 @@
 
 상태: **대기** (시작 전) → **초안** (본 코드는 있으나 테스트가 없어 커밋 전) → **완료** (테스트와 함께 커밋하고 푸시함).
 
-**다음에 할 일.** 커밋 4의 테스트(`VersusEngineTest`)를 쓰고 커밋 4를 올린다. 그다음 `wip/versus-core-draft` 브랜치를 지운다.
+**다음에 할 일.** 커밋 5: `VersusMatch`, `VersusListener`, `MatchResult`와 `VersusMatchTest`. 설계는 `design.md` 3.5, 알림 목록은 `ui-contract.md` 4.2.
 
 ### 다른 기기에서 이어서 하기
 
@@ -42,16 +42,7 @@ git switch feat/versus-core          # 처음이면 원격 브랜치를 따라 �
 git pull
 ```
 
-커밋 1~4의 코드 초안은 테스트가 없어 `feat/versus-core`에 커밋하지 않았다. `wip/versus-core-draft` 브랜치에 임시 커밋 하나로 올려 두었으니, 작업 폴더로 가져와 계획한 단위대로 나눠 커밋한다.
-
-```bash
-git checkout origin/wip/versus-core-draft -- src   # 초안 파일을 작업 폴더로 가져온다
-git restore --staged src                           # 스테이징을 풀어 커밋 단위로 나눠 담을 수 있게 한다
-./gradlew compileJava                              # 초안은 컴파일까지 확인된 상태다
-```
-
-- 이 컴퓨터에 이미 초안이 작업 폴더에 있다면 위 두 줄은 필요 없다.
-- 커밋 4까지 올리면 `wip/versus-core-draft`는 지운다 (`git push origin --delete wip/versus-core-draft`). 그때 이 안내도 지운다.
+커밋 1~4로 옮긴 코드 초안의 임시 브랜치(`wip/versus-core-draft`)는 지웠다. `feat/versus-core`만 받으면 된다.
 
 ## 1. 브랜치와 PR
 

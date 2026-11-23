@@ -59,6 +59,23 @@ public final class GameEngine implements AutoCloseable {
     }
 
     /**
+     * Versus mode: the narrow channel through which an engine exchanges attack lines with its opponent.
+     * A single-player engine uses {@link #NONE}. See docs/battle/rules.md section 4 for the order of events.
+     */
+    public interface AttackLink {
+        /** The piece just locked cleared two or more lines; these are the lines to hand over, top to bottom. */
+        void send(List<GarbageLine> lines);
+
+        /** Called right before the next spawn: remove and return every line waiting for this player. */
+        List<GarbageLine> takeIncoming();
+
+        AttackLink NONE = new AttackLink() {
+            @Override public void send(List<GarbageLine> lines) { }
+            @Override public List<GarbageLine> takeIncoming() { return List.of(); }
+        };
+    }
+
+    /**
      * @param attackLines versus mode: lines this lock hands to the opponent, top to bottom; empty when the
      *                    lock cleared fewer than two lines
      */
@@ -170,6 +187,7 @@ public final class GameEngine implements AutoCloseable {
     private final DropTimer timer;
     private final DropTimer survivalTimer;
     private final Supplier<Difficulty> difficultySource;
+    private final AttackLink attackLink;
     private Difficulty difficulty = Difficulty.NORMAL;
     private GameState state = GameState.READY;
     private int score;
@@ -194,6 +212,13 @@ public final class GameEngine implements AutoCloseable {
                 new SwingDropTimer(), difficultySource);
     }
 
+    /** Versus mode: a real-time engine that exchanges attack lines through {@code attackLink}. */
+    public GameEngine(BoardDriver board, GameEventListener listener, Supplier<Difficulty> difficultySource,
+                      AttackLink attackLink) {
+        this(board, listener, new ScoreCalculator(), new DefaultSpeedPolicy(), new SwingDropTimer(),
+                new SwingDropTimer(), difficultySource, attackLink);
+    }
+
     public GameEngine(BoardDriver board, GameEventListener listener, ScoringPolicy scoring, DropTimer timer) {
         this(board, listener, scoring, new DefaultSpeedPolicy(), timer);
     }
@@ -206,6 +231,12 @@ public final class GameEngine implements AutoCloseable {
     public GameEngine(BoardDriver board, GameEventListener listener, ScoringPolicy scoring,
                       SpeedPolicy speedPolicy, DropTimer timer, DropTimer survivalTimer,
                       Supplier<Difficulty> difficultySource) {
+        this(board, listener, scoring, speedPolicy, timer, survivalTimer, difficultySource, AttackLink.NONE);
+    }
+
+    public GameEngine(BoardDriver board, GameEventListener listener, ScoringPolicy scoring,
+                      SpeedPolicy speedPolicy, DropTimer timer, DropTimer survivalTimer,
+                      Supplier<Difficulty> difficultySource, AttackLink attackLink) {
         this.board = Objects.requireNonNull(board, "board");
         this.listener = Objects.requireNonNull(listener, "listener");
         this.scoring = Objects.requireNonNull(scoring, "scoring");
@@ -214,6 +245,7 @@ public final class GameEngine implements AutoCloseable {
         this.timer = Objects.requireNonNull(timer, "timer");
         this.survivalTimer = Objects.requireNonNull(survivalTimer, "survivalTimer");
         this.difficultySource = Objects.requireNonNull(difficultySource, "difficultySource");
+        this.attackLink = Objects.requireNonNull(attackLink, "attackLink");
     }
 
     /** Start a fresh game. Resume a paused game with resume(), not start(). */
@@ -349,7 +381,14 @@ public final class GameEngine implements AutoCloseable {
         // Item effects start after the locked piece's own points are awarded.
         Item item = board.lockedItem();
         if (item != null) item.onActivated(effects);
+        if (!result.attackLines().isEmpty()) attackLink.send(result.attackLines());
         if (result.topOut()) {
+            gameOver();
+            return;
+        }
+        // Received lines enter after this piece's own clear and before the next piece exists (rules.md 4).
+        List<GarbageLine> incoming = Objects.requireNonNull(attackLink.takeIncoming(), "incoming lines");
+        if (!incoming.isEmpty() && board.insertGarbage(incoming)) {
             gameOver();
             return;
         }
