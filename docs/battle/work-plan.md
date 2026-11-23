@@ -11,7 +11,7 @@
 
 **이 표가 작업의 기준이다.** 어느 기기에서든 여기를 보고 이어서 한다. 커밋할 때 해당 줄의 상태를 같은 커밋에서 고치고, 커밋한 뒤 바로 푸시한다.
 
-마지막 갱신: 2026-11-24 — 커밋 6 완료.
+마지막 갱신: 2026-11-24 — 커밋 7 완료.
 
 | # | 커밋 | 상태 | 메모 |
 | --- | --- | --- | --- |
@@ -21,7 +21,7 @@
 | 4 | 엔진에 공격을 보내고 받는 지점 | 완료 | 초안의 `GameEngine.newSwingTimer()`는 쓰는 곳이 생기는 커밋 6으로 미룸 |
 | 5 | 대전 한 판을 진행하는 `VersusMatch` | 완료 | 일반 방식만. 방식별 처리는 커밋 6 |
 | 6 | 시간제한 대전과 아이템 대전 | 완료 | 제한 시간 타이머는 `VersusMatch` 생성자로 주입(기본값 `GameEngine.newSwingTimer()`). 일시정지로 끊긴 1초는 이어서 잰다. 남은 시간 조회 `remainingSeconds()` 추가 |
-| 7 | 연결 지점 문서를 구현에 맞춤 | 대기 | |
+| 7 | 연결 지점 문서를 구현에 맞춤 | 완료 | `ui-contract.md` 2·4절을 코드와 같게. 3·5절(`VersusInput`, 확인용 화면)은 PR 2 계획으로 표시 |
 | — | **PR 1 올리기** | 대기 | |
 | 8 | 대전 키 값 | 대기 | |
 | 9 | 2인 키 입력 분배와 누름 반복 | 대기 | |
@@ -32,7 +32,7 @@
 
 상태: **대기** (시작 전) → **초안** (본 코드는 있으나 테스트가 없어 커밋 전) → **완료** (테스트와 함께 커밋하고 푸시함).
 
-**다음에 할 일.** 커밋 7: `ui-contract.md`·`design.md`·`integration.md`의 메서드 이름과 모양을 실제 코드(`VersusMatch`, `VersusListener`, `MatchResult`, `GameEngine.AttackLink`)와 같게 맞춘다. 커밋 6에서 생긴 `VersusMatch(PlayerSetup, DropTimer)` 생성자와 `remainingSeconds()`도 넣는다. 그다음 PR 1을 올린다.
+**다음에 할 일.** PR 1 올리기(`feat/versus-core`, 템플릿 네 항목). UI·P2P 담당에게 `ui-contract.md` 2·4절을 보라고 알린다. 그다음 `feat/versus-core` 위에 `feat/versus-play`를 만들어 커밋 8(대전 키 값)부터 한다.
 
 ### 다른 기기에서 이어서 하기
 

@@ -20,12 +20,17 @@ package com.team.tetris.common.battle;
 
 /** 공격 줄 한 줄. 비트 c(0~9)가 1이면 c열이 차 있다. 불변이며 그대로 직렬화할 수 있다. */
 public record GarbageLine(int cells) implements java.io.Serializable {
+    public static final int COLS = 10;                  // GameConstants.BOARD_COLS
+    public static boolean isSendable(int cells) { … }   // 빈 줄·꽉 찬 줄·폭을 넘는 값이면 false
+    public static GarbageLine of(boolean... filled) { … }
     public boolean filled(int col) { … }
 }
 ```
 
+`Player`(`P1`, `P2`, `opponent()`)도 같은 패키지에 있다.
+
 - **한 번의 공격** = `List<GarbageLine>`, **위에서 아래** 순서(삭제 전 보드에서의 순서). 보통 2~4줄이고, 넘길 칸이 없는 줄이 빠지면 더 적다.
-- 칸이 하나도 없는 줄과 꽉 찬 줄은 `GarbageLine`으로 만들 수 없다(생성자가 거부한다).
+- 칸이 하나도 없는 줄과 꽉 찬 줄은 `GarbageLine`으로 만들 수 없다(생성자가 거부한다). 네트워크로 받은 값은 `isSendable`로 먼저 확인할 수 있다.
 - 색은 담지 않는다. 받은 쪽에서 항상 회색으로 그린다.
 - 열 번호는 화면 왼쪽이 0이다. 좌우를 뒤집지 않는다.
 - 비트 하나짜리 정수로 둔 이유: 배열을 가진 record는 내용이 바뀔 수 있고 `equals`가 참조 비교가 된다. 정수는 불변이고 한 줄에 4바이트라 전송도 작다.
@@ -38,7 +43,7 @@ public record GarbageLine(int cells) implements java.io.Serializable {
 
 - P2P는 원격 플레이어의 표시 정보를 네트워크로 받아 같은 알림으로 넣으면 된다. 화면 코드는 로컬과 같다.
 - `BoardSnapshot`은 `int[][]` 하나를 가진 record라 직렬화 대상으로 쓰기 쉽다. 전송량을 줄이는 방법(변경분만 보내기 등)은 P2P 쪽에서 정한다.
-- 대전 알림의 정확한 인터페이스는 로직 PR에서 확정해 `ui-contract.md`에 옮겨 적는다.
+- 대전 알림(`VersusListener`)과 결과(`MatchResult`)의 실제 모양은 `ui-contract.md` 4.2절에 있다.
 
 ## 3. 화면 작업 경계와 겹치는 파일
 
@@ -68,5 +73,5 @@ public record GarbageLine(int cells) implements java.io.Serializable {
 ## 5. 통합 일정 (11/26~27)
 
 1. 로컬 로직 PR(공격 줄·대기열·엔진 연결·`VersusMatch`)이 먼저 `main`에 들어간다.
-2. P2P가 `GarbageLine`·`GarbageQueue`·`AttackLink`를 가져다 쓰고, 화면은 UI 담당의 대전 화면을 함께 쓴다.
+2. P2P가 `GarbageLine`·`GarbageQueue`·`GameEngine.AttackLink`를 가져다 쓰고, 화면은 UI 담당의 대전 화면을 함께 쓴다. 원격 상대의 엔진에는 `AttackLink`를 직접 구현해 넣는다(`send`는 소켓으로 보내고, `takeIncoming`은 받아 둔 대기열을 비운다).
 3. 겹치는 규칙(승패 판정, 시간제한)은 `VersusMatch`를 함께 쓰는지, 원격용 변형이 필요한지 그때 정한다.

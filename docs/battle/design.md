@@ -2,8 +2,8 @@
 
 근거: `requirements-analysis.md`, `rules.md`. 대상 코드는 2026-11-23 기준 `main`(`f316647`)이다.
 
-> 구현 전 초안이다. 새 클래스·메서드 이름은 계획이며, 구현하면서 바뀌면 이 문서를 고친다.
-> 파일 배치와 커밋 단위는 `work-plan.md`에 있다. 코드 초안을 쓰며 계획과 달라진 곳도 거기 표로 정리했다.
+> 3.1~3.5(대전 규칙)는 PR 1(`feat/versus-core`)로 구현했고 이 문서는 그 코드와 같다. 3.6과 `VersusInput`·설정·확인용 화면은 PR 2의 계획이다.
+> 구현하면서 바뀌면 이 문서를 고친다. 파일 배치와 커밋 단위는 `work-plan.md`에 있다. 코드 초안을 쓰며 계획과 달라진 곳도 거기 표로 정리했다.
 
 ## 1. 설계 원칙
 
@@ -131,10 +131,12 @@ public interface AttackLink {
 대전 한 판의 진행을 맡는다. 화면은 이 클래스만 상대한다.
 
 - **구성**: 플레이어마다 `BlockBoardDriver` + `GameEngine` + `GarbageQueue`. P1의 `AttackLink.send`는 P2의 대기열에 `offer`하고, P1의 `takeIncoming`은 P1의 대기열을 `drain`한다. P2는 반대다.
+  - 드라이버와 엔진은 `VersusMatch.PlayerSetup`이 만든다. 실제 게임은 `VersusMatch.standard(items, difficulty)`, 테스트는 블록 순서와 타이머를 고정한 구성을 넣는다.
   - 아이템 등장 규칙(`ItemPolicy`)은 드라이버가 각자 가지므로 플레이어별 누적 10줄이 따로 세어진다. `ItemRegistry`는 함께 쓴다.
 - **조작**: `start(mode)`, `handle(player, action)`, `pause()`, `resume()`, `stop()`. 일시정지·재개·중단은 두 엔진에 함께 건다.
 - **승패**: 각 엔진의 `onGameOver`를 받아, 먼저 끝난 쪽을 패자로 정하고 상대 엔진을 `stop()`한 뒤 `MatchResult`를 한 번만 알린다.
-- **제한 시간**: `TIME_LIMIT`에서 1초 간격으로 남은 시간을 줄인다. 엔진의 `DropTimer`를 주입받아 테스트에서 시간을 직접 넘긴다. 실제 게임은 `GameEngine.newSwingTimer()`로 얻는다. 일시정지 중에는 멈춘다. 0이 되면 두 엔진을 멈추고 점수를 비교한다.
+- **아이템 방식**: `start(mode)`가 엔진을 시작하기 전에 두 드라이버의 `setItemMode(mode == ITEM)`을 부른다. 엔진의 `start()`가 드라이버를 초기화하면서 아이템 진행 상황도 새 규칙으로 시작한다.
+- **제한 시간**: `TIME_LIMIT`에서 1초 간격으로 남은 시간을 줄인다. 타이머는 `GameEngine.DropTimer`로 생성자 `VersusMatch(setup, clock)`에 주입해 테스트에서 시간을 직접 넘긴다. 실제 게임(`VersusMatch(setup)`)은 `GameEngine.newSwingTimer()`로 얻는다. 일시정지 중에는 멈추고, 끊긴 1초는 재개 후 남은 부분부터 잰다(엔진의 초당 점수 타이머와 같은 방식). 0이 되면 두 엔진을 멈추고 점수를 비교한다. 멈춘 뒤 늦게 도착한 타이머 호출은 무시한다.
 - **알림**: 플레이어별 `GameEventListener`(보드·점수·다음 블럭 등 기존 이벤트 그대로)와 대전 알림 `VersusListener`. 목록은 `ui-contract.md` 4절.
 
 플레이어별 표시 정보가 기존 `GameEventListener` 그대로 흐르므로, 화면의 플레이어 패널은 상대가 로컬 엔진인지 네트워크인지 구분하지 않는다. P2P 통합의 접점이다(`integration.md` 2절).
