@@ -124,6 +124,14 @@ public final class GameEngine implements AutoCloseable {
         default int elapsedMillis() { return 0; }
     }
 
+    /**
+     * A real-time timer on the EDT, the same kind the engine uses for gravity. For timers that live outside
+     * the engine, such as a versus match's time limit.
+     */
+    public static DropTimer newSwingTimer() {
+        return new SwingDropTimer();
+    }
+
     /** Package-private so tests can drive its clock; the Swing timer itself is never replaced. */
     static final class SwingDropTimer implements DropTimer {
         private final LongSupplier nanoClock;
