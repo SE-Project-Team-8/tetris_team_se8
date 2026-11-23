@@ -161,11 +161,11 @@ public final class ThemedDialog {
             @Override public void actionPerformed(ActionEvent event) {
                 for (PillButton button : buttons) {
                     if (button.isFocusOwner()) {
-                        button.doClick();
+                        button.doClick(PressFeedback.PRESS_MS);
                         return;
                     }
                 }
-                if (!buttons.isEmpty()) buttons.get(0).doClick();
+                if (!buttons.isEmpty()) buttons.get(0).doClick(PressFeedback.PRESS_MS);
             }
         });
         inputs.put(KeyStroke.getKeyStroke("LEFT"), "previous");

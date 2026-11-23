@@ -11,6 +11,7 @@ import java.util.Objects;
 import javax.swing.JPanel;
 
 import com.team.tetris.common.Screen;
+import com.team.tetris.ui.theme.PressFeedback;
 import com.team.tetris.ui.theme.ThemedDialog;
 import com.team.tetris.ui.theme.UiColors;
 import com.team.tetris.ui.theme.UiFonts;
@@ -37,6 +38,7 @@ public class MainMenuScreen extends JPanel implements Screen {
 
     private final List<MenuItem> menuItems;
     private int selectedIndex = 0;
+    private final PressFeedback press = new PressFeedback(this);
 
     public MainMenuScreen(ScreenRouter router, Runnable startNormal, Runnable startItemMode) {
     Objects.requireNonNull(router, "router");
@@ -77,7 +79,7 @@ public class MainMenuScreen extends JPanel implements Screen {
 
     @Override
     public void onHide() {
-        // 화면이 숨겨질 때 추가로 정리할 작업이 없으므로 비워 둔다.
+        press.cancel();
     }
 
     /**
@@ -87,6 +89,8 @@ public class MainMenuScreen extends JPanel implements Screen {
      * - Enter / Space: 선택된 항목 실행
      */
     private void handleKeyPress(int keyCode) {
+        // 버튼 눌림 표시 중에는 선택을 바꾸거나 다시 실행하지 않는다.
+        if (press.isPressing()) return;
         switch (keyCode) {
             case KeyEvent.VK_UP, KeyEvent.VK_W -> {
                 selectedIndex = (selectedIndex - 1 + menuItems.size()) % menuItems.size();
@@ -107,7 +111,7 @@ public class MainMenuScreen extends JPanel implements Screen {
      * 현재 선택된 메뉴에 따라 적절한 화면으로 전환하거나 프로그램을 종료한다.
      */
     private void executeSelectedMenu() {
-        menuItems.get(selectedIndex).action().run();
+        press.press(selectedIndex, menuItems.get(selectedIndex).action());
     }
 
     /** 실수로 Enter를 눌러 바로 꺼지지 않도록 한 번 더 묻는다. 처음 선택은 "취소"다. */
@@ -186,11 +190,8 @@ public class MainMenuScreen extends JPanel implements Screen {
         float fontSize = Math.round(19 * scale);
 
         for (int i = 0; i < menuItems.size(); i++) {
-            UiPainter.ButtonState state = i == selectedIndex
-                    ? UiPainter.ButtonState.SELECTED
-                    : UiPainter.ButtonState.NORMAL;
             UiPainter.drawPillButton(g2d, x, y, buttonWidth, buttonHeight,
-                    menuItems.get(i).label(), state, false, fontSize);
+                    menuItems.get(i).label(), press.stateOf(i, selectedIndex), false, fontSize);
             y += buttonHeight + gap;
         }
     }

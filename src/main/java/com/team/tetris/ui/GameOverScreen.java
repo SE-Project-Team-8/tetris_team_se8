@@ -13,6 +13,7 @@ import java.util.Objects;
 import javax.swing.JPanel;
 
 import com.team.tetris.common.Screen;
+import com.team.tetris.ui.theme.PressFeedback;
 import com.team.tetris.ui.theme.UiColors;
 import com.team.tetris.ui.theme.UiFonts;
 import com.team.tetris.ui.theme.UiPainter;
@@ -33,6 +34,7 @@ public class GameOverScreen extends JPanel implements Screen {
     private boolean qualifiesForLeaderboard;
     // 0: 이름 등록/스코어보드, 1: 메인 화면으로. 두 버튼 중 노란 강조가 들어갈 쪽이다.
     private int selectedIndex = 0;
+    private final PressFeedback press = new PressFeedback(this);
 
     public GameOverScreen(ScreenRouter router) {
         this.router = Objects.requireNonNull(router, "router");
@@ -62,26 +64,30 @@ public class GameOverScreen extends JPanel implements Screen {
 
     @Override
     public void onHide() {
-        // 이 화면은 타이머나 별도 리소스를 사용하지 않아 숨길 때 정리할 작업이 없다.
+        press.cancel();
     }
 
     private void handleKeyPress(int keyCode) {
+        // 버튼 눌림 표시 중에는 선택을 바꾸거나 다시 실행하지 않는다.
+        if (press.isPressing()) return;
         switch (keyCode) {
             case KeyEvent.VK_LEFT, KeyEvent.VK_A -> select(0);
             case KeyEvent.VK_RIGHT, KeyEvent.VK_D -> select(1);
-            case KeyEvent.VK_ENTER, KeyEvent.VK_SPACE -> {
-                if (selectedIndex == 1) {
-                    router.showScreen(ScreenRouter.MAIN_MENU);
-                } else if (qualifiesForLeaderboard) {
-                    // 순위권 점수라면 이름을 먼저 받고, 아니면 바로 전체 기록을 보여준다.
-                    router.showScreen(ScreenRouter.NAME_INPUT);
-                } else {
-                    router.showScreen(ScreenRouter.SCOREBOARD);
-                }
-            }
+            case KeyEvent.VK_ENTER, KeyEvent.VK_SPACE -> press.press(selectedIndex, this::executeSelected);
             case KeyEvent.VK_ESCAPE -> router.showScreen(ScreenRouter.MAIN_MENU);
             default -> {
             }
+        }
+    }
+
+    private void executeSelected() {
+        if (selectedIndex == 1) {
+            router.showScreen(ScreenRouter.MAIN_MENU);
+        } else if (qualifiesForLeaderboard) {
+            // 순위권 점수라면 이름을 먼저 받고, 아니면 바로 전체 기록을 보여준다.
+            router.showScreen(ScreenRouter.NAME_INPUT);
+        } else {
+            router.showScreen(ScreenRouter.SCOREBOARD);
         }
     }
 
@@ -159,7 +165,7 @@ public class GameOverScreen extends JPanel implements Screen {
     }
 
     private UiPainter.ButtonState buttonState(int index) {
-        return index == selectedIndex ? UiPainter.ButtonState.SELECTED : UiPainter.ButtonState.NORMAL;
+        return press.stateOf(index, selectedIndex);
     }
 
     /** FINAL SCORE 카드: 큰 점수 + 아래에 레벨·줄 수. */
