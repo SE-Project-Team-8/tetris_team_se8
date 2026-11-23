@@ -8,7 +8,7 @@
 | --- | --- | --- | --- |
 | 1 | 공격 줄 데이터 구조 | 손동민 (P2P) | 제안 |
 | 2 | 플레이어 표시 정보 | 손동민 (P2P) | 제안 |
-| 3 | 화면 작업 경계와 겹치는 파일 | 조상윤·안성현 (UI), 손동민 | 제안 |
+| 3 | 화면 작업 경계와 겹치는 파일 | 조상윤·안성현 (UI), 손동민 | 제안 — **UI 담당 동의 필요** (`ui-contract.md`) |
 | 4 | `block.Board` 변경 | `block` 담당 | 제안 |
 
 ## 1. 공격 줄 데이터 구조
@@ -33,42 +33,26 @@ public record GarbageLine(int cells) implements java.io.Serializable {
 
 ## 2. 플레이어 표시 정보
 
-대전 화면의 플레이어 패널은 엔진을 직접 보지 않고 **표시 정보만** 받아 그린다(원본 p.11의 방식).
+화면은 엔진을 직접 보지 않고 **표시 정보만** 받아 그린다(원본 p.11의 방식). 호출과 알림의 목록은 `ui-contract.md` 2~4절에 있다.
 
-| 정보 | 전달 수단 (기존) | 비고 |
-| --- | --- | --- |
-| 보드 20×10 (낙하 블럭 포함) | `GameEventListener.onBoardUpdated(BoardSnapshot)` | 회색 칸은 `CellCodes.GARBAGE` |
-| 낙하 블럭·착지 예고 | `onLandingUpdated` | 상대 화면에서는 생략 가능 |
-| 줄 삭제 | `onLinesCleared(rows, boardBeforeClear)` | 연출용 |
-| 점수 | `onScoreChanged(int)` | |
-| 다음 블럭 | `onNextBlocksChanged(int[])` | |
-| 게임 종료 | `onGameOver(int)` | |
-| 공격 대기열 | 대전 전용 알림 (`List<GarbageLine>`) | 새로 추가 |
-| 레벨 | 대전 전용 알림 또는 조회 | 현재는 `engine.getLevel()` 조회뿐 |
-| 남은 시간, 결과 | 대전 전용 알림 | 새로 추가 |
-
-- P2P는 원격 플레이어의 패널에 네트워크로 받은 값을 같은 알림으로 넣으면 된다. 화면 코드는 로컬과 같다.
+- P2P는 원격 플레이어의 표시 정보를 네트워크로 받아 같은 알림으로 넣으면 된다. 화면 코드는 로컬과 같다.
 - `BoardSnapshot`은 `int[][]` 하나를 가진 record라 직렬화 대상으로 쓰기 쉽다. 전송량을 줄이는 방법(변경분만 보내기 등)은 P2P 쪽에서 정한다.
-- 대전 전용 알림의 정확한 인터페이스는 로직 PR에서 확정해 이 절에 옮겨 적는다.
+- 대전 알림의 정확한 인터페이스는 로직 PR에서 확정해 `ui-contract.md`에 옮겨 적는다.
 
 ## 3. 화면 작업 경계와 겹치는 파일
 
-역할 배정상 "대전용 2보드 레이아웃"과 뿌요풍 비주얼은 UI 담당, "대기열 표시 영역"과 "승자 화면"은 로컬 대전 담당이다. 겹치는 부분을 다음과 같이 나누자고 제안한다.
+로컬 대전 담당은 화면을 만들지 않고 연결 지점까지 만든다(`decisions.md` D-12). 담당 경계는 `ui-contract.md` 1절의 표다. **UI 담당의 동의를 받아야 한다.**
 
-| 구분 | 로컬 대전 (윤성빈) | UI (조상윤·안성현) |
-| --- | --- | --- |
-| 대전 화면 | 기존 테마 부품으로 동작하는 2보드 화면, 대기열 격자, 타이머, 승자 화면 | 그 위에 색감·연출 적용, 공격 연출(`design-spec.md` §3.2) |
-| `GameScreen.java` | 셀·보드 그리기를 공용 부품으로 분리하는 리팩토링 (동작 변화 없음) | 분리된 부품의 비주얼 수정 |
-
-같은 파일을 동시에 고치게 되는 곳과 처리 방법.
+같은 파일을 양쪽이 고치게 되는 곳과 처리 방법.
 
 | 파일 | 누가 무엇을 | 제안 |
 | --- | --- | --- |
-| `ui/GameScreen.java` | 로컬: 그리기 분리 / UI: 비주얼 | 분리 리팩토링 PR을 먼저 올려 머지한 뒤 UI가 그 위에서 작업 |
-| `ui/MainMenuScreen.java` | 로컬: "대전 모드" / P2P: "P2P 대전" | 항목 순서를 게임 시작 → 아이템 모드 → 대전 모드 → P2P 대전 → 설정 → 스코어보드 → 게임 종료로 정하고, 생성자에 동작을 하나씩 추가 |
-| `ui/ScreenRouter.java` | 양쪽이 화면 이름 상수 추가 | 로컬 `BATTLE_SELECT`·`VERSUS`·`VERSUS_RESULT`, P2P는 `P2P_` 접두어 |
-| `Main.java` | 양쪽이 조립 코드 추가 | 대전 조립을 메서드로 분리해 충돌 범위를 줄임 |
-| `docs/design/design-spec.md` §6 | 대기열 표현이 "가로 바"로 적혀 있음 | 격자 표현으로 고침 (3차 p.4, `screens.md` 3절) |
+| `Main.java` | 로컬: 엔진 2개·`VersusMatch`·`VersusInput` 조립, 확인용 화면 실행 인자 / UI·P2P: 화면 등록 | 대전 조립을 메서드 하나로 분리해 충돌 범위를 줄인다. 로직 PR이 먼저 들어간다 |
+| `settings/*` | 로컬: `VersusKeyBindings`, 저장 형식 버전 3 | UI는 `SettingsScreen`에서 이 값을 읽고 쓴다. 로컬은 `SettingsScreen`의 화면 배치를 건드리지 않는다 |
+| `ui/SettingsScreen.java` | 로컬: `GameSettings` 생성자가 바뀌어 컴파일을 맞추는 최소 수정 / UI: 대전 키 영역 | 로컬이 먼저 컴파일만 맞추고, UI가 그 위에 영역을 추가 |
+| `ui/MainMenuScreen.java` | UI: "대전 모드" / P2P: "P2P 대전" | 항목 순서를 게임 시작 → 아이템 모드 → 대전 모드 → P2P 대전 → 설정 → 스코어보드 → 게임 종료로 제안 |
+| `ui/ScreenRouter.java` | UI·P2P가 화면 이름 상수 추가 | P2P는 `P2P_` 접두어 |
+| `docs/design/design-spec.md` §6 | 대기열 표현이 "가로 바"로 적혀 있음 | 격자 표현으로 고침 (3차 p.4, `screens.md` 3절) — UI 담당 |
 
 ## 4. `block.Board` 변경
 
@@ -83,5 +67,5 @@ public record GarbageLine(int cells) implements java.io.Serializable {
 ## 5. 통합 일정 (11/26~27)
 
 1. 로컬 로직 PR(공격 줄·대기열·엔진 연결·`VersusMatch`)이 먼저 `main`에 들어간다.
-2. P2P가 `GarbageLine`·`GarbageQueue`·`AttackLink`와 플레이어 패널을 가져다 쓴다.
+2. P2P가 `GarbageLine`·`GarbageQueue`·`AttackLink`를 가져다 쓰고, 화면은 UI 담당의 대전 화면을 함께 쓴다.
 3. 겹치는 규칙(승패 판정, 시간제한)은 `VersusMatch`를 함께 쓰는지, 원격용 변형이 필요한지 그때 정한다.

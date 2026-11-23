@@ -22,6 +22,7 @@
 | `common.GameMode` | `NORMAL`, `ITEM`. `ScoreboardRepository`가 `valueOf`로 읽고 `ScoreboardScreen`이 `values()`를 돌며 탭을 만듦 | 여기에 대전 방식을 넣으면 스코어보드에 대전 탭이 생긴다 (LB-F15 위반) |
 | `ui.GameScreen` | 1,153줄. 보드 그리기·줄 삭제 연출·키 입력이 엔진 하나에 묶여 있음 | 보드 그리기를 두 번 쓸 수 없다. 키 바인딩은 `KeyBindings` 한 벌만 받는다 |
 | `ui.PauseScreen` | `GameEngine` 하나와 `ScreenRouter.GAME`으로 돌아가는 동작이 고정 | 대전에서는 두 엔진을 멈추고 대전 화면으로 돌아가야 한다 |
+| `settings` | `KeyBindings` 한 벌(7개 동작)만 저장. `settings.properties` 형식 버전 2 | 대전용 P1·P2 키를 저장할 자리가 없다 (LB-I11) |
 | `ui.ScreenRouter` | 창 크기는 설정의 세로형 3단계(480×640 / 540×720 / 600×800) | 보드 2개가 들어갈 폭이 아니다 |
 
 ## 3. 새로 만들 것과 바꿀 곳
@@ -35,18 +36,27 @@ game/versus/                    (새 패키지 — 화면 없는 대전 규칙)
 ├── GarbageQueue                공격 대기열 (최대 10줄)
 ├── AttackLink                  엔진이 공격을 보내고 받는 통로
 ├── VersusMatch                 엔진 2개·대기열 2개·승패·제한 시간
-└── MatchResult                 승자(P1/P2/무승부)와 종료 사유
+├── VersusListener              대전 알림 (대기열·레벨·남은 시간·일시정지·결과)
+├── MatchResult                 승자(P1/P2/무승부)와 종료 사유
+└── VersusInput                 키 분배와 누름 반복 (키 코드만 받음, 화면 무관)
 
 block/Board                     (변경) 회색 칸 저장, 아래에 줄 삽입
 game/BlockBoardDriver           (변경) 공격 줄 계산, 삽입 위임, 스냅샷에 회색 코드
 game/GameEngine                 (변경) AttackLink 연결 지점, LockResult에 공격 줄
 common/events/CellCodes         (변경) GARBAGE 코드
 
-ui/                             (새 화면·입력 — screens.md, input.md)
-├── BattleSelectScreen          게임 방식 선택
-├── VersusScreen                2보드 대전 화면
-├── VersusResultScreen          승자 화면
-└── VersusInput                 창 전체 키 분배
+settings/                       (변경 — input.md 4절)
+├── VersusKeyBindings           (새) P1·P2 대전 키
+├── GameSettings                대전 키 항목 추가
+└── SettingsRepository          형식 버전 3, 대전 키 저장·이전 버전 읽기
+
+Main                            (변경) 대전 조립, 확인용 화면 실행 인자
+ui/VersusCheckScreen            (새) 확인용 화면 — 꾸미지 않음 (ui-contract.md 5절)
+
+── 아래는 UI 담당 범위 (screens.md) ──
+ui/MainMenuScreen               "대전 모드" 항목
+ui/ 방식 선택·대전·승자 화면   새 화면
+ui/SettingsScreen               대전 P1·P2 키 영역
 ```
 
 ### 3.1 `GarbageLine`, `GarbageQueue`
@@ -124,23 +134,25 @@ public interface AttackLink {
 - **조작**: `start(mode)`, `handle(player, action)`, `pause()`, `resume()`, `stop()`. 일시정지·재개·중단은 두 엔진에 함께 건다.
 - **승패**: 각 엔진의 `onGameOver`를 받아, 먼저 끝난 쪽을 패자로 정하고 상대 엔진을 `stop()`한 뒤 `MatchResult`를 한 번만 알린다.
 - **제한 시간**: `TIME_LIMIT`에서 1초 간격으로 남은 시간을 줄인다. 엔진의 `DropTimer`를 주입받아 테스트에서 시간을 직접 넘긴다. 일시정지 중에는 멈춘다. 0이 되면 두 엔진을 멈추고 점수를 비교한다.
-- **알림**: 플레이어별 `GameEventListener`(보드·점수·다음 블럭 등 기존 이벤트 그대로)와 대전 전용 알림(대기열 변경, 남은 시간, 결과).
+- **알림**: 플레이어별 `GameEventListener`(보드·점수·다음 블럭 등 기존 이벤트 그대로)와 대전 알림 `VersusListener`. 목록은 `ui-contract.md` 4절.
 
 플레이어별 표시 정보가 기존 `GameEventListener` 그대로 흐르므로, 화면의 플레이어 패널은 상대가 로컬 엔진인지 네트워크인지 구분하지 않는다. P2P 통합의 접점이다(`integration.md` 2절).
 
 ### 3.6 `Main`
 
-`Application`에 대전용 조립을 추가한다. 1인용 엔진·화면은 그대로 두고, `VersusMatch`와 대전 화면 셋을 만들어 `ScreenRouter`에 등록한다. 설정 변경(`applySettings`)이 대전 화면의 색 구성에도 전달되게 한다.
+`Application`에 대전용 조립을 추가한다. 1인용 엔진·화면은 그대로 두고, 플레이어별 드라이버·엔진과 `VersusMatch`, `VersusInput`을 만들어 연결한다. 설정 변경(`applySettings`)이 새 대전 키를 `VersusInput`에 전달하게 한다.
+
+화면 등록은 UI 담당이 한다. 그 전까지는 실행 인자가 있을 때만 확인용 화면을 띄운다(`ui-contract.md` 5절).
 
 ## 4. 성능 (LB-N01)
 
 - 엔진 하나가 쓰는 Swing 타이머는 낙하용과 1초 점수용 둘이다. 대전은 이것이 두 벌이고 제한 시간용 하나가 더해진다. 모두 이벤트가 있을 때만 깨어난다.
-- 화면은 이벤트가 왔을 때 해당 플레이어 영역만 다시 그린다. 상시 다시 그리기 루프는 두지 않는다(`design-spec.md` §7.3).
+- 로직은 값이 바뀔 때만 알림을 보낸다. 화면이 알림을 받은 플레이어 영역만 다시 그리면 상시 다시 그리기 루프가 필요 없다(`design-spec.md` §7.3).
 
 ## 5. 확인이 필요한 설계 판단
 
 | 판단 | 이유 | 확인 대상 |
 | --- | --- | --- |
 | `block.Board`에 회색 표시와 삽입 기능 추가 | `block` 패키지는 game·ui를 import하지 않는다는 규칙을 지키면서 회색 줄을 저장하려면 보드가 알아야 한다. `GarbageLine`을 `common/battle`에 두는 것도 이 규칙 때문이다 | `block` 담당 리뷰 |
-| `GameScreen`의 보드 그리기를 공용 부품으로 분리 | 대전 화면이 같은 셀 그리기를 써야 한다. UI 리뉴얼과 같은 파일을 건드린다 | `integration.md` 3절 |
-| `PauseScreen`을 엔진 대신 작은 인터페이스에 의존하게 변경 | 대전에서 재사용하려면 "재개·나가기·돌아갈 화면"만 알면 된다 | UI 담당 |
+| 화면을 만들지 않고 연결 지점까지만 제공 | 로컬 대전 담당은 UI 담당이 아니다. 역할 배정 문서와 다르므로 동의가 필요하다 (`decisions.md` D-12) | UI 담당 |
+| `VersusInput`을 화면과 무관하게 `game/versus`에 둠 | 키 코드의 눌림·뗌만 받으면 단위 테스트할 수 있고, UI는 이벤트를 넘기기만 하면 된다. 반복 타이머는 엔진의 `DropTimer`처럼 주입한다 | 리뷰 |
