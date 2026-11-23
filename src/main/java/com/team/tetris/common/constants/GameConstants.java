@@ -13,6 +13,12 @@ public final class GameConstants {
     /** 아이템 모드에서 아이템 기회 하나를 얻는 데 필요한 누적 삭제 줄 수 (2차 요구사항 4.2). */
     public static final int LINES_PER_ITEM = 10;
     public static final int SCOREBOARD_MIN_ENTRIES = 10;
+    /** 대전 모드에서 공격이 되는 최소 동시 삭제 줄 수 (3차 요구사항 p.4). */
+    public static final int MIN_ATTACK_CLEARED_LINES = 2;
+    /** 대전 모드의 공격 대기열이 담는 최대 줄 수 (3차 요구사항 p.6). */
+    public static final int ATTACK_QUEUE_MAX_LINES = 10;
+    /** 시간제한 대전의 제한 시간 (docs/battle/decisions.md D-10). */
+    public static final int VERSUS_TIME_LIMIT_SECONDS = 180;
 
     private GameConstants() {
     }
