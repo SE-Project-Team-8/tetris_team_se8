@@ -3,6 +3,7 @@ package com.team.tetris.game;
 import com.team.tetris.common.events.BoardSnapshot;
 import com.team.tetris.common.events.GameEventListener;
 import com.team.tetris.common.Difficulty;
+import com.team.tetris.common.battle.GarbageLine;
 import com.team.tetris.game.item.GameEffects;
 import com.team.tetris.game.item.Item;
 
@@ -50,10 +51,20 @@ public final class GameEngine implements AutoCloseable {
         default BoardSnapshot landingSnapshot() { return null; }
         /** Preview block IDs use the block/UI team's agreed 0..6 mapping. */
         int[] nextBlockTypes();
+        /**
+         * Versus mode: insert received lines at the bottom, top to bottom, pushing the stack up. Called only
+         * between a lock and the next spawn. True means existing blocks were pushed out above the board.
+         */
+        default boolean insertGarbage(List<GarbageLine> lines) { return false; }
     }
 
+    /**
+     * @param attackLines versus mode: lines this lock hands to the opponent, top to bottom; empty when the
+     *                    lock cleared fewer than two lines
+     */
     public record LockResult(
-            int clearedLines, boolean topOut, List<Integer> clearedRows, BoardSnapshot boardBeforeClear) {
+            int clearedLines, boolean topOut, List<Integer> clearedRows, BoardSnapshot boardBeforeClear,
+            List<GarbageLine> attackLines) {
         public LockResult {
             if (clearedLines < 0 || clearedLines > 4) {
                 throw new IllegalArgumentException("clearedLines must be between 0 and 4");
@@ -65,6 +76,12 @@ public final class GameEngine implements AutoCloseable {
             if (!clearedRows.isEmpty() && boardBeforeClear == null) {
                 throw new IllegalArgumentException("A pre-clear board snapshot is required for cleared rows");
             }
+            attackLines = List.copyOf(Objects.requireNonNull(attackLines, "attackLines"));
+        }
+
+        public LockResult(int clearedLines, boolean topOut, List<Integer> clearedRows,
+                          BoardSnapshot boardBeforeClear) {
+            this(clearedLines, topOut, clearedRows, boardBeforeClear, List.of());
         }
 
         public LockResult(int clearedLines, boolean topOut, List<Integer> clearedRows) {

@@ -21,6 +21,12 @@ public final class CellCodes {
     /** 아이템이 특정 칸에 붙어 있지 않을 때의 칸 번호. */
     public static final int NO_INDEX = -1;
 
+    /**
+     * 대전 모드에서 상대에게 받은 회색 줄의 칸. 블록 종류도 아이템 문자도 없으므로 {@link #isValid}가 다루는
+     * 코드 범위 밖의 값으로 두고 {@link #isGarbage}로 구분한다.
+     */
+    public static final int GARBAGE = -2;
+
     private static final int MAX_BASE_TYPE = 6;
     private static final int BASE_RADIX = 8;
     private static final int SYMBOL_RADIX = Character.MAX_VALUE + 1;
@@ -61,6 +67,11 @@ public final class CellCodes {
         if (symbol != NO_SYMBOL && !isSymbol((char) symbol)) return false;
         if (cellIndex > MAX_CELL_INDEX) return false;
         return cellIndex == NO_INDEX || symbol != NO_SYMBOL;
+    }
+
+    /** 대전 모드에서 받은 회색 줄의 칸인지 확인한다. */
+    public static boolean isGarbage(int code) {
+        return code == GARBAGE;
     }
 
     /** 색을 빌려 올 블록 종류의 ID(0..6). */
