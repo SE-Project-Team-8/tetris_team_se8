@@ -1,8 +1,10 @@
 /*
- * 고정된 블록 셀을 소유하는 보드. 배치·행 삭제(강제 행 포함)·셀 삭제·초기화를 제공한다.
+ * 고정된 블록 셀을 소유하는 보드. 배치·행 삭제(강제 행 포함)·셀 삭제·초기화와,
+ * 대전 모드에서 받은 회색 줄을 아래에 끼워 넣는 기능을 제공한다.
  */
 package com.team.tetris.block;
 
+import com.team.tetris.common.battle.GarbageLine;
 import com.team.tetris.common.constants.GameConstants;
 
 import java.util.Arrays;
@@ -22,7 +24,12 @@ import java.util.TreeSet;
 public final class Board implements BoardView {
     private final int rows;
     private final int cols;
+    /** 회색 줄의 칸에 채워 두는 자리 표시용 종류. 회색 칸은 {@link #isGarbage}로 구분한다. */
+    private static final TetrominoType GARBAGE_FILLER = TetrominoType.I;
+
     private TetrominoType[][] cells;
+    /** 대전 모드에서 상대에게 받은 회색 줄의 칸. cells가 비어 있는 칸은 항상 false다. */
+    private boolean[][] garbage;
 
     /** 공용 상수의 20행 × 10열 빈 게임 보드를 생성한다. */
     public Board() {
@@ -45,6 +52,7 @@ public final class Board implements BoardView {
         this.rows = rows;
         this.cols = cols;
         this.cells = new TetrominoType[rows][cols];
+        this.garbage = new boolean[rows][cols];
     }
 
     /** {@inheritDoc} */
@@ -65,6 +73,18 @@ public final class Board implements BoardView {
         Objects.checkIndex(row, rows);
         Objects.checkIndex(col, cols);
         return Optional.ofNullable(cells[row][col]);
+    }
+
+    /**
+     * 대전 모드에서 상대에게 받은 회색 줄의 칸인지 조회한다. 회색 칸도 {@link #cellAt}에서는 차 있는 칸이며,
+     * 그때 돌려주는 종류는 의미 없는 자리 표시용 값이다.
+     *
+     * @throws IndexOutOfBoundsException 행 또는 열이 보드 범위 밖인 경우
+     */
+    public boolean isGarbage(int row, int col) {
+        Objects.checkIndex(row, rows);
+        Objects.checkIndex(col, cols);
+        return garbage[row][col];
     }
 
     /**
@@ -104,6 +124,7 @@ public final class Board implements BoardView {
         for (Cell cell : checked) {
             if (cells[cell.row()][cell.col()] != null) {
                 cells[cell.row()][cell.col()] = null;
+                garbage[cell.row()][cell.col()] = false;
                 removed++;
             }
         }
@@ -170,16 +191,71 @@ public final class Board implements BoardView {
         }
 
         TetrominoType[][] compacted = new TetrominoType[rows][cols];
+        boolean[][] compactedGarbage = new boolean[rows][cols];
         int destination = rows - 1;
         for (int source = rows - 1; source >= 0; source--) {
             if (!rowsToClear.contains(source)) {
                 // 행 참조를 재사용하지 않아 이후 한 행의 변경이 다른 행에 전파되지 않는다.
                 System.arraycopy(cells[source], 0, compacted[destination], 0, cols);
+                System.arraycopy(garbage[source], 0, compactedGarbage[destination], 0, cols);
                 destination--;
             }
         }
         cells = compacted;
+        garbage = compactedGarbage;
         return List.copyOf(rowsToClear);
+    }
+
+    /**
+     * 대전 모드에서 받은 줄을 보드 맨 아래에 끼워 넣고, 기존 줄을 들어온 줄 수만큼 위로 민다.
+     *
+     * 목록의 순서가 위에서 아래 순서이며 마지막 줄이 보드의 맨 아래 줄이 된다. 들어온 칸은 회색으로 표시된다.
+     * 새 배열을 완성한 뒤 참조를 교체하므로 부분 적용 상태를 남기지 않는다. 낙하 중인 블록은 보드가 알지
+     * 못하므로, 엔진은 블록을 고정한 뒤 다음 블록을 만들기 전에만 호출해야 한다.
+     *
+     * @param lines 위에서 아래 순서의 줄. 비어 있으면 아무 일도 하지 않는다
+     * @return 기존 블록이 한 칸이라도 보드 맨 위로 밀려나 사라졌으면 true
+     * @throws IllegalStateException 보드 폭이 줄의 폭과 다른 경우
+     * @throws IllegalArgumentException 줄 수가 보드 높이보다 많은 경우
+     */
+    public boolean insertRowsAtBottom(List<GarbageLine> lines) {
+        List<GarbageLine> incoming = List.copyOf(Objects.requireNonNull(lines, "lines"));
+        if (incoming.isEmpty()) {
+            return false;
+        }
+        if (cols != GarbageLine.COLS) {
+            throw new IllegalStateException("Garbage lines need a board " + GarbageLine.COLS + " columns wide");
+        }
+        int count = incoming.size();
+        if (count > rows) {
+            throw new IllegalArgumentException("More garbage lines than board rows: " + count);
+        }
+
+        TetrominoType[][] shifted = new TetrominoType[rows][cols];
+        boolean[][] shiftedGarbage = new boolean[rows][cols];
+        boolean pushedOut = false;
+        for (int source = 0; source < rows; source++) {
+            int destination = source - count;
+            if (destination >= 0) {
+                System.arraycopy(cells[source], 0, shifted[destination], 0, cols);
+                System.arraycopy(garbage[source], 0, shiftedGarbage[destination], 0, cols);
+            } else if (Arrays.stream(cells[source]).anyMatch(Objects::nonNull)) {
+                pushedOut = true;
+            }
+        }
+        for (int index = 0; index < count; index++) {
+            int row = rows - count + index;
+            GarbageLine line = incoming.get(index);
+            for (int col = 0; col < cols; col++) {
+                if (line.filled(col)) {
+                    shifted[row][col] = GARBAGE_FILLER;
+                    shiftedGarbage[row][col] = true;
+                }
+            }
+        }
+        cells = shifted;
+        garbage = shiftedGarbage;
+        return pushedOut;
     }
 
     /**
@@ -189,6 +265,9 @@ public final class Board implements BoardView {
     public void clear() {
         for (TetrominoType[] row : cells) {
             Arrays.fill(row, null);
+        }
+        for (boolean[] row : garbage) {
+            Arrays.fill(row, false);
         }
     }
 }
