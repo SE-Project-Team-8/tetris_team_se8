@@ -4,7 +4,7 @@
 이 문서는 UI 담당(조상윤·안성현)에게 넘기는 계약이다. P2P 담당(손동민)도 같은 연결 지점을 쓴다.
 
 > 2·4절은 PR 1(`feat/versus-core`)의 코드와 같다. 이름과 모양이 바뀌면 코드와 이 문서를 같은 커밋에서 고친다.
-> 3절(`VersusInput`)과 4.3절의 대전 키, 5절(확인용 화면)은 PR 2에서 만드는 것이라 아직 계획이다.
+> 3절(`VersusInput`)과 5절(확인용 화면)은 PR 2에서 만드는 것이라 아직 계획이다. 4.3절의 대전 키 값은 PR 2에서 먼저 만들었다.
 > **이 범위 나눔은 UI 담당의 동의가 필요하다.** 역할 배정 문서와 다르기 때문이다(1절).
 
 ## 1. 누가 무엇을 만드는가
@@ -130,7 +130,7 @@ KeyboardFocusManager.getCurrentKeyboardFocusManager().addKeyEventDispatcher(forw
 | 값 | 어디서 |
 | --- | --- |
 | 칸의 색·문자 | 기존 `CellCodes`, `ColorScheme`. 회색 칸은 `CellCodes.GARBAGE`이고 `UiColors.GARBAGE`·`GARBAGE_GLYPH`로 그린다 |
-| 화면에 안내할 대전 키 | `VersusKeyBindings.keyFor(player, action)` (PR 2, 계획) |
+| 화면에 안내할 대전 키 | `settings.versusKeys().keyFor(player, action)` (`VersusKeyBindings`) |
 | 일시정지·나가기 키 | 1인용 `KeyBindings`의 `PAUSE`, `QUIT` |
 | 제한 시간 | `GameConstants.VERSUS_TIME_LIMIT_SECONDS` (180) |
 | 대기열 상한 | `GameConstants.ATTACK_QUEUE_MAX_LINES` (10). `GarbageQueue.CAPACITY`와 같다 |

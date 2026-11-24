@@ -2,7 +2,7 @@
 
 근거: LB-F18(창 전체에서 받아 분배), LB-I01(동시 입력에도 즉시·정확 반응), LB-I04(키 안내), LB-I11(대전 키 설정). 원본 p.7.
 
-> 구현 전 초안이다. `VersusInput`, `VersusKeyBindings`는 계획 중인 클래스 이름이다.
+> `VersusKeyBindings`(4절의 값)는 구현했다. `VersusInput`(2·3절)과 설정 파일 저장(4절)은 아직 계획이다.
 
 ## 1. 키 셋
 
@@ -56,9 +56,13 @@
 
 ## 4. 설정 화면 연동
 
-**값.** `settings/VersusKeyBindings`(계획): P1·P2 각각 다섯 동작의 키 코드를 담는 불변 값. `GameSettings`에 항목으로 추가한다.
-- 열 개의 키는 서로 달라야 한다. 일시정지·나가기 키와도 달라야 한다.
+**값.** `settings/VersusKeyBindings`: P1·P2 각각 다섯 동작(`PLAYER_ACTIONS`)의 키 코드를 담는 불변 값. `GameSettings.versusKeys()`로 들고 다닌다.
+- 열 개의 키는 서로 달라야 한다. `VersusKeyBindings`가 만들 때 거부한다.
 - 1인용 키와는 겹쳐도 된다(기본값부터 P2 방향키가 1인용과 같다). 1인 모드와 대전은 동시에 진행되지 않는다.
+- 일시정지·나가기 키와도 달라야 한다. 대전 키를 바꿀 때(`GameSettings.withVersusKeys`) 거부한다.
+  - 반대로 1인용 일시정지·나가기 키를 대전 키로 바꾸는 것은 막지 않는다. 막으면 대전 키 때문에 1인용 키 설정이 안 되거나, 그런 설정 파일을 읽지 못해 `Main`이 기본값으로 덮어쓴다.
+  - 이렇게 겹친 키는 대전 중에 일시정지·나가기로 쓰이고 조작에는 쓰이지 않는다. 설정 화면은 `GameSettings.versusKeyClashes()`로 겹친 동작을 알아내 경고할 수 있다.
+- 화면에 안내할 키는 `keyFor(player, action)`, 눌린 키의 주인은 `assignmentFor(keyCode)`로 찾는다.
 
 **저장.** `settings.properties`의 형식 버전을 2에서 3으로 올리고 `versus.p1.MOVE_LEFT` 같은 키로 저장한다.
 - 버전 1·2 파일을 읽을 때는 대전 키를 기본값으로 채운다. 기존 사용자의 설정 파일이 깨지지 않는다.
