@@ -98,6 +98,11 @@ public class GameScreen extends JPanel implements Screen {
     private static final int FEVER_NOTIFICATION_MS = 2_700;
     private static final int SLOW_DOWN_NOTIFICATION_MS = 2_000;
     private static final Color BEST_SCORE_COLOR = new Color(255, 211, 64);
+    private static final int LEVEL_UP_TICK_MS = 30;
+    /** 레벨업 카드가 떠 있는 전체 시간. 마지막 {@link #ITEM_EFFECT_FADE_MS} 동안 흐려진다. */
+    private static final int LEVEL_UP_NOTIFICATION_MS = 1_800;
+    /** 레벨업 카드가 작게 시작해 살짝 넘치며 제 크기로 튀어나오는 시간. */
+    private static final int LEVEL_UP_POP_MS = 180;
 
     private final ScreenRouter router;
     private final GameEngine engine;
@@ -119,6 +124,8 @@ public class GameScreen extends JPanel implements Screen {
                 } else {
                     board = cells;
                 }
+                // 엔진은 줄을 지우고 다음 블록을 꺼낼 때 레벨을 다시 계산한 뒤 보드를 보낸다.
+                updateLevelUpNotification();
                 repaint();
             });
         }
@@ -255,6 +262,12 @@ public class GameScreen extends JPanel implements Screen {
     private ItemEffectKind itemEffectKind;
     private int itemEffectElapsedMs;
     private int itemEffectDurationMs;
+    /** 마지막으로 확인한 레벨. -1이면 새 판이 시작돼 아직 확인하지 않은 상태다. */
+    private int shownLevel = -1;
+    private int levelUpFrom;
+    private int levelUpTo;
+    /** 레벨업 카드가 뜬 뒤 지난 시간. 음수이면 카드가 없다. */
+    private int levelUpElapsedMs = -1;
     private int[][] pendingBoard;
     private int[][] falling;
     private int[][] pendingFalling;
@@ -263,6 +276,7 @@ public class GameScreen extends JPanel implements Screen {
     private final Timer lineClearTimer = new Timer(LINE_CLEAR_FLASH_INTERVAL_MS, event -> advanceLineClearAnimation());
     private final Timer bestScoreTimer = new Timer(BEST_SCORE_TICK_MS, event -> advanceBestScoreAnimation());
     private final Timer itemEffectTimer = new Timer(ITEM_EFFECT_TICK_MS, event -> advanceItemEffectAnimation());
+    private final Timer levelUpTimer = new Timer(LEVEL_UP_TICK_MS, event -> advanceLevelUpAnimation());
     // 하드드롭 연출 상태. 타이머가 끝나면 비워 다음 리페인트에 원래 모습으로 돌아간다.
     private int[][] dropTrail;
     private int dropDistance;
@@ -303,6 +317,44 @@ public class GameScreen extends JPanel implements Screen {
             bestScoreTimer.stop();
         }
         repaint();
+    }
+
+    /** 레벨이 올랐으면 레벨업 카드를 띄운다. 슬로우다운으로 내려간 레벨은 기억만 한다. */
+    private void updateLevelUpNotification() {
+        int level = engine.getLevel();
+        if (shownLevel >= 0 && level > shownLevel) {
+            levelUpFrom = shownLevel;
+            levelUpTo = level;
+            levelUpElapsedMs = 0;
+            levelUpTimer.restart();
+        }
+        shownLevel = level;
+    }
+
+    private void advanceLevelUpAnimation() {
+        levelUpElapsedMs += LEVEL_UP_TICK_MS;
+        if (levelUpElapsedMs >= LEVEL_UP_NOTIFICATION_MS) {
+            levelUpElapsedMs = -1;
+            levelUpTimer.stop();
+        }
+        repaint();
+    }
+
+    /** 레벨업 카드 불투명도. 끝나기 직전에만 흐려진다. 카드가 없으면 0이다. */
+    private float levelUpFade() {
+        if (levelUpElapsedMs < 0) return 0f;
+        int fadeStart = LEVEL_UP_NOTIFICATION_MS - ITEM_EFFECT_FADE_MS;
+        if (levelUpElapsedMs <= fadeStart) return 1f;
+        return Math.max(0f, (float) (LEVEL_UP_NOTIFICATION_MS - levelUpElapsedMs) / ITEM_EFFECT_FADE_MS);
+    }
+
+    /** 레벨업 카드 크기 배율. 0.7배에서 시작해 살짝 넘쳤다가 1배에 멈춘다 (ease-out-back). */
+    private float levelUpPopScale() {
+        if (levelUpElapsedMs >= LEVEL_UP_POP_MS) return 1f;
+        float t = Math.max(0f, (float) levelUpElapsedMs / LEVEL_UP_POP_MS) - 1f;
+        float overshoot = 1.70158f;
+        float eased = 1f + (overshoot + 1f) * t * t * t + overshoot * t * t;
+        return 0.7f + 0.3f * eased;
     }
 
     private void showItemEffect(String title, String subtitle, Color color, int durationMs, ItemEffectKind kind) {
@@ -550,6 +602,9 @@ public class GameScreen extends JPanel implements Screen {
         lineClearTimer.stop();
         bestScoreTimer.stop();
         itemEffectTimer.stop();
+        levelUpTimer.stop();
+        shownLevel = -1;
+        levelUpElapsedMs = -1;
         clearHardDropEffect();
         flashingRows = new int[0];
         lineClearAnimating = false;
@@ -736,6 +791,75 @@ public class GameScreen extends JPanel implements Screen {
             toast.setFont(subtitleFont);
             toast.setColor(UiColors.TEXT_SECONDARY);
             UiPainter.drawCentered(toast, itemEffectSubtitle, centerX, boxY + boxHeight - Math.round(17 * scale));
+        } finally {
+            toast.dispose();
+        }
+    }
+
+    /**
+     * 레벨업 카드: 아이템 토스트와 같은 패널 카드에 LEVEL 주황 테두리 + 제목 양옆 ▲ + "LEVEL 이전 → 다음" 부제.
+     * 블록을 가리거나 보드 위 알림과 겹치지 않도록 우측 패널 열의 LEVEL 패널 바로 아래 빈 자리에 띄운다.
+     *
+     * @param x 패널 열 왼쪽 x
+     * @param y 카드 윗변 y (LEVEL 패널 아래 간격 포함)
+     * @param width 패널 열 폭. 카드도 위 패널들과 같은 폭으로 그린다.
+     */
+    private void drawLevelUpNotification(Graphics2D g2d, int x, int y, int width, float scale) {
+        if (levelUpElapsedMs < 0) return;
+        Graphics2D toast = (Graphics2D) g2d.create();
+        try {
+            String title = "LEVEL UP!";
+            String subtitle = "LEVEL " + levelUpFrom + "  →  " + levelUpTo;
+            Font titleFont = UiFonts.display(Math.round(24 * scale));
+            Font subtitleFont = UiFonts.monoOrFallback(subtitle, Math.round(12 * scale));
+            FontMetrics titleMetrics = toast.getFontMetrics(titleFont);
+            int icon = Math.round(16 * scale);
+            int iconGap = Math.round(8 * scale);
+            int decoratedWidth = titleMetrics.stringWidth(title) + (icon + iconGap) * 2;
+            int boxWidth = width;
+            int boxHeight = Math.round(78 * scale);
+            int centerX = x + width / 2;
+            int boxX = x;
+            int boxY = y;
+
+            // 카드 가운데를 기준으로 튀어나오듯 커진다.
+            float pop = levelUpPopScale();
+            double centerY = boxY + boxHeight / 2.0;
+            toast.translate(centerX, centerY);
+            toast.scale(pop, pop);
+            toast.translate(-centerX, -centerY);
+            toast.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, levelUpFade()));
+
+            Color deep = UiColors.darker(UiColors.LEVEL, 0.55f);
+            int radius = Math.round(12 * scale);
+            int shadow = Math.max(2, Math.round(5 * scale));
+            toast.setColor(deep);
+            toast.fillRoundRect(boxX, boxY + shadow, boxWidth, boxHeight, radius * 2, radius * 2);
+            UiPainter.drawPanel(toast, boxX, boxY, boxWidth, boxHeight, radius,
+                    UiColors.PANEL, UiColors.LEVEL, 3f);
+
+            int titleBaseline = boxY + Math.round(36 * scale);
+            int titleX = centerX - decoratedWidth / 2;
+            int iconCenterY = titleBaseline - titleMetrics.getAscent() / 2 + Math.round(2 * scale);
+            UiPainter.drawUpTriangle(toast, titleX + icon / 2, iconCenterY, icon, UiColors.LEVEL);
+            UiPainter.drawUpTriangle(toast, titleX + decoratedWidth - icon / 2, iconCenterY, icon, UiColors.LEVEL);
+            // 카드 위 모서리에 작은 반짝이를 얹어 축하하는 느낌을 낸다.
+            int sparkle = Math.round(6 * scale);
+            int sparkleInset = Math.round(14 * scale);
+            UiPainter.drawSparkle(toast, boxX + sparkleInset, boxY + sparkleInset, sparkle, UiColors.ACCENT);
+            UiPainter.drawSparkle(toast, boxX + boxWidth - sparkleInset, boxY + sparkleInset, sparkle,
+                    UiColors.ACCENT);
+
+            int textX = titleX + icon + iconGap;
+            int textShadow = Math.max(1, Math.round(2 * scale));
+            toast.setFont(titleFont);
+            toast.setColor(deep);
+            toast.drawString(title, textX + textShadow, titleBaseline + textShadow);
+            toast.setColor(UiColors.LEVEL);
+            toast.drawString(title, textX, titleBaseline);
+            toast.setFont(subtitleFont);
+            toast.setColor(UiColors.TEXT_SECONDARY);
+            UiPainter.drawCentered(toast, subtitle, centerX, boxY + boxHeight - Math.round(17 * scale));
         } finally {
             toast.dispose();
         }
@@ -1020,6 +1144,13 @@ public class GameScreen extends JPanel implements Screen {
         int slowdown = engine.getSlowdownSteps();
         drawStatPanel(g2d, "LEVEL", String.valueOf(engine.getLevel()), slowdown > 0 ? SLOW_COLOR : UiColors.LEVEL,
                 slowdown > 0 ? "▼" + slowdown : null, SLOW_COLOR, x, statY, width, statHeight, scale);
+        // 레벨업 카드가 떠 있는 동안 LEVEL 패널 테두리도 주황으로 강조해 어느 수치가 올랐는지 보여 준다.
+        float levelGlow = levelUpFade();
+        if (levelGlow > 0f) {
+            UiPainter.strokeRoundRect(g2d, x, statY, width, statHeight, radius,
+                    UiColors.withAlpha(UiColors.LEVEL, levelGlow), 2.5f);
+        }
+        drawLevelUpNotification(g2d, x, statY + statHeight + gap, width, scale);
     }
 
     /**

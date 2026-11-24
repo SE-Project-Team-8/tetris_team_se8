@@ -309,6 +309,19 @@ public final class UiPainter {
     }
 
     /**
+     * 위를 향한 삼각형(▲). 레벨업 카드 제목 양옆 장식.
+     */
+    public static void drawUpTriangle(Graphics2D g, int centerX, int centerY, int size, Color color) {
+        Path2D.Float triangle = new Path2D.Float();
+        triangle.moveTo(centerX - size / 2f, centerY + size * 0.4f);
+        triangle.lineTo(centerX + size / 2f, centerY + size * 0.4f);
+        triangle.lineTo(centerX, centerY - size * 0.45f);
+        triangle.closePath();
+        g.setColor(color);
+        g.fill(triangle);
+    }
+
+    /**
      * 높이 {@code height}인 영역에서 글자가 세로 가운데에 보이도록 하는 기준선 y.
      * Jua처럼 줄 간격(leading)이 큰 글꼴은 getHeight() 기준으로 맞추면 글자가 위로 뜨므로
      * 실제 글자 높이(ascent+descent)만으로 계산한다.
