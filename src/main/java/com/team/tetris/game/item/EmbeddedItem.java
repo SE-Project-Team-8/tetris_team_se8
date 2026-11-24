@@ -5,6 +5,7 @@
 package com.team.tetris.game.item;
 
 import com.team.tetris.block.Board;
+import com.team.tetris.block.BoardView;
 import com.team.tetris.block.Cell;
 
 import java.util.Set;
@@ -21,4 +22,12 @@ public non-sealed interface EmbeddedItem extends Item {
      * @return 강제로 지울 행 번호. 없으면 빈 집합
      */
     Set<Integer> onLock(Board board, Cell itemCell);
+
+    /**
+     * 이 아이템이 {@link #onLock}에서 터뜨릴 범위. 화면의 폭발 연출에만 쓰며 보드를 바꾸지 않는다. {@link #onLock} 바로
+     * 전에, 블록이 기록된 보드로 호출된다. 폭발하지 않는 아이템은 null (기본값).
+     */
+    default Blast blastOf(BoardView board, Cell itemCell) {
+        return null;
+    }
 }

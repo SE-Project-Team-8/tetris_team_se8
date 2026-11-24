@@ -14,6 +14,7 @@ import com.team.tetris.common.battle.GarbageLine;
 import com.team.tetris.common.constants.GameConstants;
 import com.team.tetris.common.events.BoardSnapshot;
 import com.team.tetris.common.events.CellCodes;
+import com.team.tetris.game.item.Blast;
 import com.team.tetris.game.item.EmbeddedItem;
 import com.team.tetris.game.item.FallingPiece;
 import com.team.tetris.game.item.Item;
@@ -50,6 +51,7 @@ public final class BlockBoardDriver implements GameEngine.BoardDriver {
     private ItemPolicy itemPolicy = ItemPolicy.none();
     private FallingPiece current;
     private Item lockedItem;
+    private Blast lockedBlast;
 
     public BlockBoardDriver() {
         this(ItemRegistry.defaults());
@@ -101,6 +103,7 @@ public final class BlockBoardDriver implements GameEngine.BoardDriver {
         board.clear();
         current = null;
         lockedItem = null;
+        lockedBlast = null;
         itemPolicy.reset();
         preview.clear();
         fillPreview();
@@ -150,6 +153,7 @@ public final class BlockBoardDriver implements GameEngine.BoardDriver {
         List<Cell> lockedCells = List.copyOf(locking.cells());
         LockOutcome outcome = locking.lock(board);
         lockedItem = locking.item();
+        lockedBlast = outcome.blast();
         current = null;
         if (!outcome.clearsLines()) return new GameEngine.LockResult(0, false);
         BoardSnapshot boardBeforeClear = snapshot();
@@ -190,6 +194,16 @@ public final class BlockBoardDriver implements GameEngine.BoardDriver {
     @Override
     public Item lockedItem() {
         return lockedItem;
+    }
+
+    @Override
+    public Blast lockedBlast() {
+        return lockedBlast;
+    }
+
+    @Override
+    public List<Cell> takeCrushedCells() {
+        return current == null ? List.of() : current.takeCrushedCells();
     }
 
     @Override

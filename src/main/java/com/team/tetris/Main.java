@@ -17,6 +17,7 @@ import com.team.tetris.common.Difficulty;
 import com.team.tetris.common.GameMode;
 import com.team.tetris.common.battle.VersusMode;
 import com.team.tetris.common.events.BoardSnapshot;
+import com.team.tetris.common.events.CellPosition;
 import com.team.tetris.common.events.GameEventListener;
 import com.team.tetris.game.BlockBoardDriver;
 import com.team.tetris.game.GameEngine;
@@ -288,6 +289,15 @@ public final class Main {
         @Override public void onFeverActivated(int seconds) { delegate.onFeverActivated(seconds); }
         @Override public void onSlowDownActivated(int previousLevel, int currentLevel) {
             delegate.onSlowDownActivated(previousLevel, currentLevel);
+        }
+        @Override public void onHardDropped(BoardSnapshot fallingBefore, BoardSnapshot fallingAfter) {
+            delegate.onHardDropped(fallingBefore, fallingAfter);
+        }
+        @Override public void onBombExploded(CellPosition center, List<CellPosition> blastCells) {
+            delegate.onBombExploded(center, blastCells);
+        }
+        @Override public void onAnvilCrushed(List<CellPosition> crushedCells) {
+            delegate.onAnvilCrushed(crushedCells);
         }
         @Override public void onGameOver(int score) { delegate.onGameOver(score); }
     }

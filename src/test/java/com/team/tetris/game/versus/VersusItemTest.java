@@ -17,6 +17,7 @@ import com.team.tetris.common.events.CellCodes;
 import com.team.tetris.game.BlockBoardDriver;
 import com.team.tetris.game.GameAction;
 import com.team.tetris.game.item.AnvilItem;
+import com.team.tetris.game.item.BombItem;
 import com.team.tetris.game.item.Item;
 import com.team.tetris.game.item.ItemPolicy;
 import com.team.tetris.game.item.ItemSelector;
@@ -130,6 +131,26 @@ class VersusItemTest {
             assertTrue(CellCodes.isGarbage(cells[19][0]), "grey cells outside the anvil stay");
             assertFalse(CellCodes.isGarbage(cells[19][3]), "the anvil crushed the grey cells under it");
             assertFalse(CellCodes.isGarbage(cells[19][6]));
+        });
+    }
+
+    @Test
+    void effectEventsReachOnlyTheirOwnPlayersScreen() throws Exception {
+        VersusMatchTest.Fixture bombs = new VersusMatchTest.Fixture(board -> alwaysItem(board, new BombItem()));
+        edt(() -> {
+            bombs.match.start(VersusMode.ITEM);
+            bombs.match.handle(Player.P1, GameAction.HARD_DROP);
+            assertEquals(List.of("hardDropped", "bombExploded"), bombs.views.get(Player.P1).effects);
+            assertEquals(List.of(), bombs.views.get(Player.P2).effects);
+        });
+        VersusMatchTest.Fixture anvils = new VersusMatchTest.Fixture(board -> alwaysItem(board, new AnvilItem()));
+        edt(() -> {
+            anvils.match.start(VersusMode.ITEM);
+            anvils.boards.get(Player.P2).insertRowsAtBottom(List.of(HOLES_AT_4_5));
+            anvils.match.handle(Player.P2, GameAction.HARD_DROP);
+            assertEquals(List.of("anvilCrushed", "hardDropped"), anvils.views.get(Player.P2).effects,
+                    "the anvil crushes grey cells too");
+            assertEquals(List.of(), anvils.views.get(Player.P1).effects);
         });
     }
 

@@ -11,6 +11,7 @@ import com.team.tetris.common.battle.Player;
 import com.team.tetris.common.battle.VersusMode;
 import com.team.tetris.common.constants.GameConstants;
 import com.team.tetris.common.events.BoardSnapshot;
+import com.team.tetris.common.events.CellPosition;
 import com.team.tetris.common.events.GameEventListener;
 import com.team.tetris.game.BlockBoardDriver;
 import com.team.tetris.game.GameAction;
@@ -298,6 +299,18 @@ public final class VersusMatch implements AutoCloseable {
         @Override public void onSlowDownActivated(int previousLevel, int currentLevel) {
             view.onSlowDownActivated(previousLevel, currentLevel);
             publishLevel();
+        }
+
+        @Override public void onHardDropped(BoardSnapshot fallingBefore, BoardSnapshot fallingAfter) {
+            view.onHardDropped(fallingBefore, fallingAfter);
+        }
+
+        @Override public void onBombExploded(CellPosition center, List<CellPosition> blastCells) {
+            view.onBombExploded(center, blastCells);
+        }
+
+        @Override public void onAnvilCrushed(List<CellPosition> crushedCells) {
+            view.onAnvilCrushed(crushedCells);
         }
 
         @Override public void onGameOver(int score) {
