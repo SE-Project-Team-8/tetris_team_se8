@@ -110,6 +110,27 @@ class VersusMatchTest {
     }
 
     @Test
+    void eachPlayerLevelsUpEveryTenOwnClearedLinesLikeTheSinglePlayerGame() throws Exception {
+        Fixture f = new Fixture();
+        edt(() -> {
+            f.match.start(VersusMode.NORMAL);
+            for (int round = 0; round < 4; round++) {
+                fillAroundTheMiddle(f.boards.get(Player.P1), 18);
+                fillAroundTheMiddle(f.boards.get(Player.P1), 19);
+                f.match.handle(Player.P1, GameAction.HARD_DROP);
+            }
+            assertEquals(1, f.match.level(Player.P1), "8 lines");
+            fillAroundTheMiddle(f.boards.get(Player.P1), 18);
+            fillAroundTheMiddle(f.boards.get(Player.P1), 19);
+            f.match.handle(Player.P1, GameAction.HARD_DROP);
+            assertEquals(2, f.match.level(Player.P1), "10 lines: DefaultSpeedPolicy, the same rule as one player");
+            assertEquals(2, f.events.levels.get(Player.P1), "the screen hears the new level");
+            assertEquals(1, f.match.level(Player.P2), "the other player's lines do not count");
+            assertEquals(1, f.events.levels.get(Player.P2));
+        });
+    }
+
+    @Test
     void pausingStopsBothBoardsUntilResumed() throws Exception {
         Fixture f = new Fixture();
         edt(() -> {
