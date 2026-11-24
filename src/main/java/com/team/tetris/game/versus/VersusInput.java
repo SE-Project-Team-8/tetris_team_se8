@@ -21,6 +21,9 @@ import java.util.function.Supplier;
  * 반복이 끊긴다. 그래서 OS 반복은 무시하고, 눌린 키마다 반복 타이머를 따로 돌린다. 새로 누른 키는 바로 한 번 실행하고,
  * {@link #REPEAT_DELAY_MILLIS} 뒤부터 {@link #REPEAT_INTERVAL_MILLIS}마다 반복한다. 하드드롭은 반복하지 않는다.
  *
+ * 키는 키 코드와 위치(왼쪽·오른쪽)로 받는다. 키 표의 키는 {@link SidedKey}라서 왼쪽 Shift와 오른쪽 Shift를 다른
+ * 사람에게 줄 수 있다. 쪽을 정하지 않은 표의 키는 어느 쪽에서 눌려도 맞는다.
+ *
  * 일시정지·나가기 키는 다루지 않는다. 화면 전환이 따르는 키라 화면이 직접 받는다. 대전이 진행 중이 아니면 조작 키도
  * 받지 않고, 반복 중이던 키는 다음 반복 때 스스로 멈춘다. 모든 메서드는 Swing EDT에서 호출한다.
  */
@@ -73,22 +76,33 @@ public final class VersusInput {
     /**
      * 창에서 받은 KEY_PRESSED. OS 자동 반복도 걸러 내지 않고 그대로 넘긴다.
      *
+     * @param keyCode  {@code KeyEvent.getKeyCode()}
+     * @param location {@code KeyEvent.getKeyLocation()}. 왼쪽·오른쪽 Shift를 가른다
      * @return 대전 조작 키여서 이 입력이 썼으면 true. 대전 키가 아니거나 대전이 진행 중이 아니면 false라서 다른 처리에 넘어간다
      */
-    public boolean keyPressed(int keyCode) {
-        PlayerMove move = keys.get(keyCode);
+    public boolean keyPressed(int keyCode, int location) {
+        int key = SidedKey.of(keyCode, location);
+        PlayerMove move = moveFor(key);
         if (move == null || !target.isRunning()) return false;
-        if (!down.add(keyCode)) return true;   // OS 자동 반복: 반복은 직접 돌린다
+        if (!down.add(key)) return true;   // OS 자동 반복: 반복은 직접 돌린다
         target.handle(move.player(), move.action());
-        if (move.repeats()) startRepeat(keyCode, move);
+        if (move.repeats()) startRepeat(key, move);
         return true;
     }
 
     /** 창에서 받은 KEY_RELEASED. 그 키의 반복을 멈춘다. */
-    public void keyReleased(int keyCode) {
-        down.remove(keyCode);
-        GameEngine.DropTimer timer = repeating.remove(keyCode);
+    public void keyReleased(int keyCode, int location) {
+        int key = SidedKey.of(keyCode, location);
+        down.remove(key);
+        GameEngine.DropTimer timer = repeating.remove(key);
         if (timer != null) timer.stop();
+    }
+
+    /** 그쪽 키로 정한 조작을 먼저, 없으면 쪽을 가리지 않는 키의 조작을 찾는다. */
+    private PlayerMove moveFor(int key) {
+        PlayerMove move = keys.get(key);
+        if (move == null && SidedKey.side(key) != SidedKey.ANY) move = keys.get(SidedKey.keyCode(key));
+        return move;
     }
 
     /** 눌린 키를 모두 뗀 것으로 친다. 화면을 떠날 때, 창이 포커스를 잃을 때, 대화상자를 띄울 때 부른다. */

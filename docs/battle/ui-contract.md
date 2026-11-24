@@ -61,12 +61,14 @@ match.setPlayerListener(Player.P2, rightBoardPanel);
 
 `com.team.tetris.game.versus.VersusInput`. `Main`이 `new VersusInput(match, settings.versusKeyMap())`로 만들어 화면에 넘긴다.
 
-`VersusInput`은 화면을 모르는 클래스다. 키 코드의 눌림과 뗌만 받는다. 어느 키가 누구의 어떤 동작인지, 누르고 있을 때의 반복, 하드드롭 한 번만 실행 같은 처리는 전부 안에서 한다(`input.md`).
+`VersusInput`은 화면을 모르는 클래스다. 키 코드·위치의 눌림과 뗌만 받는다. 어느 키가 누구의 어떤 동작인지, 누르고 있을 때의 반복, 하드드롭 한 번만 실행 같은 처리는 전부 안에서 한다(`input.md`).
 
 | 호출 | 언제 |
 | --- | --- |
-| `keyPressed(int keyCode)` | 대전 화면이 보이는 동안 창에서 `KEY_PRESSED`를 받을 때마다 (OS 자동 반복 포함, 걸러 내지 않고 그대로) |
-| `keyReleased(int keyCode)` | `KEY_RELEASED`를 받을 때마다 |
+| `keyPressed(int keyCode, int location)` | 대전 화면이 보이는 동안 창에서 `KEY_PRESSED`를 받을 때마다 (OS 자동 반복 포함, 걸러 내지 않고 그대로) |
+| `keyReleased(int keyCode, int location)` | `KEY_RELEASED`를 받을 때마다 |
+
+`location`은 `KeyEvent.getKeyLocation()`이다. 왼쪽 Shift(P1)와 오른쪽 Shift(P2)를 가르는 데 쓴다(D-13).
 | `releaseAll()` | 화면을 떠날 때, 창이 포커스를 잃을 때, 대화상자를 띄울 때 |
 
 - 포커스가 어디에 있든 받도록 `KeyboardFocusManager`의 `KeyEventDispatcher`로 등록해 넘긴다(요구사항 p.7). `HeldKeys`, `PauseScreen`이 쓰는 방식과 같다.
@@ -78,8 +80,8 @@ match.setPlayerListener(Player.P2, rightBoardPanel);
 // 대전 화면의 onShow / onHide 에서 (예시)
 KeyEventDispatcher forward = event -> {
     switch (event.getID()) {
-        case KeyEvent.KEY_PRESSED -> { return input.keyPressed(event.getKeyCode()); }
-        case KeyEvent.KEY_RELEASED -> input.keyReleased(event.getKeyCode());
+        case KeyEvent.KEY_PRESSED -> { return input.keyPressed(event.getKeyCode(), event.getKeyLocation()); }
+        case KeyEvent.KEY_RELEASED -> input.keyReleased(event.getKeyCode(), event.getKeyLocation());
     }
     return false;
 };
@@ -131,7 +133,7 @@ KeyboardFocusManager.getCurrentKeyboardFocusManager().addKeyEventDispatcher(forw
 | 값 | 어디서 |
 | --- | --- |
 | 칸의 색·문자 | 기존 `CellCodes`, `ColorScheme`. 회색 칸은 `CellCodes.GARBAGE`이고 `UiColors.GARBAGE`·`GARBAGE_GLYPH`로 그린다 |
-| 화면에 안내할 대전 키 | `settings.versusKeys().keyFor(player, action)` (`VersusKeyBindings`) |
+| 화면에 안내할 대전 키 | `settings.versusKeys().keyFor(player, action)` (`VersusKeyBindings`). 값은 `SidedKey`라서 `SidedKey.keyCode`·`side`로 "왼쪽 Shift"처럼 쓴다(`VersusCheckScreen.versusKeyName` 참고) |
 | 일시정지·나가기 키 | 1인용 `KeyBindings`의 `PAUSE`, `QUIT` |
 | 제한 시간 | `GameConstants.VERSUS_TIME_LIMIT_SECONDS` (180) |
 | 대기열 상한 | `GameConstants.ATTACK_QUEUE_MAX_LINES` (10). `GarbageQueue.CAPACITY`와 같다 |

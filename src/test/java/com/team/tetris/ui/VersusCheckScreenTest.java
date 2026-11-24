@@ -16,6 +16,7 @@ import com.team.tetris.game.DefaultSpeedPolicy;
 import com.team.tetris.game.GameEngine;
 import com.team.tetris.game.ScoreCalculator;
 import com.team.tetris.game.versus.MatchResult;
+import com.team.tetris.game.versus.SidedKey;
 import com.team.tetris.game.versus.VersusInput;
 import com.team.tetris.game.versus.VersusMatch;
 import com.team.tetris.settings.GameSettings;
@@ -52,7 +53,7 @@ class VersusCheckScreenTest {
             assertEquals(VersusCheckScreen.WINDOW_HEIGHT, f.router.getCurrentHeight());
             assertEquals(VersusMatch.State.RUNNING, f.match.state());
 
-            assertTrue(f.screen.keyPressed(KeyEvent.VK_ESCAPE), "quit goes back to the main menu");
+            assertTrue(f.screen.keyPressed(KeyEvent.VK_ESCAPE, KeyEvent.KEY_LOCATION_STANDARD), "quit goes back to the main menu");
             assertEquals(ScreenRouter.MAIN_MENU, f.router.getCurrentScreenName());
             assertEquals(VersusMatch.State.READY, f.match.state(), "leaving stops the match");
             assertEquals(GameSettings.ScreenSize.MEDIUM.width(), f.router.getCurrentWidth());
@@ -66,13 +67,13 @@ class VersusCheckScreenTest {
         Fixture f = new Fixture(GameSettings.defaults(), VersusMode.NORMAL);
         edt(() -> {
             f.router.showScreen(VersusCheckScreen.NAME);
-            assertTrue(f.screen.keyPressed(KeyEvent.VK_A), "P1's move key");
-            assertFalse(f.screen.keyPressed(KeyEvent.VK_Q), "not a key of this screen");
+            assertTrue(f.screen.keyPressed(KeyEvent.VK_A, KeyEvent.KEY_LOCATION_STANDARD), "P1's move key");
+            assertFalse(f.screen.keyPressed(KeyEvent.VK_Q, KeyEvent.KEY_LOCATION_STANDARD), "not a key of this screen");
 
-            assertTrue(f.screen.keyPressed(KeyEvent.VK_P));
+            assertTrue(f.screen.keyPressed(KeyEvent.VK_P, KeyEvent.KEY_LOCATION_STANDARD));
             assertEquals(VersusMatch.State.PAUSED, f.match.state());
-            assertFalse(f.screen.keyPressed(KeyEvent.VK_ENTER), "Enter neither drops nor restarts while paused");
-            assertTrue(f.screen.keyPressed(KeyEvent.VK_P));
+            assertFalse(f.screen.keyPressed(KeyEvent.VK_ENTER, KeyEvent.KEY_LOCATION_STANDARD), "Enter neither drops nor restarts while paused");
+            assertTrue(f.screen.keyPressed(KeyEvent.VK_P, KeyEvent.KEY_LOCATION_STANDARD));
             assertEquals(VersusMatch.State.RUNNING, f.match.state());
             f.close();
         });
@@ -87,19 +88,19 @@ class VersusCheckScreenTest {
             assertEquals(VersusMatch.State.ENDED, f.match.state());
             assertEquals(MatchResult.Reason.TIME_UP, f.screen.result().reason());
 
-            assertTrue(f.screen.keyPressed(KeyEvent.VK_ENTER));
+            assertTrue(f.screen.keyPressed(KeyEvent.VK_ENTER, KeyEvent.KEY_LOCATION_STANDARD));
             assertEquals(VersusMatch.State.RUNNING, f.match.state());
             assertEquals(VersusMode.TIME_LIMIT, f.screen.currentMode());
             assertNull(f.screen.result());
 
             f.match.stop();
-            assertTrue(f.screen.keyPressed(KeyEvent.VK_2));
+            assertTrue(f.screen.keyPressed(KeyEvent.VK_2, KeyEvent.KEY_LOCATION_STANDARD));
             assertEquals(VersusMode.ITEM, f.match.mode());
             f.match.stop();
-            assertTrue(f.screen.keyPressed(KeyEvent.VK_1));
+            assertTrue(f.screen.keyPressed(KeyEvent.VK_1, KeyEvent.KEY_LOCATION_STANDARD));
             assertEquals(VersusMode.NORMAL, f.match.mode());
             f.match.stop();
-            assertTrue(f.screen.keyPressed(KeyEvent.VK_3));
+            assertTrue(f.screen.keyPressed(KeyEvent.VK_3, KeyEvent.KEY_LOCATION_STANDARD));
             assertEquals(VersusMode.TIME_LIMIT, f.match.mode());
             f.close();
         });
@@ -112,8 +113,8 @@ class VersusCheckScreenTest {
         Fixture f = new Fixture(settings, VersusMode.NORMAL);
         edt(() -> {
             f.router.showScreen(VersusCheckScreen.NAME);
-            assertFalse(f.screen.keyPressed(KeyEvent.VK_P));
-            assertTrue(f.screen.keyPressed(KeyEvent.VK_F1));
+            assertFalse(f.screen.keyPressed(KeyEvent.VK_P, KeyEvent.KEY_LOCATION_STANDARD));
+            assertTrue(f.screen.keyPressed(KeyEvent.VK_F1, KeyEvent.KEY_LOCATION_STANDARD));
             assertEquals(VersusMatch.State.PAUSED, f.match.state());
             f.close();
         });
@@ -129,19 +130,19 @@ class VersusCheckScreenTest {
             // P1 clears two rows twice: P2 takes the first attack into its board, the second waits in its queue.
             fillAroundTheMiddle(f.boards[0], 18);
             fillAroundTheMiddle(f.boards[0], 19);
-            assertTrue(f.screen.keyPressed(KeyEvent.VK_SHIFT));
-            assertTrue(f.screen.keyPressed(KeyEvent.VK_ENTER));
-            f.input.keyReleased(KeyEvent.VK_SHIFT);
+            assertTrue(f.screen.keyPressed(KeyEvent.VK_SHIFT, KeyEvent.KEY_LOCATION_LEFT));
+            assertTrue(f.screen.keyPressed(KeyEvent.VK_SHIFT, KeyEvent.KEY_LOCATION_RIGHT));
+            f.input.keyReleased(KeyEvent.VK_SHIFT, KeyEvent.KEY_LOCATION_LEFT);
             fillAroundTheMiddle(f.boards[0], 18);
             fillAroundTheMiddle(f.boards[0], 19);
-            assertTrue(f.screen.keyPressed(KeyEvent.VK_SHIFT));
+            assertTrue(f.screen.keyPressed(KeyEvent.VK_SHIFT, KeyEvent.KEY_LOCATION_LEFT));
             assertEquals(2, f.match.queue(Player.P2).size());
             for (int i = 0; i < 7; i++) f.clock.tick.run();
             paint(f.screen, "running");
 
-            f.screen.keyPressed(KeyEvent.VK_P);
+            f.screen.keyPressed(KeyEvent.VK_P, KeyEvent.KEY_LOCATION_STANDARD);
             paint(f.screen, "paused");
-            f.screen.keyPressed(KeyEvent.VK_P);
+            f.screen.keyPressed(KeyEvent.VK_P, KeyEvent.KEY_LOCATION_STANDARD);
             for (int i = 0; i < 180; i++) f.clock.tick.run();
             paint(f.screen, "result");
             f.close();
@@ -155,6 +156,9 @@ class VersusCheckScreenTest {
         assertEquals("Shift", VersusCheckScreen.keyName(KeyEvent.VK_SHIFT));
         assertEquals("Enter", VersusCheckScreen.keyName(KeyEvent.VK_ENTER));
         assertEquals("A", VersusCheckScreen.keyName(KeyEvent.VK_A));
+        assertEquals("왼쪽 Shift", VersusCheckScreen.versusKeyName(SidedKey.left(KeyEvent.VK_SHIFT)));
+        assertEquals("오른쪽 Shift", VersusCheckScreen.versusKeyName(SidedKey.right(KeyEvent.VK_SHIFT)));
+        assertEquals("↑", VersusCheckScreen.versusKeyName(KeyEvent.VK_UP));
     }
 
     /** 그려서 픽셀이 바뀌었는지 본다. 환경 변수 TETRIS_VERSUS_CHECK_OUT이 있으면 그 폴더에 PNG로 남긴다. */

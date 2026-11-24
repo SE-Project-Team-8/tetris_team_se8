@@ -14,7 +14,7 @@
 | 오른쪽 이동 | `D` | `→` |
 | 아래 1칸 | `S` | `↓` |
 | 시계방향 회전 | `W` | `↑` |
-| 하드드롭 | `Shift` | `Enter` |
+| 하드드롭 | 왼쪽 `Shift` | 오른쪽 `Shift` |
 
 - 플레이어별로 정하는 동작은 위 다섯 가지다. 일시정지와 나가기는 두 사람이 함께 쓰는 키다(5절).
 - 대전 키는 1인용 키(`KeyBindings`)와 별개로 저장한다. 1인용 키를 바꿔도 대전 키는 바뀌지 않고, 그 반대도 같다.
@@ -29,7 +29,7 @@
 - 대전 화면이 보이는 동안(`onShow`~`onHide`)에만 등록한다.
 - `KEY_PRESSED`는 `input.keyPressed(keyCode)`, `KEY_RELEASED`는 `input.keyReleased(keyCode)`로 넘긴다. OS 자동 반복을 걸러 내지 않는다.
 
-**`game/versus/VersusInput` (로컬 대전 담당).** 화면도 설정 클래스도 모른다. 키 코드와 "키 코드 → `PlayerMove`(플레이어·조작)" 표만 받는다.
+**`game/versus/VersusInput` (로컬 대전 담당).** 화면도 설정 클래스도 모른다. 키 코드·위치와 "`SidedKey` → `PlayerMove`(플레이어·조작)" 표만 받는다.
 - 표는 `GameSettings.versusKeyMap()`이 만든다. 일시정지·나가기 키와 겹친 대전 키는 표에서 빠진다(4절).
 - 받은 키를 표에서 찾아 `match.handle(player, action)`으로 넘기고 true를 돌려준다. 표에 없는 키는 false다.
 - 일시정지 키와 나가기 키는 처리하지 않는다. 화면 전환이 따르는 키라 화면이 직접 받는다.
@@ -76,7 +76,11 @@
 - 대전 P1·P2를 고르면 일시정지·나가기 줄은 보이지 않는다.
 - 중복 키를 고르면 기존과 같은 안내("이미 다른 동작에 쓰이는 키입니다.")를 띄우고 받지 않는다.
 
-**Shift.** 키 코드만 저장하므로 왼쪽·오른쪽 Shift를 구분하지 않는다. 어느 쪽 Shift든 P1 하드드롭(기본값)이다. (`decisions.md` D-13)
+**왼쪽·오른쪽 키.** 대전 키 값은 키 코드에 쪽(왼쪽·오른쪽·가리지 않음)을 더한 `game/versus/SidedKey`다. Shift·Ctrl·Alt는 양쪽이 같은 키 코드로 오고 `KeyEvent.getKeyLocation()`으로만 갈리므로, 화면은 `keyPressed(keyCode, location)`처럼 위치를 함께 넘긴다. (`decisions.md` D-13)
+- 기본값은 왼쪽 Shift가 P1 하드드롭, 오른쪽 Shift가 P2 하드드롭이다. 각자 자기 쪽 손에 가깝다.
+- 쪽을 정하지 않은 키(예: 그냥 `Shift`)는 어느 쪽에서 눌려도 맞는다. 그래서 그냥 `Shift`와 왼쪽 `Shift`는 함께 쓸 수 없다(겹침).
+- 일시정지·나가기 키는 1인용 키 코드라 쪽이 없다. 일시정지를 `Shift`로 두면 양쪽 Shift 모두와 겹친다.
+- 키 안내는 "왼쪽 Shift", "오른쪽 Shift"처럼 쓴다.
 
 ## 5. 함께 쓰는 키
 

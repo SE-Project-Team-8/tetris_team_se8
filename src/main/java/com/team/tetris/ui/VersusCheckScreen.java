@@ -17,6 +17,7 @@ import com.team.tetris.common.events.CellCodes;
 import com.team.tetris.common.events.GameEventListener;
 import com.team.tetris.game.GameAction;
 import com.team.tetris.game.versus.MatchResult;
+import com.team.tetris.game.versus.SidedKey;
 import com.team.tetris.game.versus.VersusInput;
 import com.team.tetris.game.versus.VersusListener;
 import com.team.tetris.game.versus.VersusMatch;
@@ -119,9 +120,9 @@ public final class VersusCheckScreen extends JPanel implements Screen {
 
     private boolean dispatch(KeyEvent event) {
         return switch (event.getID()) {
-            case KeyEvent.KEY_PRESSED -> keyPressed(event.getKeyCode());
+            case KeyEvent.KEY_PRESSED -> keyPressed(event.getKeyCode(), event.getKeyLocation());
             case KeyEvent.KEY_RELEASED -> {
-                input.keyReleased(event.getKeyCode());
+                input.keyReleased(event.getKeyCode(), event.getKeyLocation());
                 yield false;
             }
             default -> false;
@@ -129,8 +130,8 @@ public final class VersusCheckScreen extends JPanel implements Screen {
     }
 
     /** 창에서 받은 KEY_PRESSED 하나. 대전 키를 먼저 보고, 남은 키를 이 화면이 처리한다. */
-    boolean keyPressed(int keyCode) {
-        if (input.keyPressed(keyCode)) return true;
+    boolean keyPressed(int keyCode, int location) {
+        if (input.keyPressed(keyCode, location)) return true;
         GameSettings current = settings.get();
         if (keyCode == current.keyBindings().keyFor(GameAction.PAUSE)) {
             if (!match.pause()) match.resume();
@@ -303,8 +304,18 @@ public final class VersusCheckScreen extends JPanel implements Screen {
 
     private static String keyGuide(VersusKeyBindings keys, Player player) {
         StringJoiner joiner = new StringJoiner(" ");
-        for (GameAction action : VersusKeyBindings.PLAYER_ACTIONS) joiner.add(keyName(keys.keyFor(player, action)));
+        for (GameAction action : VersusKeyBindings.PLAYER_ACTIONS) joiner.add(versusKeyName(keys.keyFor(player, action)));
         return joiner.toString();
+    }
+
+    /** 대전 키({@link SidedKey})의 이름. 쪽을 정한 키는 "왼쪽 Shift"처럼 쓴다. */
+    static String versusKeyName(int key) {
+        String name = keyName(SidedKey.keyCode(key));
+        return switch (SidedKey.side(key)) {
+            case SidedKey.LEFT -> "왼쪽 " + name;
+            case SidedKey.RIGHT -> "오른쪽 " + name;
+            default -> name;
+        };
     }
 
     static String keyName(int keyCode) {

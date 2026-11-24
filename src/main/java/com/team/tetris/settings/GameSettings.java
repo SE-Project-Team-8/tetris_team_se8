@@ -4,6 +4,7 @@ import com.team.tetris.common.Difficulty;
 import com.team.tetris.common.battle.Player;
 import com.team.tetris.game.GameAction;
 import com.team.tetris.game.versus.PlayerMove;
+import com.team.tetris.game.versus.SidedKey;
 
 import java.util.Collections;
 import java.util.EnumSet;
@@ -108,8 +109,8 @@ public record GameSettings(ScreenSize screenSize, ColorBlindMode colorBlindMode,
     }
 
     /**
-     * 대전 입력({@code VersusInput})이 쓰는 키 표: 키 코드 → 플레이어의 조작. 일시정지·나가기 키와 겹친 대전 키는
-     * 빼므로, 그 키는 대전 중에 일시정지·나가기로만 쓰인다 ({@link #versusKeyClashes()}).
+     * 대전 입력({@code VersusInput})이 쓰는 키 표: {@link SidedKey} → 플레이어의 조작. 일시정지·나가기 키와 겹친 대전
+     * 키는 빼므로, 그 키는 대전 중에 일시정지·나가기로만 쓰인다 ({@link #versusKeyClashes()}).
      */
     public Map<Integer, PlayerMove> versusKeyMap() {
         Set<Integer> shared = new HashSet<>();
@@ -117,7 +118,9 @@ public record GameSettings(ScreenSize screenSize, ColorBlindMode colorBlindMode,
         Map<Integer, PlayerMove> map = new HashMap<>();
         for (Player player : Player.values()) {
             versusKeys.keys(player).forEach((action, key) -> {
-                if (!shared.contains(key)) map.put(key, new PlayerMove(player, action));
+                if (shared.stream().noneMatch(code -> SidedKey.overlaps(code, key))) {
+                    map.put(key, new PlayerMove(player, action));
+                }
             });
         }
         return Map.copyOf(map);
