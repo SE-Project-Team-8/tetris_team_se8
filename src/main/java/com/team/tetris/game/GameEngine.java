@@ -1,9 +1,12 @@
 package com.team.tetris.game;
 
+import com.team.tetris.block.Cell;
 import com.team.tetris.common.events.BoardSnapshot;
+import com.team.tetris.common.events.CellPosition;
 import com.team.tetris.common.events.GameEventListener;
 import com.team.tetris.common.Difficulty;
 import com.team.tetris.common.battle.GarbageLine;
+import com.team.tetris.game.item.Blast;
 import com.team.tetris.game.item.GameEffects;
 import com.team.tetris.game.item.Item;
 
@@ -43,6 +46,10 @@ public final class GameEngine implements AutoCloseable {
         LockResult lockAndClearLines();
         /** Item carried by the piece the last lockAndClearLines() locked; null for a regular block. */
         default Item lockedItem() { return null; }
+        /** Blast of the piece the last lockAndClearLines() locked (bomb); null when nothing exploded. */
+        default Blast lockedBlast() { return null; }
+        /** Cells the falling piece crushed since the last call (anvil), then forgets them; empty by default. */
+        default List<Cell> takeCrushedCells() { return List.of(); }
         /** Composed 20 x 10 board; EMPTY = -1; falling piece is included. */
         BoardSnapshot snapshot();
         /** Cells occupied by the falling piece only, or null when unavailable. */
@@ -339,8 +346,12 @@ public final class GameEngine implements AutoCloseable {
 
     private boolean hardDrop() {
         boolean awardsPoints = board.awardsDropPoints();
+        BoardSnapshot before = board.fallingSnapshot();
         int distance = board.hardDrop();
         if (awardsPoints) award(scoring.dropPoints(distance, getLevel()));
+        publishCrushed();
+        BoardSnapshot after = board.fallingSnapshot();
+        if (before != null && after != null) listener.onHardDropped(before, after);
         lockAndAdvance();
         return true;
     }
@@ -372,6 +383,7 @@ public final class GameEngine implements AutoCloseable {
     private boolean dropOneCell() {
         if (board.moveDown()) {
             if (board.awardsDropPoints()) award(scoring.dropPoints(1, getLevel()));
+            publishCrushed();
             publishBoard();
         } else {
             lockAndAdvance();
@@ -381,6 +393,8 @@ public final class GameEngine implements AutoCloseable {
 
     private void lockAndAdvance() {
         LockResult result = Objects.requireNonNull(board.lockAndClearLines(), "lock result");
+        Blast blast = board.lockedBlast();
+        if (blast != null) listener.onBombExploded(position(blast.center()), positions(blast.cells()));
         if (!result.clearedRows().isEmpty()) {
             listener.onLinesCleared(result.clearedRows(), result.boardBeforeClear());
         }
@@ -407,6 +421,20 @@ public final class GameEngine implements AutoCloseable {
         scheduleTimer();
         publishBoard();
         publishPreview();
+    }
+
+    /** Tell the screen which cells the falling piece (anvil) crushed, if any. */
+    private void publishCrushed() {
+        List<Cell> crushed = Objects.requireNonNull(board.takeCrushedCells(), "crushed cells");
+        if (!crushed.isEmpty()) listener.onAnvilCrushed(positions(crushed));
+    }
+
+    private static CellPosition position(Cell cell) {
+        return new CellPosition(cell.row(), cell.col());
+    }
+
+    private static List<CellPosition> positions(List<Cell> cells) {
+        return cells.stream().map(GameEngine::position).toList();
     }
 
     private boolean spawn() {

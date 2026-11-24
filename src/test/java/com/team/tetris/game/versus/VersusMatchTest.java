@@ -498,6 +498,16 @@ class VersusMatchTest {
     static final class View implements GameEventListener {
         BoardSnapshot board;
         int[] next = new int[0];
+        /** 연출 알림의 이름을 받은 순서대로. */
+        final List<String> effects = new ArrayList<>();
+        @Override public void onHardDropped(BoardSnapshot before, BoardSnapshot after) { effects.add("hardDropped"); }
+        @Override public void onBombExploded(com.team.tetris.common.events.CellPosition center,
+                                             List<com.team.tetris.common.events.CellPosition> cells) {
+            effects.add("bombExploded");
+        }
+        @Override public void onAnvilCrushed(List<com.team.tetris.common.events.CellPosition> cells) {
+            effects.add("anvilCrushed");
+        }
         @Override public void onBoardUpdated(BoardSnapshot snapshot) { board = snapshot; }
         @Override public void onScoreChanged(int score) { }
         @Override public void onNextBlocksChanged(int[] blockTypes) { next = blockTypes.clone(); }

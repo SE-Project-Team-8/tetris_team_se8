@@ -1,7 +1,7 @@
 # UI 연결 지점
 
 로컬 대전 담당(윤성빈)은 화면을 만들지 않는다. 대전 로직과 **UI가 그 위에 화면을 얹을 수 있는 연결 지점**까지 만든다(`decisions.md` D-12).
-이 문서는 UI 담당(조상윤·안성현)에게 넘기는 계약이다. P2P 담당(손동민)도 같은 연결 지점을 쓴다.
+이 문서는 UI 담당(조상윤·안성현)에게 넘기는 계약이다. P2P 담당(손동민)도 같은 연결 지점을 쓴다. 바로 작업에 들어갈 때는 `ui-handoff.md`(작업 순서·시그니처·완료 기준을 한 문서에 모은 인계서)를 본다.
 
 > 2·4절은 PR 1(`feat/versus-core`)의 코드와 같다. 이름과 모양이 바뀌면 코드와 이 문서를 같은 커밋에서 고친다.
 > 3절(`VersusInput`), 4.3절의 대전 키 값, 5절(확인용 화면)은 PR 2(`feat/versus-play`)에서 만들었다.
@@ -103,6 +103,11 @@ KeyboardFocusManager.getCurrentKeyboardFocusManager().addKeyEventDispatcher(forw
 | `onScoreChanged(int)` | 점수 |
 | `onNextBlocksChanged(int[])` | 다음 블럭 |
 | `onFeverActivated`, `onSlowDownActivated` | 아이템 효과 표시용 (아이템 대전) |
+| `onHardDropped(before, after)` | 하드드롭 잔상·눌림 연출용. 떨어지기 전·후 낙하 블럭 칸. 고정·줄 삭제 알림보다 먼저 |
+| `onBombExploded(center, blastCells)` | 폭탄 3×3 점선 연출용 (이슈 #68). 줄 삭제 알림보다 먼저 |
+| `onAnvilCrushed(crushedCells)` | 무게추 연기 퍼프 연출용 (이슈 #68). 한 칸 낙하마다, 하드드롭이면 한 번에 |
+
+1인 모드는 하드드롭 연출을 화면이 키를 직접 처리하며 시작하지만, 대전은 키가 `VersusInput`을 거쳐 엔진으로 바로 가므로 `onHardDropped`로 시작해야 한다. 연출별 신호 표는 `ui-handoff.md` 5절.
 
 `onGameOver`와 `onPauseStateChanged`는 플레이어별로 오지만 화면 전환에는 쓰지 않는다. 승패와 일시정지는 4.2의 대전 알림으로 처리한다.
 

@@ -12,6 +12,7 @@ import com.team.tetris.block.Rotation;
 import com.team.tetris.block.Tetromino;
 import com.team.tetris.block.TetrominoType;
 import com.team.tetris.common.events.CellCodes;
+import com.team.tetris.game.item.Blast;
 import com.team.tetris.game.item.EmbeddedItem;
 import com.team.tetris.game.item.FallingPiece;
 import com.team.tetris.game.item.LockOutcome;
@@ -105,9 +106,12 @@ public final class TetrominoPiece implements FallingPiece {
         if (!board.tryPlace(tetromino)) {
             throw new IllegalStateException("A valid falling block could not be locked");
         }
-        Set<Integer> forcedRows = item == null ? Set.of()
-                : Objects.requireNonNull(item.onLock(board, tetromino.cells().get(itemIndex)), "forced rows");
-        return LockOutcome.clearLines(forcedRows);
+        if (item == null) return LockOutcome.clearLines();
+        Cell itemCell = tetromino.cells().get(itemIndex);
+        // 폭발 범위는 아이템이 보드를 바꾸기 전에 잡는다 (화면 연출 알림용).
+        Blast blast = item.blastOf(board, itemCell);
+        Set<Integer> forcedRows = Objects.requireNonNull(item.onLock(board, itemCell), "forced rows");
+        return new LockOutcome(true, forcedRows, blast);
     }
 
     @Override
