@@ -27,7 +27,7 @@
 **화면 쪽 (UI 담당, 확인용 화면은 로컬 대전 담당).** 창의 키 이벤트를 포커스와 무관하게 받아 그대로 넘긴다.
 - `KeyboardFocusManager`의 `KeyEventDispatcher`로 등록한다. `HeldKeys`와 `PauseScreen`이 이미 쓰는 방식이다.
 - 대전 화면이 보이는 동안(`onShow`~`onHide`)에만 등록한다.
-- `KEY_PRESSED`는 `input.keyPressed(keyCode)`, `KEY_RELEASED`는 `input.keyReleased(keyCode)`로 넘긴다. OS 자동 반복을 걸러 내지 않는다.
+- `KEY_PRESSED`는 `input.keyPressed(keyCode, location)`, `KEY_RELEASED`는 `input.keyReleased(keyCode, location)`로 넘긴다(`location`은 `getKeyLocation()`, 4절의 왼쪽·오른쪽 키). OS 자동 반복을 걸러 내지 않는다.
 
 **`game/versus/VersusInput` (로컬 대전 담당).** 화면도 설정 클래스도 모른다. 키 코드·위치와 "`SidedKey` → `PlayerMove`(플레이어·조작)" 표만 받는다.
 - 표는 `GameSettings.versusKeyMap()`이 만든다. 일시정지·나가기 키와 겹친 대전 키는 표에서 빠진다(4절).
@@ -65,7 +65,7 @@
 - 일시정지·나가기 키와도 달라야 한다. 대전 키를 바꿀 때(`GameSettings.withVersusKeys`) 거부한다.
   - 반대로 1인용 일시정지·나가기 키를 대전 키로 바꾸는 것은 막지 않는다. 막으면 대전 키 때문에 1인용 키 설정이 안 되거나, 그런 설정 파일을 읽지 못해 `Main`이 기본값으로 덮어쓴다.
   - 이렇게 겹친 키는 대전 중에 일시정지·나가기로 쓰이고 조작에는 쓰이지 않는다. 설정 화면은 `GameSettings.versusKeyClashes()`로 겹친 동작을 알아내 경고할 수 있다.
-- 화면에 안내할 키는 `keyFor(player, action)`, 눌린 키의 주인은 `moveFor(keyCode)`로 찾는다.
+- 화면에 안내할 키는 `keyFor(player, action)`, 키의 주인은 `moveFor(key)`로 찾는다(`key`는 `SidedKey`).
 
 **저장.** `settings.properties`에 `versus.p1.MOVE_LEFT=65`처럼 플레이어·동작마다 한 줄씩 더한다. 값은 `SidedKey` 정수다(왼쪽 Shift는 `131088`처럼 쪽이 위 비트에 들어간다).
 - 형식 버전은 2 그대로 둔다. 처음 계획은 3으로 올리는 것이었지만, 기존 `SettingsRepositoryTest`가 저장한 파일의 `version=2`를 `version=1`로 바꿔 옛 파일을 만들기 때문에 버전을 올리면 그 테스트가 깨진다. 줄을 더하기만 하므로 버전을 올릴 필요도 없다.
