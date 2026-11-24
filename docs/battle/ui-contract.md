@@ -4,7 +4,7 @@
 이 문서는 UI 담당(조상윤·안성현)에게 넘기는 계약이다. P2P 담당(손동민)도 같은 연결 지점을 쓴다.
 
 > 2·4절은 PR 1(`feat/versus-core`)의 코드와 같다. 이름과 모양이 바뀌면 코드와 이 문서를 같은 커밋에서 고친다.
-> 3절(`VersusInput`)과 4.3절의 대전 키, 5절(확인용 화면)은 PR 2에서 만드는 것이라 아직 계획이다.
+> 3절(`VersusInput`), 4.3절의 대전 키 값, 5절(확인용 화면)은 PR 2(`feat/versus-play`)에서 만들었다.
 > **이 범위 나눔은 UI 담당의 동의가 필요하다.** 역할 배정 문서와 다르기 때문이다(1절).
 
 ## 1. 누가 무엇을 만드는가
@@ -59,26 +59,29 @@ match.setPlayerListener(Player.P2, rightBoardPanel);
 
 ## 3. UI가 키 이벤트를 넘기는 곳
 
-> PR 2에서 만든다. 아래는 계획이며, 만들면서 바뀌면 고친다.
+`com.team.tetris.game.versus.VersusInput`. `Main`이 `new VersusInput(match, settings.versusKeyMap())`로 만들어 화면에 넘긴다.
 
-`VersusInput`은 화면을 모르는 클래스다. 키 코드의 눌림과 뗌만 받는다. 어느 키가 누구의 어떤 동작인지, 누르고 있을 때의 반복, 하드드롭 한 번만 실행 같은 처리는 전부 안에서 한다(`input.md`).
+`VersusInput`은 화면을 모르는 클래스다. 키 코드·위치의 눌림과 뗌만 받는다. 어느 키가 누구의 어떤 동작인지, 누르고 있을 때의 반복, 하드드롭 한 번만 실행 같은 처리는 전부 안에서 한다(`input.md`).
 
 | 호출 | 언제 |
 | --- | --- |
-| `keyPressed(int keyCode)` | 대전 화면이 보이는 동안 창에서 `KEY_PRESSED`를 받을 때마다 (OS 자동 반복 포함, 걸러 내지 않고 그대로) |
-| `keyReleased(int keyCode)` | `KEY_RELEASED`를 받을 때마다 |
+| `keyPressed(int keyCode, int location)` | 대전 화면이 보이는 동안 창에서 `KEY_PRESSED`를 받을 때마다 (OS 자동 반복 포함, 걸러 내지 않고 그대로) |
+| `keyReleased(int keyCode, int location)` | `KEY_RELEASED`를 받을 때마다 |
+
+`location`은 `KeyEvent.getKeyLocation()`이다. 왼쪽 Shift(P1)와 오른쪽 Shift(P2)를 가르는 데 쓴다(D-13).
 | `releaseAll()` | 화면을 떠날 때, 창이 포커스를 잃을 때, 대화상자를 띄울 때 |
 
 - 포커스가 어디에 있든 받도록 `KeyboardFocusManager`의 `KeyEventDispatcher`로 등록해 넘긴다(요구사항 p.7). `HeldKeys`, `PauseScreen`이 쓰는 방식과 같다.
-- `keyPressed`는 그 키가 P1·P2의 조작 키여서 처리했으면 true를 돌려준다.
+- `keyPressed`는 그 키가 P1·P2의 조작 키여서 처리했으면 true를 돌려준다. 대전이 진행 중이 아니면(일시정지·종료) 조작 키도 false라서, 디스패처가 이벤트를 삼키지 않고 일시정지 화면 등에 넘긴다.
+- 키 설정이 바뀌면 `Main`이 `input.setKeys(...)`로 알린다. 화면이 할 일은 없다.
 - **일시정지 키와 나가기 키는 `VersusInput`이 처리하지 않는다.** 화면 전환과 확인 대화상자가 따르는 키라 UI가 직접 받아 `match.pause()`·`match.stop()`을 호출한다(1인 모드의 화면들이 하는 방식과 같다).
 
 ```java
 // 대전 화면의 onShow / onHide 에서 (예시)
 KeyEventDispatcher forward = event -> {
     switch (event.getID()) {
-        case KeyEvent.KEY_PRESSED -> { return input.keyPressed(event.getKeyCode()); }
-        case KeyEvent.KEY_RELEASED -> input.keyReleased(event.getKeyCode());
+        case KeyEvent.KEY_PRESSED -> { return input.keyPressed(event.getKeyCode(), event.getKeyLocation()); }
+        case KeyEvent.KEY_RELEASED -> input.keyReleased(event.getKeyCode(), event.getKeyLocation());
     }
     return false;
 };
@@ -130,20 +133,22 @@ KeyboardFocusManager.getCurrentKeyboardFocusManager().addKeyEventDispatcher(forw
 | 값 | 어디서 |
 | --- | --- |
 | 칸의 색·문자 | 기존 `CellCodes`, `ColorScheme`. 회색 칸은 `CellCodes.GARBAGE`이고 `UiColors.GARBAGE`·`GARBAGE_GLYPH`로 그린다 |
-| 화면에 안내할 대전 키 | `VersusKeyBindings.keyFor(player, action)` (PR 2, 계획) |
+| 화면에 안내할 대전 키 | `settings.versusKeys().keyFor(player, action)` (`VersusKeyBindings`). 값은 `SidedKey`라서 `SidedKey.keyCode`·`side`로 "왼쪽 Shift"처럼 쓴다(`VersusCheckScreen.versusKeyName` 참고) |
 | 일시정지·나가기 키 | 1인용 `KeyBindings`의 `PAUSE`, `QUIT` |
 | 제한 시간 | `GameConstants.VERSUS_TIME_LIMIT_SECONDS` (180) |
 | 대기열 상한 | `GameConstants.ATTACK_QUEUE_MAX_LINES` (10). `GarbageQueue.CAPACITY`와 같다 |
 
 ## 5. 확인용 화면
 
-> PR 2에서 만든다.
-
-로컬 대전 담당이 만드는 꾸미지 않은 화면 하나다.
+`ui/VersusCheckScreen`. 로컬 대전 담당이 만드는 꾸미지 않은 화면 하나다.
 
 - **목적**: ① 한 판이 처음부터 승패까지 도는지 눈으로 확인, ② 두 사람이 동시에 키를 누르는 조작감(LB-I01) 확인, ③ 이 문서의 연결 지점을 실제로 쓰는 예제.
 - **내용**: 보드 2개, 플레이어별 점수·다음 블럭·레벨, 공격 대기열 격자, 남은 시간, 끝났을 때의 결과 문구. 기존 셀 색만 쓰고 연출은 없다.
-- **띄우는 방법**: 시작 메뉴를 건드리지 않도록 실행 인자로 띄운다(예: `./gradlew run --args="--versus=normal"`). 정식 진입 경로는 UI 담당이 만드는 시작 메뉴 항목이다.
+- **띄우는 방법**: 시작 메뉴를 건드리지 않도록 실행 인자로 띄운다. `./gradlew run --args="--versus=normal"` (`item`, `time`도 된다). 인자가 없으면 이전과 똑같이 메인 화면이 뜬다. 정식 진입 경로는 UI 담당이 만드는 시작 메뉴 항목이다.
+- **키**: 대전 키는 `VersusInput`에 넘긴다. 1인용 설정의 일시정지 키(기본 `P`)로 일시정지·재개, 나가기 키(기본 `Esc`)로 메인 화면. 대전이 끝나거나 멈춘 상태에서 `Enter`는 같은 방식으로 다시 대전, `1`·`2`·`3`은 일반·아이템·시간제한으로 시작한다.
+- **창 크기**: 보이는 동안 960×720으로 넓히고, 떠나면 원래 크기로 돌린다. 창이 포커스를 잃으면 `input.releaseAll()`.
+- **조립**: `Main`이 `VersusMatch.standard(...)`와 `VersusInput`을 만들고, 설정이 바뀌면 `versusInput.setKeys(settings.versusKeyMap())`를 부른다. 정식 화면도 같은 두 객체를 받으면 된다.
+- **주의**: 이 화면은 `KeyboardFocusManager`에 키 디스패처를 등록한다. `onHide`에서 떼지 않으면 다른 화면의 키를 가로챈다(화면 테스트에서 실제로 겪었다).
 - UI 담당은 이 화면을 고쳐 쓰거나 새 화면으로 바꾼다. 정식 화면이 들어오면 확인용 화면을 남길지 지울지 그때 정한다.
 
 ## 6. UI 담당이 할 일

@@ -11,7 +11,7 @@
 
 **이 표가 작업의 기준이다.** 어느 기기에서든 여기를 보고 이어서 한다. 커밋할 때 해당 줄의 상태를 같은 커밋에서 고치고, 커밋한 뒤 바로 푸시한다.
 
-마지막 갱신: 2026-11-24 — 커밋 7 완료.
+마지막 갱신: 2026-11-24 — 커밋 12 완료. PR 2 올리기 전.
 
 | # | 커밋 | 상태 | 메모 |
 | --- | --- | --- | --- |
@@ -22,27 +22,32 @@
 | 5 | 대전 한 판을 진행하는 `VersusMatch` | 완료 | 일반 방식만. 방식별 처리는 커밋 6 |
 | 6 | 시간제한 대전과 아이템 대전 | 완료 | 제한 시간 타이머는 `VersusMatch` 생성자로 주입(기본값 `GameEngine.newSwingTimer()`). 일시정지로 끊긴 1초는 이어서 잰다. 남은 시간 조회 `remainingSeconds()` 추가 |
 | 7 | 연결 지점 문서를 구현에 맞춤 | 완료 | `ui-contract.md` 2·4절을 코드와 같게. 3·5절(`VersusInput`, 확인용 화면)은 PR 2 계획으로 표시 |
-| — | **PR 1 올리기** | 대기 | |
-| 8 | 대전 키 값 | 대기 | |
-| 9 | 2인 키 입력 분배와 누름 반복 | 대기 | |
-| 10 | 대전 조립과 확인용 화면 | 대기 | |
-| 11 | 대전 키를 설정 파일에 저장 | 대기 | |
-| 12 | 수동 확인 결과와 문서 마무리 | 대기 | |
+| — | **PR 1 올리기** | 완료 | #70, 머지됨. PR 2는 머지된 `main`에서 분기 |
+| 8 | 대전 키 값 | 완료 | 일시정지·나가기 키와의 겹침은 대전 키를 바꿀 때만 거부. 1인용 쪽에서 생긴 겹침은 `versusKeyClashes()`로 알림(input.md 4절) |
+| 9 | 2인 키 입력 분배와 누름 반복 | 완료 | `game`이 `settings`를 import하지 않도록 키 표(`Map<Integer, PlayerMove>`)를 받음. 표는 `GameSettings.versusKeyMap()`. 커밋 8의 `VersusKeyBindings.Assignment`는 `PlayerMove`로 바꿈 |
+| 10 | 대전 조립과 확인용 화면 | 완료 | `--versus=normal\|item\|time`. 화면 테스트(키·창 크기·그리기)와 실행 인자 테스트 추가. **두 사람 수동 확인(`test-plan.md` 3절)은 아직** |
+| 10a | 하드드롭을 왼쪽·오른쪽 Shift로 나눔 | 완료 | 확인용 화면을 해 보고 바꿈(D-13 수정). 키 값은 `SidedKey`(키 코드 + 쪽) |
+| 10b | P2 하드드롭을 Enter로 되돌림 | 완료 | macOS에서 한쪽 Shift를 누른 채 다른 쪽 Shift를 누르면 이벤트가 오지 않음(수동 확인). P1은 왼쪽 Shift만이라 P2의 오른쪽 Shift 실수에 반응하지 않음 |
+| 11 | 대전 키를 설정 파일에 저장 | 완료 | `versus.p1.MOVE_LEFT=65` 줄, `SidedKey` 정수 그대로. **형식 버전 3으로 올리지 않음**: 기존 테스트가 `version=2` 치환에 기대고, 줄을 더하기만 해서 필요 없음(input.md 4절) |
+| 12 | 수동 확인 결과와 문서 마무리 | 완료 | macOS 수동 확인 결과는 `test-plan.md` 3절. 아이템 대전 검토와 Windows 11 확인은 남은 일로 |
 | — | **PR 2 올리기** | 대기 | |
 
 상태: **대기** (시작 전) → **초안** (본 코드는 있으나 테스트가 없어 커밋 전) → **완료** (테스트와 함께 커밋하고 푸시함).
 
-**다음에 할 일.** PR 1 올리기(`feat/versus-core`, 템플릿 네 항목). UI·P2P 담당에게 `ui-contract.md` 2·4절을 보라고 알린다. 그다음 `feat/versus-core` 위에 `feat/versus-play`를 만들어 커밋 8(대전 키 값)부터 한다.
+**다음에 할 일.**
+1. PR 2 올리기(`feat/versus-play` → `main`).
+2. **아이템 검토** (PR 2 뒤): 1인 아이템 모드와 아이템 대전 모두에서, 아이템 관련 코드가 제대로 구현됐는지 검토하고 각 아이템이 실제로 나오고 동작하는지 확인한다. 두 모드는 같은 코드를 쓰고, 대전에서만 생기는 상황(공격 줄·회색 칸)을 더 본다(`test-plan.md` 3절 남은 일).
+3. Windows 11에서 수동 확인을 다시 한다.
 
 ### 다른 기기에서 이어서 하기
 
 ```bash
 git fetch
-git switch feat/versus-core          # 처음이면 원격 브랜치를 따라 만들어진다
+git switch feat/versus-play          # 처음이면 원격 브랜치를 따라 만들어진다
 git pull
 ```
 
-커밋 1~4로 옮긴 코드 초안의 임시 브랜치(`wip/versus-core-draft`)는 지웠다. `feat/versus-core`만 받으면 된다.
+PR 1(`feat/versus-core`)은 머지됐다. PR 2는 `feat/versus-play`만 받으면 된다.
 
 ## 1. 브랜치와 PR
 
@@ -55,6 +60,7 @@ main
 
 - 코드 브랜치를 문서 브랜치 위에 쌓는다. 코드를 쓰면서 문서를 같이 보고 고치기 위해서다. `main`에 머지되면 커밋만 남으므로 어느 브랜치에서 올렸는지는 상관없다.
 - **PR 1이 먼저다.** UI 담당과 P2P 담당이 PR 1의 연결 지점을 받아야 작업을 시작할 수 있다.
+- 실제 진행: PR 1은 문서 커밋까지 함께 `feat/versus-core` → `main`으로 올려 머지했다(#70). PR 2(`feat/versus-play`)는 머지된 `main`에서 분기했다. 대전 작업은 PR 단위로 바로 `main`에 머지한다.
 - PR 설명은 `.github/PULL_REQUEST_TEMPLATE.md`의 네 항목(무슨 기능 / 어떻게 구현 / 테스트 여부 / 관련 이슈)을 채운다.
 
 ## 2. 커밋 규칙
@@ -90,12 +96,14 @@ game/
     ├── VersusMatch.java             (새) 엔진 2개·대기열 2개·승패·일시정지·제한 시간
     ├── VersusListener.java          (새) 대전 알림 (대기열·레벨·남은 시간·일시정지·결과)
     ├── MatchResult.java             (새) 승자·종료 사유·두 점수
-    └── VersusInput.java             (새) 키 분배와 누름 반복. 키 코드만 받는다
+    ├── PlayerMove.java              (새) 플레이어 한 명의 조작 하나. 키 표의 값
+    ├── SidedKey.java                (새) 키 코드 + 왼쪽·오른쪽. 대전 키 값
+    └── VersusInput.java             (새) 키 분배와 누름 반복. 키 코드와 키 표만 받는다
 
 settings/
 ├── VersusKeyBindings.java           (새) P1·P2 대전 키
 ├── GameSettings.java                (변경) 대전 키 항목
-└── SettingsRepository.java          (변경) 형식 버전 3, 이전 버전 읽기
+└── SettingsRepository.java          (변경) 대전 키 `versus.*` 줄 저장, 줄이 없는 이전 파일 읽기
 
 ui/
 ├── VersusCheckScreen.java           (새) 확인용 화면. 꾸미지 않음
@@ -156,7 +164,7 @@ settings/SettingsRepositoryVersusKeysTest.java   기존 SettingsRepositoryTest�
 | # | 커밋 메시지 | 담는 파일 | 테스트 | 요구사항·결정 |
 | --- | --- | --- | --- | --- |
 | 8 | `feat(settings): 대전 키 값(VersusKeyBindings) 추가` | `VersusKeyBindings`, `GameSettings`, `SettingsScreen`(컴파일 맞춤) | `VersusKeyBindingsTest` | LB-I11, D-11, D-13 |
-| 9 | `feat(battle): 2인 키 입력 분배와 누름 반복(VersusInput) 추가` | `VersusInput` | `VersusInputTest` | LB-F18, LB-I01 |
+| 9 | `feat(battle): 2인 키 입력 분배와 누름 반복(VersusInput) 추가` | `VersusInput`, `PlayerMove`, `GameSettings.versusKeyMap` | `VersusInputTest`, `VersusKeyBindingsTest` 추가분 | LB-F18, LB-I01 |
 | 10 | `feat(ui): 대전 조립과 확인용 화면 추가` | `Main`, `VersusCheckScreen` | 수동 확인 (`test-plan.md` 3절) | LB-F03, LB-I01, D-12 |
 | 11 | `feat(settings): 대전 키를 설정 파일에 저장` | `SettingsRepository` | `SettingsRepositoryVersusKeysTest` | LB-I11 |
 | 12 | `docs(battle): 수동 확인 결과와 문서 마무리` | `test-plan.md`, `ui-contract.md`, `input.md` | — | — |

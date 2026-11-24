@@ -247,7 +247,7 @@ public final class SettingsScreen extends JPanel implements Screen {
     private void saveSelected() {
         try {
             save(new GameSettings(size.getSelected(), color.getSelected(), new KeyBindings(selectedKeys),
-                    difficulty.getSelected()));
+                    difficulty.getSelected(), currentSettings.get().versusKeys()));
         } catch (IllegalArgumentException invalid) {
             showMessage("동작마다 서로 다른 키를 지정해 주세요.", "키 설정 오류",
                     ThemedDialog.Tone.WARNING);

@@ -54,7 +54,7 @@ public record GarbageLine(int cells) implements java.io.Serializable {
 | 파일 | 누가 무엇을 | 제안 |
 | --- | --- | --- |
 | `Main.java` | 로컬: 엔진 2개·`VersusMatch`·`VersusInput` 조립, 확인용 화면 실행 인자 / UI·P2P: 화면 등록 | 대전 조립을 메서드 하나로 분리해 충돌 범위를 줄인다. 로직 PR이 먼저 들어간다 |
-| `settings/*` | 로컬: `VersusKeyBindings`, 저장 형식 버전 3 | UI는 `SettingsScreen`에서 이 값을 읽고 쓴다. 로컬은 `SettingsScreen`의 화면 배치를 건드리지 않는다 |
+| `settings/*` | 로컬: `VersusKeyBindings`, 설정 파일의 `versus.*` 줄 | UI는 `SettingsScreen`에서 이 값을 읽고 쓴다. 로컬은 `SettingsScreen`의 화면 배치를 건드리지 않는다 |
 | `ui/SettingsScreen.java` | 로컬: `GameSettings` 생성자가 바뀌어 컴파일을 맞추는 최소 수정 / UI: 대전 키 영역 | 로컬이 먼저 컴파일만 맞추고, UI가 그 위에 영역을 추가 |
 | `ui/MainMenuScreen.java` | UI: "대전 모드" / P2P: "P2P 대전" | 항목 순서를 게임 시작 → 아이템 모드 → 대전 모드 → P2P 대전 → 설정 → 스코어보드 → 게임 종료로 제안 |
 | `ui/ScreenRouter.java` | UI·P2P가 화면 이름 상수 추가 | P2P는 `P2P_` 접두어 |
