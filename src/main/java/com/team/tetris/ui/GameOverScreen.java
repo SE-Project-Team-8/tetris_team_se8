@@ -13,6 +13,7 @@ import java.util.Objects;
 import javax.swing.JPanel;
 
 import com.team.tetris.common.Screen;
+import com.team.tetris.ui.theme.MenuBackground;
 import com.team.tetris.ui.theme.PressFeedback;
 import com.team.tetris.ui.theme.UiColors;
 import com.team.tetris.ui.theme.UiFonts;
@@ -111,12 +112,6 @@ public class GameOverScreen extends JPanel implements Screen {
             // 수치는 창 크기 L(600px) 기준이며 창 폭 배율을 곱한다.
             float scale = UiPainter.scale(screenWidth);
 
-            UiPainter.fillBackground(g2d, screenWidth, screenHeight);
-            UiPainter.drawSoftCircle(g2d, Math.round(screenWidth * 0.05f), Math.round(screenHeight * 0.17f),
-                    Math.round(screenWidth * 0.13f), UiColors.withAlpha(LOGO_COLORS[0], 0.18f));
-            UiPainter.drawSoftCircle(g2d, Math.round(screenWidth * 0.96f), Math.round(screenHeight * 0.80f),
-                    Math.round(screenWidth * 0.17f), UiColors.withAlpha(LOGO_COLORS[6], 0.16f));
-
             // 순위권이면 배너 줄이 하나 더 들어가므로 전체 묶음 높이를 먼저 구해 세로 가운데에 둔다.
             int tile = Math.round(46 * scale);
             int cardHeight = Math.round(150 * scale);
@@ -126,6 +121,8 @@ public class GameOverScreen extends JPanel implements Screen {
             int blockHeight = tile + gap + cardHeight + gap
                     + (qualifiesForLeaderboard ? bannerHeight + gap : 0) + buttonHeight;
             int y = Math.max(Math.round(24 * scale), (screenHeight - blockHeight) / 2 - Math.round(20 * scale));
+            // 시작 메뉴와 같은 테트로미노 배경. 조명은 GAMEOVER 로고 뒤에 둔다.
+            MenuBackground.draw(g2d, screenWidth, screenHeight, y + tile / 2, scale);
 
             int logoBottom = UiPainter.drawLogo(g2d, "GAMEOVER", centerX, y, tile, LOGO_COLORS);
             y = logoBottom + gap;

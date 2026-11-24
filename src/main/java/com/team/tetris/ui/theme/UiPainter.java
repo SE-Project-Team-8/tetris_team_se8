@@ -69,16 +69,6 @@ public final class UiPainter {
     }
 
     /**
-     * 메뉴·게임오버 배경의 은은한 장식 원을 그린다. 정적 도형이라 리페인트 비용만 든다.
-     *
-     * @param color 원 색. 알파 0.2 내외를 권장한다.
-     */
-    public static void drawSoftCircle(Graphics2D g, int centerX, int centerY, int radius, Color color) {
-        g.setColor(color);
-        g.fillOval(centerX - radius, centerY - radius, radius * 2, radius * 2);
-    }
-
-    /**
      * NEXT·SCORE 같은 정보 패널. panel 채움 + panelBorder 1px.
      */
     public static void drawPanel(Graphics2D g, int x, int y, int width, int height, int radius) {

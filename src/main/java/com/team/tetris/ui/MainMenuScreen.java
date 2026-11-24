@@ -11,6 +11,7 @@ import java.util.Objects;
 import javax.swing.JPanel;
 
 import com.team.tetris.common.Screen;
+import com.team.tetris.ui.theme.MenuBackground;
 import com.team.tetris.ui.theme.PressFeedback;
 import com.team.tetris.ui.theme.ThemedDialog;
 import com.team.tetris.ui.theme.UiColors;
@@ -25,7 +26,7 @@ import com.team.tetris.ui.theme.UiPainter;
  * - Enter 또는 Space로 선택된 메뉴를 실행한다.
  */
 public class MainMenuScreen extends JPanel implements Screen {
-    /** 로고 타일과 장식 원에 쓰는 블럭색. 팔레트 모드와 무관한 장식이라 일반 팔레트 값을 고정으로 쓴다. */
+    /** 로고 타일에 쓰는 블럭색. 팔레트 모드와 무관한 장식이라 일반 팔레트 값을 고정으로 쓴다. */
     private static final Color[] LOGO_COLORS = {
             new Color(0x4FC3E8), new Color(0xFFD34E), new Color(0xB07FE8),
             new Color(0x6FD66F), new Color(0xFF7F7F), new Color(0xFFA94F)
@@ -145,32 +146,17 @@ public class MainMenuScreen extends JPanel implements Screen {
             // 수치는 창 크기 L(600px) 기준이며 창 폭 배율을 곱해 S/M/L에서 같은 비율을 유지한다.
             float scale = UiPainter.scale(width);
 
-            UiPainter.fillBackground(g2d, width, height);
-            drawDecorations(g2d, width, height);
             // 로고와 메뉴를 한 묶음으로 보고 화면 세로 가운데에 둔다. 하단 안내 문구 몫만큼 살짝 위로 올린다.
             int tile = Math.round(LOGO_TILE * scale);
             int blockHeight = tile + Math.round(LOGO_TO_MENU_GAP * scale) + menuHeight(scale);
             int top = Math.max(Math.round(24 * scale), (height - blockHeight) / 2 - Math.round(20 * scale));
+            MenuBackground.draw(g2d, width, height, top + tile / 2, scale);
             int logoBottom = drawTitle(g2d, width, top, tile);
             drawMenuItems(g2d, width, logoBottom, scale);
             drawHint(g2d, width, height, scale);
         } finally {
             g2d.dispose();
         }
-    }
-
-    /**
-     * 배경의 은은한 장식 원. 정적 도형이라 애니메이션 비용이 없다.
-     */
-    private static void drawDecorations(Graphics2D g2d, int width, int height) {
-        UiPainter.drawSoftCircle(g2d, Math.round(width * 0.03f), Math.round(height * 0.17f),
-                Math.round(width * 0.12f), UiColors.withAlpha(LOGO_COLORS[0], 0.22f));
-        UiPainter.drawSoftCircle(g2d, Math.round(width * 0.97f), Math.round(height * 0.52f),
-                Math.round(width * 0.16f), UiColors.withAlpha(LOGO_COLORS[4], 0.18f));
-        UiPainter.drawSoftCircle(g2d, Math.round(width * 0.84f), Math.round(height * 0.78f),
-                Math.round(width * 0.06f), UiColors.withAlpha(LOGO_COLORS[3], 0.16f));
-        UiPainter.drawSoftCircle(g2d, Math.round(width * 0.12f), Math.round(height * 0.90f),
-                Math.round(width * 0.10f), UiColors.withAlpha(LOGO_COLORS[5], 0.16f));
     }
 
     /**
