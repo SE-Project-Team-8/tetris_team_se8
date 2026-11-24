@@ -22,8 +22,8 @@ import java.util.Set;
 /**
  * 대전 키 열 개: 플레이어마다 {@link #PLAYER_ACTIONS}의 다섯 동작에 키 코드 하나씩 (LB-I11, D-11, D-13).
  *
- * 키 값은 {@link SidedKey}다. 키 코드에 왼쪽·오른쪽 구분을 더한 정수라서, 기본값처럼 왼쪽 Shift는 P1, 오른쪽 Shift는
- * P2에 줄 수 있다. 쪽을 정하지 않은 키는 어느 쪽에서 눌려도 맞는다.
+ * 키 값은 {@link SidedKey}다. 키 코드에 왼쪽·오른쪽 구분을 더한 정수라서, 기본값의 P1 하드드롭은 왼쪽 Shift에만 맞고
+ * 오른쪽 Shift에는 맞지 않는다. 쪽을 정하지 않은 키는 어느 쪽에서 눌려도 맞는다.
  *
  * 열 개의 키는 서로 겹치지 않아야 한다({@link SidedKey#overlaps}). 1인용 키와는 겹쳐도 된다(기본값부터 P2 방향키가
  * 1인용과 같다). 일시정지·나가기 키와 겹치지 않아야 한다는 규칙은 두 키 묶음을 함께 가진 {@link GameSettings}가 맡는다.
@@ -55,7 +55,12 @@ public record VersusKeyBindings(Map<GameAction, Integer> p1, Map<GameAction, Int
         }
     }
 
-    /** 기본값: P1은 키보드 왼쪽(A·D·S·W·왼쪽 Shift), P2는 오른쪽(방향키·오른쪽 Shift). input.md 1절의 표. */
+    /**
+     * 기본값: P1은 키보드 왼쪽(A·D·S·W·왼쪽 Shift), P2는 오른쪽(방향키·Enter). input.md 1절의 표.
+     *
+     * P1의 Shift는 왼쪽만이라서 P2가 오른쪽 Shift를 잘못 눌러도 P1 블록이 떨어지지 않는다. P2 하드드롭을 오른쪽 Shift로 하지
+     * 않는 이유는, macOS에서 한쪽 Shift를 누른 채 다른 쪽 Shift를 누르면 키 이벤트가 오지 않기 때문이다 (D-13).
+     */
     public static VersusKeyBindings defaults() {
         return new VersusKeyBindings(
                 Map.of(GameAction.MOVE_LEFT, KeyEvent.VK_A,
@@ -67,7 +72,7 @@ public record VersusKeyBindings(Map<GameAction, Integer> p1, Map<GameAction, Int
                         GameAction.MOVE_RIGHT, KeyEvent.VK_RIGHT,
                         GameAction.SOFT_DROP, KeyEvent.VK_DOWN,
                         GameAction.ROTATE_CLOCKWISE, KeyEvent.VK_UP,
-                        GameAction.HARD_DROP, SidedKey.right(KeyEvent.VK_SHIFT)));
+                        GameAction.HARD_DROP, KeyEvent.VK_ENTER));
     }
 
     /** 그 플레이어의 동작별 키. 읽기 전용이다. */

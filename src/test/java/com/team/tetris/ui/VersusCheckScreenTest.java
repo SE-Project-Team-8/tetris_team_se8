@@ -131,7 +131,9 @@ class VersusCheckScreenTest {
             fillAroundTheMiddle(f.boards[0], 18);
             fillAroundTheMiddle(f.boards[0], 19);
             assertTrue(f.screen.keyPressed(KeyEvent.VK_SHIFT, KeyEvent.KEY_LOCATION_LEFT));
-            assertTrue(f.screen.keyPressed(KeyEvent.VK_SHIFT, KeyEvent.KEY_LOCATION_RIGHT));
+            assertFalse(f.screen.keyPressed(KeyEvent.VK_SHIFT, KeyEvent.KEY_LOCATION_RIGHT),
+                    "the right Shift is nobody's by default");
+            assertTrue(f.screen.keyPressed(KeyEvent.VK_ENTER, KeyEvent.KEY_LOCATION_STANDARD));
             f.input.keyReleased(KeyEvent.VK_SHIFT, KeyEvent.KEY_LOCATION_LEFT);
             fillAroundTheMiddle(f.boards[0], 18);
             fillAroundTheMiddle(f.boards[0], 19);
