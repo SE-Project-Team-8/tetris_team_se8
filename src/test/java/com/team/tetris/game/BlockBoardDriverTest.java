@@ -84,6 +84,39 @@ class BlockBoardDriverTest {
     }
 
     @Test
+    void counterclockwiseRotationReusesTheSideWallCorrection() {
+        BlockBoardDriver driver = new BlockBoardDriver(new Board(), sequence(TetrominoType.I));
+        driver.reset();
+        assertTrue(driver.spawnNextBlock());
+        assertTrue(driver.moveDown());
+        assertTrue(driver.rotateClockwise());
+        for (int step = 0; step < 5; step++) assertTrue(driver.moveLeft());
+
+        assertTrue(driver.rotateCounterclockwise());
+        assertArrayEquals(new int[]{0, 0, 0, 0, -1, -1, -1, -1, -1, -1},
+                driver.snapshot().cells()[1]);
+    }
+
+    @Test
+    void enginePublishesTheCounterclockwiseBoardWhileRunning() throws Exception {
+        BlockBoardDriver driver = new BlockBoardDriver(new Board(), sequence(TetrominoType.T));
+        Scores listener = new Scores();
+        SwingUtilities.invokeAndWait(() -> {
+            try (GameEngine engine = new GameEngine(driver, listener)) {
+                assertFalse(engine.rotateCounterclockwise());
+                assertTrue(engine.start());
+                assertTrue(engine.rotateCounterclockwise());
+                BoardSnapshot rotated = listener.board;
+                assertEquals(TetrominoType.T.id(), rotated.cells()[1][3], "the tip points left");
+                assertEquals(BoardSnapshot.EMPTY, rotated.cells()[1][5], "the right side is empty");
+                assertTrue(engine.pause());
+                assertFalse(engine.rotateCounterclockwise());
+                assertSame(rotated, listener.board);
+            }
+        });
+    }
+
+    @Test
     void wallCorrectionDoesNotRotateThroughFixedBlocks() {
         Board board = new Board();
         BlockBoardDriver driver = new BlockBoardDriver(board, sequence(TetrominoType.I));

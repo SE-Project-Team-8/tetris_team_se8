@@ -67,4 +67,9 @@ public record Tetromino(TetrominoType type, Rotation rotation, int row, int col)
     public Tetromino rotateClockwise() {
         return new Tetromino(type, rotation.clockwise(), row, col);
     }
+
+    /** 기준점을 유지한 채 반시계 방향 90도 회전한 후보를 만든다. */
+    public Tetromino rotateCounterclockwise() {
+        return new Tetromino(type, rotation.counterclockwise(), row, col);
+    }
 }
