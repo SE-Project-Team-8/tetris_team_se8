@@ -49,7 +49,7 @@ common/events/CellCodes         (변경) GARBAGE 코드
 settings/                       (변경 — input.md 4절)
 ├── VersusKeyBindings           (새) P1·P2 대전 키
 ├── GameSettings                대전 키 항목 추가
-└── SettingsRepository          형식 버전 3, 대전 키 저장·이전 버전 읽기
+└── SettingsRepository          대전 키 저장(`versus.*` 줄, 형식 버전 2 유지)·이전 파일 읽기
 
 Main                            (변경) 대전 조립, 확인용 화면 실행 인자
 ui/VersusCheckScreen            (새) 확인용 화면 — 꾸미지 않음 (ui-contract.md 5절)
