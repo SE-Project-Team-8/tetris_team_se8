@@ -11,7 +11,7 @@
 
 **이 표가 작업의 기준이다.** 어느 기기에서든 여기를 보고 이어서 한다. 커밋할 때 해당 줄의 상태를 같은 커밋에서 고치고, 커밋한 뒤 바로 푸시한다.
 
-마지막 갱신: 2026-11-24 — 커밋 9 완료.
+마지막 갱신: 2026-11-24 — 커밋 10 완료. 수동 확인은 남음.
 
 | # | 커밋 | 상태 | 메모 |
 | --- | --- | --- | --- |
@@ -25,14 +25,16 @@
 | — | **PR 1 올리기** | 완료 | #70, 머지됨. PR 2는 머지된 `main`에서 분기 |
 | 8 | 대전 키 값 | 완료 | 일시정지·나가기 키와의 겹침은 대전 키를 바꿀 때만 거부. 1인용 쪽에서 생긴 겹침은 `versusKeyClashes()`로 알림(input.md 4절) |
 | 9 | 2인 키 입력 분배와 누름 반복 | 완료 | `game`이 `settings`를 import하지 않도록 키 표(`Map<Integer, PlayerMove>`)를 받음. 표는 `GameSettings.versusKeyMap()`. 커밋 8의 `VersusKeyBindings.Assignment`는 `PlayerMove`로 바꿈 |
-| 10 | 대전 조립과 확인용 화면 | 대기 | |
+| 10 | 대전 조립과 확인용 화면 | 완료 | `--versus=normal\|item\|time`. 화면 테스트(키·창 크기·그리기)와 실행 인자 테스트 추가. **두 사람 수동 확인(`test-plan.md` 3절)은 아직** |
 | 11 | 대전 키를 설정 파일에 저장 | 대기 | |
 | 12 | 수동 확인 결과와 문서 마무리 | 대기 | |
 | — | **PR 2 올리기** | 대기 | |
 
 상태: **대기** (시작 전) → **초안** (본 코드는 있으나 테스트가 없어 커밋 전) → **완료** (테스트와 함께 커밋하고 푸시함).
 
-**다음에 할 일.** 커밋 10: `Main`에 대전 조립(`VersusMatch.standard`, `VersusInput`, `applySettings`에서 `setKeys`)과 실행 인자(`--versus=normal|item|time`)로 띄우는 확인용 화면 `ui/VersusCheckScreen`. 두 사람이 한 판을 끝까지 하는지 손으로 확인(`test-plan.md` 3절)하고 반복 지연·간격을 맞춘다.
+**다음에 할 일.**
+1. 수동 확인: `./gradlew run --args="--versus=normal"`로 두 사람이 한 판을 끝까지 한다. `test-plan.md` 3절의 "확인용" 항목을 보고, 누름 반복(170ms/50ms)이 1인 모드와 비슷한지 본다. 결과는 커밋 12에서 적는다.
+2. 커밋 11: `SettingsRepository` 형식 버전 3, `versus.p1.MOVE_LEFT` 같은 키로 대전 키 저장, 버전 1·2 파일은 대전 키 기본값. `SettingsRepositoryVersusKeysTest`.
 
 ### 다른 기기에서 이어서 하기
 

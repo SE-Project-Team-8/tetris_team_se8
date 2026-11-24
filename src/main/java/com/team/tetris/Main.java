@@ -5,6 +5,7 @@ package com.team.tetris;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -14,11 +15,14 @@ import javax.swing.SwingWorker;
 import com.team.tetris.block.ColorScheme;
 import com.team.tetris.common.Difficulty;
 import com.team.tetris.common.GameMode;
+import com.team.tetris.common.battle.VersusMode;
 import com.team.tetris.common.events.BoardSnapshot;
 import com.team.tetris.common.events.GameEventListener;
 import com.team.tetris.game.BlockBoardDriver;
 import com.team.tetris.game.GameEngine;
 import com.team.tetris.game.item.ItemRegistry;
+import com.team.tetris.game.versus.VersusInput;
+import com.team.tetris.game.versus.VersusMatch;
 import com.team.tetris.scoreboard.ScoreRecord;
 import com.team.tetris.scoreboard.ScoreboardRepository;
 import com.team.tetris.settings.GameSettings;
@@ -31,14 +35,48 @@ import com.team.tetris.ui.PauseScreen;
 import com.team.tetris.ui.ScoreboardScreen;
 import com.team.tetris.ui.ScreenRouter;
 import com.team.tetris.ui.SettingsScreen;
+import com.team.tetris.ui.VersusCheckScreen;
 import com.team.tetris.ui.theme.ThemedDialog;
 
 /** Composition root for the game engine, screens, settings, and ranking storage. */
 public final class Main {
     private Main() { }
 
+    /** 확인용 대전 화면을 띄우는 실행 인자의 앞부분. 예: {@code --versus=normal} */
+    static final String VERSUS_ARGUMENT = "--versus=";
+
     public static void main(String[] args) {
-        SwingUtilities.invokeLater(() -> new Application().show());
+        Optional<VersusMode> versus;
+        try {
+            versus = versusModeFrom(args);
+        } catch (IllegalArgumentException invalid) {
+            System.err.println(invalid.getMessage());
+            versus = Optional.empty();
+        }
+        Optional<VersusMode> versusMode = versus;
+        SwingUtilities.invokeLater(() -> new Application(versusMode).show());
+    }
+
+    /**
+     * 실행 인자에서 확인용 대전 화면의 방식을 찾는다 (docs/battle/ui-contract.md 5절). 정식 진입 경로는 UI 담당이 만드는
+     * 시작 메뉴 항목이고, 그 전까지 대전은 이 인자로만 띄운다.
+     *
+     * @return {@code --versus=normal|item|time}이 있으면 그 방식
+     * @throws IllegalArgumentException 방식 이름을 알 수 없을 때
+     */
+    static Optional<VersusMode> versusModeFrom(String... args) {
+        for (String arg : args) {
+            if (!arg.startsWith(VERSUS_ARGUMENT)) continue;
+            String name = arg.substring(VERSUS_ARGUMENT.length()).toLowerCase(Locale.ROOT);
+            return Optional.of(switch (name) {
+                case "normal" -> VersusMode.NORMAL;
+                case "item" -> VersusMode.ITEM;
+                case "time" -> VersusMode.TIME_LIMIT;
+                default -> throw new IllegalArgumentException(
+                        "Unknown versus mode '" + name + "'. Use " + VERSUS_ARGUMENT + "normal, item or time.");
+            });
+        }
+        return Optional.empty();
     }
 
     private static final class Application {
@@ -54,6 +92,10 @@ public final class Main {
         private final GameOverScreen gameOverScreen = new GameOverScreen(router);
         private final NameInputScreen nameInputScreen = new NameInputScreen(router, this::saveScore);
         private final ScoreboardScreen scoreboardScreen = new ScoreboardScreen(router, scoreboardRepository);
+        // 로컬 대전: 두 플레이어가 같은 아이템 목록과 설정의 난이도를 쓴다 (D-11).
+        private final VersusMatch versusMatch = new VersusMatch(VersusMatch.standard(items, () -> settings.difficulty()));
+        private final VersusInput versusInput = new VersusInput(versusMatch, settings.versusKeyMap());
+        private final Optional<VersusMode> versusCheck;
         private int finalScore;
         private int bestScoreLoadGeneration;
         private int bestScore = -1;
@@ -61,7 +103,8 @@ public final class Main {
         private GameMode currentMode = GameMode.NORMAL;
         private GameMode finalMode = GameMode.NORMAL;
 
-        private Application() {
+        private Application(Optional<VersusMode> versusCheck) {
+            this.versusCheck = Objects.requireNonNull(versusCheck, "versusCheck");
             listener.setDelegate(gameScreen.eventListener());
             applySettings(settings);
             router.addScreen(ScreenRouter.MAIN_MENU, new MainMenuScreen(router,
@@ -75,16 +118,19 @@ public final class Main {
                     new SettingsScreen(router, settingsRepository, scoreboardRepository,
                             () -> settings, this::applySettings, this::onScoresReset));
             router.addScreen(ScreenRouter.SCOREBOARD, scoreboardScreen);
+            versusCheck.ifPresent(mode -> router.addScreen(VersusCheckScreen.NAME,
+                    new VersusCheckScreen(router, versusMatch, versusInput, () -> settings, mode)));
             router.addWindowListener(new java.awt.event.WindowAdapter() {
                 @Override public void windowClosing(java.awt.event.WindowEvent event) {
                     engine.close();
+                    versusMatch.close();
                 }
             });
         }
 
         private void show() {
             router.setVisible(true);
-            router.showScreen(ScreenRouter.MAIN_MENU);
+            router.showScreen(versusCheck.isPresent() ? VersusCheckScreen.NAME : ScreenRouter.MAIN_MENU);
             refreshBestScore(true);
         }
 
@@ -155,6 +201,7 @@ public final class Main {
             settings = Objects.requireNonNull(updated, "updated");
             router.updateWindowSize(updated.screenSize().width(), updated.screenSize().height());
             gameScreen.updateKeyBindings(updated.keyBindings());
+            versusInput.setKeys(updated.versusKeyMap());
             gameScreen.setColorScheme(updated.isColorBlindModeEnabled()
                     ? ColorScheme.colorBlind() : ColorScheme.standard());
         }
