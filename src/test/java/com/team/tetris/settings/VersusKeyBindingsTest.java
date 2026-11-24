@@ -7,6 +7,7 @@ package com.team.tetris.settings;
 import com.team.tetris.common.Difficulty;
 import com.team.tetris.common.battle.Player;
 import com.team.tetris.game.GameAction;
+import com.team.tetris.game.versus.PlayerMove;
 import org.junit.jupiter.api.Test;
 
 import java.awt.event.KeyEvent;
@@ -50,11 +51,11 @@ class VersusKeyBindingsTest {
 
     @Test
     void aKeyTellsWhoseMoveItIs() {
-        assertEquals(Optional.of(new VersusKeyBindings.Assignment(Player.P1, GameAction.HARD_DROP)),
-                DEFAULTS.assignmentFor(KeyEvent.VK_SHIFT));
-        assertEquals(Optional.of(new VersusKeyBindings.Assignment(Player.P2, GameAction.MOVE_LEFT)),
-                DEFAULTS.assignmentFor(KeyEvent.VK_LEFT));
-        assertEquals(Optional.empty(), DEFAULTS.assignmentFor(KeyEvent.VK_P));
+        assertEquals(Optional.of(new PlayerMove(Player.P1, GameAction.HARD_DROP)),
+                DEFAULTS.moveFor(KeyEvent.VK_SHIFT));
+        assertEquals(Optional.of(new PlayerMove(Player.P2, GameAction.MOVE_LEFT)),
+                DEFAULTS.moveFor(KeyEvent.VK_LEFT));
+        assertEquals(Optional.empty(), DEFAULTS.moveFor(KeyEvent.VK_P));
         assertTrue(DEFAULTS.uses(KeyEvent.VK_ENTER));
         assertFalse(DEFAULTS.uses(KeyEvent.VK_SPACE));
     }
@@ -147,5 +148,24 @@ class VersusKeyBindingsTest {
         GameSettings both = settings.withKeyBindings(KeyBindings.defaults()
                 .withKey(GameAction.PAUSE, KeyEvent.VK_ENTER).withKey(GameAction.QUIT, KeyEvent.VK_A));
         assertEquals(Set.of(GameAction.PAUSE, GameAction.QUIT), both.versusKeyClashes());
+    }
+
+    @Test
+    void theKeyMapForTheInputHasAllTenKeys() {
+        Map<Integer, PlayerMove> map = GameSettings.defaults().versusKeyMap();
+        assertEquals(10, map.size());
+        assertEquals(new PlayerMove(Player.P1, GameAction.MOVE_LEFT), map.get(KeyEvent.VK_A));
+        assertEquals(new PlayerMove(Player.P2, GameAction.HARD_DROP), map.get(KeyEvent.VK_ENTER));
+        assertNull(map.get(KeyEvent.VK_P));
+    }
+
+    @Test
+    void aVersusKeyThatClashesWithPauseIsLeftOutOfTheKeyMap() {
+        GameSettings settings = GameSettings.defaults()
+                .withKeyBindings(KeyBindings.defaults().withKey(GameAction.PAUSE, KeyEvent.VK_ENTER));
+        Map<Integer, PlayerMove> map = settings.versusKeyMap();
+        assertEquals(9, map.size());
+        assertNull(map.get(KeyEvent.VK_ENTER), "Enter pauses; it no longer drops P2's piece");
+        assertEquals(new PlayerMove(Player.P1, GameAction.HARD_DROP), map.get(KeyEvent.VK_SHIFT));
     }
 }

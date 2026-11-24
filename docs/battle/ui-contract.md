@@ -4,7 +4,7 @@
 이 문서는 UI 담당(조상윤·안성현)에게 넘기는 계약이다. P2P 담당(손동민)도 같은 연결 지점을 쓴다.
 
 > 2·4절은 PR 1(`feat/versus-core`)의 코드와 같다. 이름과 모양이 바뀌면 코드와 이 문서를 같은 커밋에서 고친다.
-> 3절(`VersusInput`)과 5절(확인용 화면)은 PR 2에서 만드는 것이라 아직 계획이다. 4.3절의 대전 키 값은 PR 2에서 먼저 만들었다.
+> 3절(`VersusInput`)과 4.3절의 대전 키 값은 PR 2(`feat/versus-play`)에서 만들었다. 5절(확인용 화면)은 아직 계획이다.
 > **이 범위 나눔은 UI 담당의 동의가 필요하다.** 역할 배정 문서와 다르기 때문이다(1절).
 
 ## 1. 누가 무엇을 만드는가
@@ -59,7 +59,7 @@ match.setPlayerListener(Player.P2, rightBoardPanel);
 
 ## 3. UI가 키 이벤트를 넘기는 곳
 
-> PR 2에서 만든다. 아래는 계획이며, 만들면서 바뀌면 고친다.
+`com.team.tetris.game.versus.VersusInput`. `Main`이 `new VersusInput(match, settings.versusKeyMap())`로 만들어 화면에 넘긴다.
 
 `VersusInput`은 화면을 모르는 클래스다. 키 코드의 눌림과 뗌만 받는다. 어느 키가 누구의 어떤 동작인지, 누르고 있을 때의 반복, 하드드롭 한 번만 실행 같은 처리는 전부 안에서 한다(`input.md`).
 
@@ -70,7 +70,8 @@ match.setPlayerListener(Player.P2, rightBoardPanel);
 | `releaseAll()` | 화면을 떠날 때, 창이 포커스를 잃을 때, 대화상자를 띄울 때 |
 
 - 포커스가 어디에 있든 받도록 `KeyboardFocusManager`의 `KeyEventDispatcher`로 등록해 넘긴다(요구사항 p.7). `HeldKeys`, `PauseScreen`이 쓰는 방식과 같다.
-- `keyPressed`는 그 키가 P1·P2의 조작 키여서 처리했으면 true를 돌려준다.
+- `keyPressed`는 그 키가 P1·P2의 조작 키여서 처리했으면 true를 돌려준다. 대전이 진행 중이 아니면(일시정지·종료) 조작 키도 false라서, 디스패처가 이벤트를 삼키지 않고 일시정지 화면 등에 넘긴다.
+- 키 설정이 바뀌면 `Main`이 `input.setKeys(...)`로 알린다. 화면이 할 일은 없다.
 - **일시정지 키와 나가기 키는 `VersusInput`이 처리하지 않는다.** 화면 전환과 확인 대화상자가 따르는 키라 UI가 직접 받아 `match.pause()`·`match.stop()`을 호출한다(1인 모드의 화면들이 하는 방식과 같다).
 
 ```java

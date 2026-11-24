@@ -5,6 +5,7 @@ package com.team.tetris.settings;
 
 import com.team.tetris.common.battle.Player;
 import com.team.tetris.game.GameAction;
+import com.team.tetris.game.versus.PlayerMove;
 
 import java.awt.event.KeyEvent;
 import java.util.Collections;
@@ -36,14 +37,6 @@ public record VersusKeyBindings(Map<GameAction, Integer> p1, Map<GameAction, Int
     /** 두 사람이 함께 쓰는 동작. 1인용 {@link KeyBindings}의 키를 쓴다. */
     public static final Set<GameAction> SHARED_ACTIONS = Collections.unmodifiableSet(EnumSet.of(
             GameAction.PAUSE, GameAction.QUIT));
-
-    /** 키 하나가 맡은 일: 누구의 어떤 동작인가. */
-    public record Assignment(Player player, GameAction action) {
-        public Assignment {
-            Objects.requireNonNull(player, "player");
-            Objects.requireNonNull(action, "action");
-        }
-    }
 
     public VersusKeyBindings {
         p1 = copyOf(p1, "p1");
@@ -83,11 +76,11 @@ public record VersusKeyBindings(Map<GameAction, Integer> p1, Map<GameAction, Int
         return key;
     }
 
-    /** 그 키가 누구의 어떤 동작인지. 대전 키가 아니면 비어 있다. */
-    public Optional<Assignment> assignmentFor(int keyCode) {
+    /** 그 키가 누구의 어떤 조작인지. 대전 키가 아니면 비어 있다. */
+    public Optional<PlayerMove> moveFor(int keyCode) {
         for (Player player : Player.values()) {
             for (Map.Entry<GameAction, Integer> entry : keys(player).entrySet()) {
-                if (entry.getValue() == keyCode) return Optional.of(new Assignment(player, entry.getKey()));
+                if (entry.getValue() == keyCode) return Optional.of(new PlayerMove(player, entry.getKey()));
             }
         }
         return Optional.empty();
@@ -95,7 +88,7 @@ public record VersusKeyBindings(Map<GameAction, Integer> p1, Map<GameAction, Int
 
     /** 열 개의 키 중 하나인지. */
     public boolean uses(int keyCode) {
-        return assignmentFor(keyCode).isPresent();
+        return moveFor(keyCode).isPresent();
     }
 
     /** 키 하나를 바꾼 새 값. 다른 대전 키와 겹치면 거부한다. 두 키를 맞바꾸려면 생성자를 쓴다. */

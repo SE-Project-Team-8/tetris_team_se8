@@ -2,7 +2,7 @@
 
 근거: LB-F18(창 전체에서 받아 분배), LB-I01(동시 입력에도 즉시·정확 반응), LB-I04(키 안내), LB-I11(대전 키 설정). 원본 p.7.
 
-> `VersusKeyBindings`(4절의 값)는 구현했다. `VersusInput`(2·3절)과 설정 파일 저장(4절)은 아직 계획이다.
+> `VersusKeyBindings`(4절의 값)와 `VersusInput`(2·3절)은 구현했다. 설정 파일 저장(4절)은 아직 계획이다.
 
 ## 1. 키 셋
 
@@ -29,11 +29,12 @@
 - 대전 화면이 보이는 동안(`onShow`~`onHide`)에만 등록한다.
 - `KEY_PRESSED`는 `input.keyPressed(keyCode)`, `KEY_RELEASED`는 `input.keyReleased(keyCode)`로 넘긴다. OS 자동 반복을 걸러 내지 않는다.
 
-**`VersusInput` (로컬 대전 담당).** 화면을 모르는 클래스다. 키 코드만 받는다.
-- 받은 키를 현재 설정의 대전 키에서 찾아 `match.handle(player, action)`으로 넘긴다. P1·P2의 조작 키가 아니면 처리하지 않고 false를 돌려준다.
+**`game/versus/VersusInput` (로컬 대전 담당).** 화면도 설정 클래스도 모른다. 키 코드와 "키 코드 → `PlayerMove`(플레이어·조작)" 표만 받는다.
+- 표는 `GameSettings.versusKeyMap()`이 만든다. 일시정지·나가기 키와 겹친 대전 키는 표에서 빠진다(4절).
+- 받은 키를 표에서 찾아 `match.handle(player, action)`으로 넘기고 true를 돌려준다. 표에 없는 키는 false다.
 - 일시정지 키와 나가기 키는 처리하지 않는다. 화면 전환이 따르는 키라 화면이 직접 받는다.
-- 대전이 진행 중이 아닐 때(일시정지, 종료)는 조작 키를 무시한다.
-- 설정이 바뀌면 `Main`의 `applySettings`가 새 대전 키를 전달한다(1인용 `GameScreen.updateKeyBindings`와 같은 경로).
+- 대전이 진행 중이 아닐 때(일시정지, 종료)는 조작 키도 false를 돌려준다. 일시정지 화면이 Enter 같은 키를 받을 수 있게 하려는 것이다.
+- 설정이 바뀌면 `Main`의 `applySettings`가 `input.setKeys(settings.versusKeyMap())`로 새 표를 전달한다(1인용 `GameScreen.updateKeyBindings`와 같은 경로). 눌려 있던 키는 뗀 것으로 친다.
 
 ## 3. 누르고 있을 때의 반복
 
@@ -43,14 +44,16 @@
 
 - `KEY_PRESSED`: 이미 눌려 있는 키면(OS 자동 반복) 무시한다. 새로 눌린 키면 동작을 한 번 바로 실행하고, 반복되는 동작이면 그 키의 반복 타이머를 시작한다.
 - `KEY_RELEASED`: 그 키의 반복 타이머를 멈춘다.
-- 반복 타이머는 실제로는 Swing `Timer`이고, 엔진의 `DropTimer`처럼 주입해 테스트에서 직접 넘긴다. 첫 반복까지의 지연과 이후 간격은 상수로 두고 플레이해 보며 맞춘다(시작값: 지연 170ms, 간격 50ms).
+- 반복 타이머는 실제로는 Swing `Timer`(`GameEngine.newSwingTimer()`)이고, 엔진의 `DropTimer`처럼 주입해 테스트에서 직접 넘긴다. 첫 반복까지의 지연과 이후 간격은 상수(`REPEAT_DELAY_MILLIS`, `REPEAT_INTERVAL_MILLIS`)로 두고 플레이해 보며 맞춘다(시작값: 지연 170ms, 간격 50ms).
+- 엔진의 타이머는 첫 지연이 간격보다 길 수 없어서, 지연만큼 한 번 기다린 뒤 간격으로 다시 건다.
+- 키를 뗀 뒤 늦게 도착한 반복 호출은 무시한다.
 
 | 동작 | 누르고 있을 때 |
 | --- | --- |
 | 좌우 이동, 아래 1칸, 회전 | 반복 (1인 모드와 같다) |
 | 하드드롭, 일시정지, 나가기 | 새로 누를 때 한 번만 (`GameScreen.ONE_PRESS_ACTIONS`와 같다) |
 
-**눌림 상태를 비우는 때 (`releaseAll()`).** 창이 포커스를 잃을 때, 일시정지에 들어갈 때, 대전이 끝날 때, 화면을 떠날 때. 일시정지와 대전 종료는 `VersusInput`이 스스로 비우고, 나머지는 화면이 호출한다. 떼는 이벤트를 받지 못해 키가 눌린 채로 남는 것을 막는다. (`HeldKeys`가 `activeWindow` 변화에 기록을 비우는 것과 같은 이유다.)
+**눌림 상태를 비우는 때 (`releaseAll()`).** 창이 포커스를 잃을 때, 일시정지에 들어갈 때, 대전이 끝날 때, 화면을 떠날 때. 일시정지와 대전 종료는 `VersusInput`이 다음 반복 때 대전 상태를 보고 스스로 비우고, 나머지는 화면이 호출한다. 재개한 뒤에도 키를 누르고 있으면 OS 자동 반복이 새 누름으로 들어와 다시 반복된다. 떼는 이벤트를 받지 못해 키가 눌린 채로 남는 것을 막는다. (`HeldKeys`가 `activeWindow` 변화에 기록을 비우는 것과 같은 이유다.)
 
 **하드드롭 연타 방지.** 한쪽의 블럭이 고정되어 다음 블럭이 나왔을 때, 누르고 있던 아래 키의 반복은 새 블럭에도 이어진다(1인 모드와 같은 동작). 하드드롭은 한 번만 실행되므로 다음 블럭까지 떨어지지 않는다.
 
@@ -62,7 +65,7 @@
 - 일시정지·나가기 키와도 달라야 한다. 대전 키를 바꿀 때(`GameSettings.withVersusKeys`) 거부한다.
   - 반대로 1인용 일시정지·나가기 키를 대전 키로 바꾸는 것은 막지 않는다. 막으면 대전 키 때문에 1인용 키 설정이 안 되거나, 그런 설정 파일을 읽지 못해 `Main`이 기본값으로 덮어쓴다.
   - 이렇게 겹친 키는 대전 중에 일시정지·나가기로 쓰이고 조작에는 쓰이지 않는다. 설정 화면은 `GameSettings.versusKeyClashes()`로 겹친 동작을 알아내 경고할 수 있다.
-- 화면에 안내할 키는 `keyFor(player, action)`, 눌린 키의 주인은 `assignmentFor(keyCode)`로 찾는다.
+- 화면에 안내할 키는 `keyFor(player, action)`, 눌린 키의 주인은 `moveFor(keyCode)`로 찾는다.
 
 **저장.** `settings.properties`의 형식 버전을 2에서 3으로 올리고 `versus.p1.MOVE_LEFT` 같은 키로 저장한다.
 - 버전 1·2 파일을 읽을 때는 대전 키를 기본값으로 채운다. 기존 사용자의 설정 파일이 깨지지 않는다.
