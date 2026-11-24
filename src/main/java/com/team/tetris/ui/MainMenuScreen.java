@@ -19,7 +19,8 @@ import com.team.tetris.ui.theme.UiPainter;
 
 /**
  * 시작 화면 메뉴 패널.
- * - 일반 게임 시작, 아이템 모드 시작, 설정, 스코어보드, 게임 종료 메뉴를 보여준다.
+ * - 일반 게임 시작, 아이템 모드 시작, 대전 모드, P2P 대전, 설정, 스코어보드, 게임 종료 메뉴를 보여준다.
+ * - 대전 모드와 P2P 대전은 아직 구현 전이라 "준비 중" 안내만 띄운다.
  * - 키보드 방향키와 W/S 키로 메뉴 이동이 가능하다.
  * - Enter 또는 Space로 선택된 메뉴를 실행한다.
  */
@@ -47,6 +48,9 @@ public class MainMenuScreen extends JPanel implements Screen {
     menuItems = List.of(
         new MenuItem("게임 시작", startNormal),
         new MenuItem("아이템 모드", startItemMode),
+        // TODO 대전 모드·P2P 대전 화면이 생기면 안내 대신 해당 화면을 여는 동작으로 바꾼다.
+        new MenuItem("대전 모드", () -> showComingSoon("대전 모드")),
+        new MenuItem("P2P 대전", () -> showComingSoon("P2P 대전")),
         new MenuItem("설정", () -> router.showScreen(ScreenRouter.SETTINGS)),
         new MenuItem("스코어보드", () -> router.showScreen(ScreenRouter.SCOREBOARD)),
         new MenuItem("게임 종료", this::confirmExit)
@@ -112,6 +116,12 @@ public class MainMenuScreen extends JPanel implements Screen {
      */
     private void executeSelectedMenu() {
         press.press(selectedIndex, menuItems.get(selectedIndex).action());
+    }
+
+    /** 아직 만들지 않은 메뉴를 골랐을 때 준비 중임을 알린다. */
+    private void showComingSoon(String mode) {
+        ThemedDialog.showMessage(this, mode, "아직 준비 중인 기능입니다.\n조금만 기다려 주세요!",
+                ThemedDialog.Tone.INFO);
     }
 
     /** 실수로 Enter를 눌러 바로 꺼지지 않도록 한 번 더 묻는다. 처음 선택은 "취소"다. */

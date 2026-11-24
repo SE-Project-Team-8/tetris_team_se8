@@ -49,6 +49,9 @@ class MainMenuItemModeTest {
                 press(menu, KeyEvent.VK_ENTER);
                 assertEquals(List.of("item", "normal"), started);
 
+                // 아이템 모드 다음에 대전 모드·P2P 대전이 있고, 설정은 그 아래다.
+                press(menu, KeyEvent.VK_S);
+                press(menu, KeyEvent.VK_S);
                 press(menu, KeyEvent.VK_S);
                 press(menu, KeyEvent.VK_S);
                 press(menu, KeyEvent.VK_ENTER);
