@@ -30,7 +30,7 @@ import com.team.tetris.ui.theme.UiPainter;
  * 이름 입력·스코어보드로 가는 길은 없다. 대전 결과는 저장하지 않는다 (LB-F15).
  */
 public final class VersusResultScreen extends JPanel implements Screen {
-    private static final String[] BUTTONS = {"다시 대전", "방식 선택", "메인 화면으로"};
+    private static final String[] BUTTONS = {"다시 대전", "대전 방식 선택", "메인 화면으로"};
 
     private final ScreenRouter router;
     private final Consumer<VersusMode> startVersus;

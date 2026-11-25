@@ -42,11 +42,11 @@ public final class BattleSelectScreen extends JPanel implements Screen {
 
     private static final List<Choice> CHOICES = List.of(
             new Choice(VersusMode.NORMAL, "일반 대전",
-                    "2줄 이상 지우면 상대 보드에 공격줄 추가. 먼저 못 쌓게 되는 쪽이 패배."),
+                    "2줄 이상 지우면 상대 보드에 공격줄 추가"),
             new Choice(VersusMode.ITEM, "아이템 대전",
-                    "일반 대전 + 10줄마다 아이템 등장. 아이템 5종으로 역전 가능."),
+                    "일반 대전 + 10줄 삭제마다 아이템 등장"),
             new Choice(VersusMode.TIME_LIMIT, "시간제한 대전",
-                    "제한 시간 종료 시 점수가 높은 쪽이 승리."));
+                    "제한 시간 종료 시 점수가 높은 쪽이 승리"));
 
     private final ScreenRouter router;
     private final Supplier<GameSettings> settings;
@@ -238,8 +238,8 @@ public final class BattleSelectScreen extends JPanel implements Screen {
         int baseline = y + height - Math.round(16 * scale);
         GameSettings current = settings.get();
         g2d.setColor(UiColors.PLAYER1);
-        UiPainter.drawText(g2d, "P1 — " + VersusScreen.playerKeys(current, Player.P1), x + inner, baseline);
-        String p2 = "P2 — " + VersusScreen.playerKeys(current, Player.P2);
+        UiPainter.drawText(g2d, "P1: " + VersusScreen.playerKeys(current, Player.P1), x + inner, baseline);
+        String p2 = "P2: " + VersusScreen.playerKeys(current, Player.P2);
         g2d.setColor(UiColors.PLAYER2);
         FontMetrics metrics = g2d.getFontMetrics();
         UiPainter.drawText(g2d, p2, x + width - inner - UiPainter.textWidth(metrics, p2), baseline);

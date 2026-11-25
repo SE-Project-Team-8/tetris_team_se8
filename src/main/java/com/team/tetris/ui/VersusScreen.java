@@ -89,7 +89,7 @@ public final class VersusScreen extends JPanel implements Screen {
     /** 꼬리 잔상 불투명도 (컴포넌트 시트: 50→12%). */
     private static final float[] TRAIL_ALPHAS = {0.50f, 0.28f, 0.12f};
     private static final Color DIMMED_OVERLAY = new Color(0x14, 0x0F, 0x28, 184);
-    private static final String[] PAUSE_ITEMS = {"계속하기", "방식 선택", "메인 화면으로 나가기"};
+    private static final String[] PAUSE_ITEMS = {"계속하기", "대전 방식 선택", "메인 화면으로 나가기"};
 
     private enum EffectKind { GLOW, SEND, QUEUE_FLASH, INSERT }
 
@@ -786,8 +786,8 @@ public final class VersusScreen extends JPanel implements Screen {
         int margin = Math.round(32 * scale);
         g2d.setFont(UiFonts.body(Math.round(13 * scale)));
         g2d.setColor(UiColors.PLAYER1);
-        UiPainter.drawText(g2d, "P1  " + playerKeys(current, Player.P1), margin, baseline);
-        String p2 = "P2  " + playerKeys(current, Player.P2);
+        UiPainter.drawText(g2d, "P1: " + playerKeys(current, Player.P1), margin, baseline);
+        String p2 = "P2: " + playerKeys(current, Player.P2);
         g2d.setColor(UiColors.PLAYER2);
         UiPainter.drawText(g2d, p2, width - margin - UiPainter.textWidth(g2d.getFontMetrics(), p2), baseline);
         g2d.setColor(UiColors.withAlpha(UiColors.TEXT_MUTED, 0.85f));
