@@ -24,6 +24,7 @@ import com.team.tetris.game.item.ItemRegistry;
 import com.team.tetris.game.versus.VersusInput;
 import com.team.tetris.game.versus.MatchResult;
 import com.team.tetris.game.versus.VersusMatch;
+import com.team.tetris.p2p.P2pSession;
 import com.team.tetris.scoreboard.ScoreRecord;
 import com.team.tetris.scoreboard.ScoreboardRepository;
 import com.team.tetris.settings.GameSettings;
@@ -32,6 +33,8 @@ import com.team.tetris.ui.GameOverScreen;
 import com.team.tetris.ui.GameScreen;
 import com.team.tetris.ui.MainMenuScreen;
 import com.team.tetris.ui.NameInputScreen;
+import com.team.tetris.ui.P2pGameScreen;
+import com.team.tetris.ui.P2pLobbyScreen;
 import com.team.tetris.ui.PauseScreen;
 import com.team.tetris.ui.ScoreboardScreen;
 import com.team.tetris.ui.ScreenRouter;
@@ -71,6 +74,10 @@ public final class Main {
                 items, this::showVersusResult);
         private final BattleSelectScreen battleSelectScreen =
                 new BattleSelectScreen(router, () -> settings, this::startVersus);
+        // P2P 대전: 세션 하나를 접속·대기실 화면과 경기 화면이 함께 쓴다 (docs/p2p-handoff.md).
+        private final P2pSession p2pSession = new P2pSession(items, () -> settings.difficulty(), this::onP2pChanged);
+        private final P2pLobbyScreen p2pLobbyScreen = new P2pLobbyScreen(router, p2pSession);
+        private final P2pGameScreen p2pGameScreen = new P2pGameScreen(router, p2pSession, () -> settings, items);
         private int finalScore;
         private int bestScoreLoadGeneration;
         private int bestScore = -1;
@@ -83,7 +90,8 @@ public final class Main {
             applySettings(settings);
             router.addScreen(ScreenRouter.MAIN_MENU, new MainMenuScreen(router,
                     () -> startGame(false), () -> startGame(true),
-                    () -> router.showScreen(ScreenRouter.BATTLE_SELECT)));
+                    () -> router.showScreen(ScreenRouter.BATTLE_SELECT),
+                    () -> router.showScreen(ScreenRouter.P2P_LOBBY)));
             router.addScreen(ScreenRouter.GAME, gameScreen);
             router.addScreen(ScreenRouter.PAUSE,
                     new PauseScreen(router, engine, () -> settings.keyBindings()));
@@ -96,10 +104,13 @@ public final class Main {
             router.addScreen(ScreenRouter.BATTLE_SELECT, battleSelectScreen);
             router.addScreen(ScreenRouter.VERSUS, versusScreen);
             router.addScreen(ScreenRouter.VERSUS_RESULT, versusResultScreen);
+            router.addScreen(ScreenRouter.P2P_LOBBY, p2pLobbyScreen);
+            router.addScreen(ScreenRouter.P2P_GAME, p2pGameScreen);
             router.addWindowListener(new java.awt.event.WindowAdapter() {
                 @Override public void windowClosing(java.awt.event.WindowEvent event) {
                     engine.close();
                     versusMatch.close();
+                    p2pSession.close();
                 }
             });
         }
@@ -114,6 +125,12 @@ public final class Main {
         private void startVersus(VersusMode mode, int timeLimitSeconds) {
             versusScreen.prepare(mode, timeLimitSeconds);
             router.showScreen(ScreenRouter.VERSUS);
+        }
+
+        /** P2P 세션이 바뀔 때마다 두 P2P 화면에 알린다. 화면 전환(경기 시작·끝·끊김)도 화면이 맡는다. */
+        private void onP2pChanged() {
+            p2pLobbyScreen.sessionChanged();
+            p2pGameScreen.sessionChanged();
         }
 
         private void showVersusResult(MatchResult result) {

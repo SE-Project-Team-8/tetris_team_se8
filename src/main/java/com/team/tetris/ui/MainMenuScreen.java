@@ -20,7 +20,7 @@ import com.team.tetris.ui.theme.UiPainter;
 /**
  * 시작 화면 메뉴 패널.
  * - 일반 게임 시작, 아이템 모드 시작, 대전 모드, P2P 대전, 설정, 스코어보드, 게임 종료 메뉴를 보여준다.
- * - 대전 모드와 P2P 대전은 아직 구현 전이라 "준비 중" 안내만 띄운다.
+ * - 대전 모드와 P2P 대전은 동작이 주어지지 않으면 "준비 중" 안내만 띄운다.
  * - 키보드 방향키와 W/S 키로 메뉴 이동이 가능하다.
  * - Enter 또는 Space로 선택된 메뉴를 실행한다.
  */
@@ -44,6 +44,15 @@ public class MainMenuScreen extends JPanel implements Screen {
      * @param openVersus 대전 모드 항목의 동작(게임 방식 선택 화면 열기). null이면 "준비 중" 안내를 띄운다.
      */
     public MainMenuScreen(ScreenRouter router, Runnable startNormal, Runnable startItemMode, Runnable openVersus) {
+        this(router, startNormal, startItemMode, openVersus, null);
+    }
+
+    /**
+     * @param openVersus 대전 모드 항목의 동작(게임 방식 선택 화면 열기). null이면 "준비 중" 안내를 띄운다.
+     * @param openP2p P2P 대전 항목의 동작(P2P 화면 열기). null이면 "준비 중" 안내를 띄운다.
+     */
+    public MainMenuScreen(ScreenRouter router, Runnable startNormal, Runnable startItemMode, Runnable openVersus,
+                          Runnable openP2p) {
     Objects.requireNonNull(router, "router");
     Objects.requireNonNull(startNormal, "startNormal");
     Objects.requireNonNull(startItemMode, "startItemMode");
@@ -51,8 +60,7 @@ public class MainMenuScreen extends JPanel implements Screen {
         new MenuItem("게임 시작", startNormal),
         new MenuItem("아이템 모드", startItemMode),
         new MenuItem("대전 모드", openVersus != null ? openVersus : () -> showComingSoon("대전 모드")),
-        // TODO P2P 대전 화면이 생기면 안내 대신 해당 화면을 여는 동작으로 바꾼다.
-        new MenuItem("P2P 대전", () -> showComingSoon("P2P 대전")),
+        new MenuItem("P2P 대전", openP2p != null ? openP2p : () -> showComingSoon("P2P 대전")),
         new MenuItem("설정", () -> router.showScreen(ScreenRouter.SETTINGS)),
         new MenuItem("스코어보드", () -> router.showScreen(ScreenRouter.SCOREBOARD)),
         new MenuItem("게임 종료", this::confirmExit)
