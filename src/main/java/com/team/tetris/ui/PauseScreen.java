@@ -35,6 +35,7 @@ public class PauseScreen extends JPanel implements Screen {
     // 일시정지 메뉴 항목
     private final String[] menuItems = {
         "계속하기",
+        "설정",
         "메인 화면으로 나가기",
         "게임 종료"
     };
@@ -126,8 +127,10 @@ public class PauseScreen extends JPanel implements Screen {
         switch (selectedIndex) {
             case 0 ->
                 router.showScreen(ScreenRouter.GAME);
-            case 1 -> quitToMenu();
-            case 2 -> {
+            // 게임은 멈춘 채로 두고 설정 화면을 연다. 설정 화면의 뒤로·저장은 이 화면으로 돌아온다.
+            case 1 -> router.showScreen(ScreenRouter.SETTINGS);
+            case 2 -> quitToMenu();
+            case 3 -> {
                 engine.handle(GameAction.QUIT);
                 System.exit(0);
             }

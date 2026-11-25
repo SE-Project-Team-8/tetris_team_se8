@@ -92,6 +92,8 @@ class PauseKeyTest {
                 tap(pause, KeyEvent.VK_SPACE);
                 assertEquals(ScreenRouter.GAME, router.getCurrentScreenName(), "Space on Resume resumes");
                 tap(game, KeyEvent.VK_P);
+                // 계속하기 → 설정 → 메인 화면으로 나가기 순서다.
+                tap(pause, KeyEvent.VK_DOWN);
                 tap(pause, KeyEvent.VK_DOWN);
                 tap(pause, KeyEvent.VK_SPACE);
                 assertEquals(ScreenRouter.MAIN_MENU, router.getCurrentScreenName(), "Space on Main Menu leaves");

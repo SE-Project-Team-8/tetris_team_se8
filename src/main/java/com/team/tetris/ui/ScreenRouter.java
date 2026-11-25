@@ -36,6 +36,8 @@ public class ScreenRouter extends JFrame {
     private int currentWidth;
     private int currentHeight;
     private String currentScreenName;
+    /** 바로 전에 보이던 화면. 설정 화면이 어디로 돌아갈지 정할 때 쓴다. */
+    private String previousScreenName;
 
     public ScreenRouter() {
         this(GameSettings.defaults().screenSize());
@@ -102,6 +104,10 @@ public class ScreenRouter extends JFrame {
             screens.get(currentScreenName).onHide();
         }
         if (PAUSE.equals(name)) {
+            // 일시정지 화면은 게임 화면 위에 겹쳐 뜬다. 설정 화면에서 돌아올 때도 아래에 게임 화면이 보이게 한다.
+            if (screens.containsKey(GAME)) {
+                cardLayout.show(containerPanel, GAME);
+            }
             screens.get(PAUSE).getPanel().setVisible(true);
         } else {
             Screen pauseScreen = screens.get(PAUSE);
@@ -110,6 +116,7 @@ public class ScreenRouter extends JFrame {
             }
             cardLayout.show(containerPanel, name);
         }
+        previousScreenName = currentScreenName;
         currentScreenName = name;
         nextScreen.onShow();
         nextScreen.getPanel().requestFocusInWindow();
@@ -139,6 +146,11 @@ public class ScreenRouter extends JFrame {
 
     public String getCurrentScreenName() {
         return currentScreenName;
+    }
+
+    /** 지금 화면 바로 전에 보이던 화면 이름. 처음 화면이면 null이다. */
+    public String getPreviousScreenName() {
+        return previousScreenName;
     }
 
     private static void validateScreenName(String name) {

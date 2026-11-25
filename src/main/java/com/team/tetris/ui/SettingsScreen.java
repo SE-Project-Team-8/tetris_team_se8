@@ -84,7 +84,11 @@ public final class SettingsScreen extends JPanel implements Screen {
     private final List<SettingCard> cards = new ArrayList<>();
     private final JLabel title = new JLabel("설정");
     private final JLabel keySection = new ThemedLabel("조작 키  ·  칸을 누른 뒤 새 키를 입력하세요");
-    private final JLabel notice = new ThemedLabel("변경한 내용은 저장을 눌러야 적용됩니다", SwingConstants.CENTER);
+    private static final String SAVE_NOTICE = "변경한 내용은 저장을 눌러야 적용됩니다";
+    private static final String PAUSED_NOTICE = "저장을 눌러야 적용되며, 난이도는 다음 게임부터 바뀝니다";
+    private final JLabel notice = new ThemedLabel(SAVE_NOTICE, SwingConstants.CENTER);
+    /** 뒤로·저장·Esc로 돌아갈 화면. 일시정지 화면에서 열었으면 그리로 돌아가 게임을 이어 한다. */
+    private String returnScreen = ScreenRouter.MAIN_MENU;
     private final JLabel hint = new ThemedLabel("←→ 값 변경  ·  Tab 다음 항목  ·  Esc 나가기", SwingConstants.CENTER);
     private final JPanel form = new JPanel();
     private final PropertyChangeListener focusRepaint = event -> repaint();
@@ -172,7 +176,7 @@ public final class SettingsScreen extends JPanel implements Screen {
         addButton(buttonRow, "저장").addActionListener(event -> saveSelected());
         addButton(buttonRow, "기본값 복원").addActionListener(event -> resetSettings());
         addButton(buttonRow, "점수 초기화").addActionListener(event -> resetScores());
-        addButton(buttonRow, "뒤로").addActionListener(event -> router.showScreen(ScreenRouter.MAIN_MENU));
+        addButton(buttonRow, "뒤로").addActionListener(event -> router.showScreen(returnScreen));
         PillButton.linkArrowKeys(buttons);
         // 저장 안내는 버튼 바로 아래에, 조작 방법은 맨 아래에 따로 둔다.
         notice.setForeground(UiColors.TEXT_SECONDARY);
@@ -185,7 +189,7 @@ public final class SettingsScreen extends JPanel implements Screen {
         getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke("ESCAPE"), "back");
         getActionMap().put("back", new javax.swing.AbstractAction() {
             @Override public void actionPerformed(java.awt.event.ActionEvent event) {
-                router.showScreen(ScreenRouter.MAIN_MENU);
+                router.showScreen(returnScreen);
             }
         });
         applyScale(1f);
@@ -194,6 +198,10 @@ public final class SettingsScreen extends JPanel implements Screen {
     @Override public JPanel getPanel() { return this; }
 
     @Override public void onShow() {
+        boolean fromPause = ScreenRouter.PAUSE.equals(router.getPreviousScreenName());
+        returnScreen = fromPause ? ScreenRouter.PAUSE : ScreenRouter.MAIN_MENU;
+        // 난이도는 게임을 시작할 때 정해지므로, 게임 중에 열었으면 다음 게임부터 바뀐다고 알린다.
+        notice.setText(fromPause ? PAUSED_NOTICE : SAVE_NOTICE);
         display(currentSettings.get());
         // 포커스가 옮겨 갈 때마다 선택 강조(노란 테두리)를 다시 그린다.
         KeyboardFocusManager.getCurrentKeyboardFocusManager()
@@ -266,7 +274,7 @@ public final class SettingsScreen extends JPanel implements Screen {
                     get();
                     display(settings);
                     settingsUpdated.accept(settings);
-                    router.showScreen(ScreenRouter.MAIN_MENU);
+                    router.showScreen(returnScreen);
                 } catch (Exception failure) {
                     showMessage("설정을 저장하지 못했습니다. 다시 시도해 주세요.", "설정 오류",
                             ThemedDialog.Tone.ERROR);
@@ -286,7 +294,7 @@ public final class SettingsScreen extends JPanel implements Screen {
                     GameSettings defaults = get();
                     display(defaults);
                     settingsUpdated.accept(defaults);
-                    router.showScreen(ScreenRouter.MAIN_MENU);
+                    router.showScreen(returnScreen);
                 } catch (Exception failure) {
                     showMessage("기본 설정으로 되돌리지 못했습니다. 다시 시도해 주세요.", "설정 오류",
                             ThemedDialog.Tone.ERROR);
