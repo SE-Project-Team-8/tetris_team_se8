@@ -142,6 +142,11 @@ public final class BlockBoardDriver implements GameEngine.BoardDriver {
     }
 
     @Override
+    public boolean rotateCounterclockwise() {
+        return requireCurrent().rotateCounterclockwise(board);
+    }
+
+    @Override
     public int hardDrop() {
         return requireCurrent().hardDrop(board);
     }

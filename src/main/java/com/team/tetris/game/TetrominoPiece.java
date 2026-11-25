@@ -77,7 +77,15 @@ public final class TetrominoPiece implements FallingPiece {
 
     @Override
     public boolean rotateClockwise(Board board) {
-        Tetromino rotated = tetromino.rotateClockwise();
+        return adoptRotation(board, tetromino.rotateClockwise());
+    }
+
+    @Override
+    public boolean rotateCounterclockwise(Board board) {
+        return adoptRotation(board, tetromino.rotateCounterclockwise());
+    }
+
+    private boolean adoptRotation(Board board, Tetromino rotated) {
         if (adopt(board, rotated)) return true;
 
         int minCol = rotated.cells().stream().mapToInt(Cell::col).min().orElseThrow();
