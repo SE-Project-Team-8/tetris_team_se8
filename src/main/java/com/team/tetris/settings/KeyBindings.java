@@ -34,6 +34,7 @@ public record KeyBindings(Map<GameAction, Integer> keys) {
                 GameAction.MOVE_RIGHT, KeyEvent.VK_RIGHT,
                 GameAction.SOFT_DROP, KeyEvent.VK_DOWN,
                 GameAction.ROTATE_CLOCKWISE, KeyEvent.VK_UP,
+                GameAction.ROTATE_COUNTERCLOCKWISE, KeyEvent.VK_Z,
                 GameAction.HARD_DROP, KeyEvent.VK_SPACE,
                 GameAction.PAUSE, KeyEvent.VK_P,
                 GameAction.QUIT, KeyEvent.VK_ESCAPE));

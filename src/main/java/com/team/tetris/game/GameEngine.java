@@ -340,6 +340,7 @@ public final class GameEngine implements AutoCloseable {
             case MOVE_LEFT -> state == GameState.RUNNING && publishIfMoved(board.moveLeft());
             case MOVE_RIGHT -> state == GameState.RUNNING && publishIfMoved(board.moveRight());
             case ROTATE_CLOCKWISE -> state == GameState.RUNNING && publishIfMoved(board.rotateClockwise());
+            case ROTATE_COUNTERCLOCKWISE -> rotateCounterclockwise();
             case SOFT_DROP -> state == GameState.RUNNING && dropOneCell();
             case HARD_DROP -> state == GameState.RUNNING && hardDrop();
         };

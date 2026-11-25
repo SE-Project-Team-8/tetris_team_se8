@@ -5,12 +5,15 @@ import com.team.tetris.common.Difficulty;
 import com.team.tetris.common.battle.Player;
 import com.team.tetris.game.GameAction;
 
+import java.awt.event.KeyEvent;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.EnumMap;
+import java.util.EnumSet;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Properties;
+import java.util.Set;
 
 /**
  * Missing data uses defaults; invalid data raises IOException without overwriting it.
@@ -37,8 +40,10 @@ public final class SettingsRepository {
             int version = PropertiesFile.requireVersion(properties, 1, 2);
             EnumMap<GameAction, Integer> keys = new EnumMap<>(GameAction.class);
             for (GameAction action : GameAction.values()) {
+                if (ADDED_ACTIONS.contains(action) && properties.getProperty("key." + action.name()) == null) continue;
                 keys.put(action, Integer.parseInt(PropertiesFile.required(properties, "key." + action.name())));
             }
+            fillAddedActions(keys);
             // 대전 키가 일시정지·나가기 키와 겹쳐 있어도 읽는다. 겹침은 대전 키를 바꿀 때만 거부한다 (GameSettings).
             return new GameSettings(
                     GameSettings.ScreenSize.valueOf(PropertiesFile.required(properties, "screenSize")),
@@ -48,6 +53,32 @@ public final class SettingsRepository {
                     loadVersusKeys(properties));
         } catch (IllegalArgumentException invalid) {
             throw new IOException("Invalid settings: " + file, invalid);
+        }
+    }
+
+    /**
+     * 설정 파일 형식을 만든 뒤에 추가된 동작. 예전 파일에 키가 없으면 오류 대신 기본 키로 채운다.
+     * 기본 키를 이미 다른 동작이 쓰고 있으면 남는 키 중 하나를 고른다.
+     */
+    private static final Set<GameAction> ADDED_ACTIONS = EnumSet.of(GameAction.ROTATE_COUNTERCLOCKWISE);
+    private static final int[] SPARE_KEYS = {KeyEvent.VK_Z, KeyEvent.VK_X, KeyEvent.VK_C, KeyEvent.VK_V,
+            KeyEvent.VK_A, KeyEvent.VK_S, KeyEvent.VK_D, KeyEvent.VK_Q, KeyEvent.VK_W, KeyEvent.VK_E};
+
+    private static void fillAddedActions(EnumMap<GameAction, Integer> keys) {
+        KeyBindings defaults = KeyBindings.defaults();
+        for (GameAction action : ADDED_ACTIONS) {
+            if (keys.containsKey(action)) continue;
+            int preferred = defaults.keyFor(action);
+            if (!keys.containsValue(preferred)) {
+                keys.put(action, preferred);
+                continue;
+            }
+            for (int spare : SPARE_KEYS) {
+                if (!keys.containsValue(spare)) {
+                    keys.put(action, spare);
+                    break;
+                }
+            }
         }
     }
 

@@ -55,6 +55,16 @@ import java.util.function.Supplier;
  * 선택한 값은 저장 버튼을 누를 때 한꺼번에 적용한다.
  */
 public final class SettingsScreen extends JPanel implements Screen {
+    /**
+     * 조작 키 칸을 늘어놓는 순서 (두 열 격자, 왼쪽→오른쪽·위→아래).
+     * 이동 / 드롭 / 회전 / 일시정지·나가기를 한 줄씩 짝지어 둔다.
+     */
+    private static final List<GameAction> KEY_ORDER = List.of(
+            GameAction.MOVE_LEFT, GameAction.MOVE_RIGHT,
+            GameAction.SOFT_DROP, GameAction.HARD_DROP,
+            GameAction.ROTATE_CLOCKWISE, GameAction.ROTATE_COUNTERCLOCKWISE,
+            GameAction.PAUSE, GameAction.QUIT);
+
     private final ScreenRouter router;
     private final SettingsRepository settingsRepository;
     private final ScoreboardRepository scoreboardRepository;
@@ -127,7 +137,7 @@ public final class SettingsScreen extends JPanel implements Screen {
         };
         keyGrid.setOpaque(false);
         keyGrid.setAlignmentX(Component.LEFT_ALIGNMENT);
-        for (GameAction action : GameAction.values()) {
+        for (GameAction action : KEY_ORDER) {
             KeyChip field = new KeyChip();
             // 눌렀지만 아직 지정하지 않은 수정 키. 다른 키 없이 떼면 그때 지정한다.
             int[] pendingModifier = {KeyEvent.VK_UNDEFINED};
@@ -387,7 +397,8 @@ public final class SettingsScreen extends JPanel implements Screen {
             case MOVE_LEFT -> "왼쪽 이동";
             case MOVE_RIGHT -> "오른쪽 이동";
             case SOFT_DROP -> "소프트 드롭";
-            case ROTATE_CLOCKWISE -> "회전";
+            case ROTATE_CLOCKWISE -> "오른쪽 회전";
+            case ROTATE_COUNTERCLOCKWISE -> "왼쪽 회전";
             case HARD_DROP -> "하드 드롭";
             case PAUSE -> "일시정지";
             case QUIT -> "나가기";

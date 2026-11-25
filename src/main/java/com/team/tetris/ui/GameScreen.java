@@ -842,7 +842,8 @@ public class GameScreen extends JPanel implements Screen {
                 g2d.setColor(UiColors.withAlpha(UiColors.TEXT_MUTED, 0.75f));
                 g2d.setFont(UiFonts.body(Math.round(12 * scale)));
                 String help = "이동 " + keyText(GameAction.MOVE_LEFT) + " " + keyText(GameAction.MOVE_RIGHT)
-                        + " " + keyText(GameAction.SOFT_DROP) + "  ·  회전 " + keyText(GameAction.ROTATE_CLOCKWISE)
+                        + " " + keyText(GameAction.SOFT_DROP)
+                        + "  ·  회전 " + keyText(GameAction.ROTATE_CLOCKWISE) + " " + keyText(GameAction.ROTATE_COUNTERCLOCKWISE)
                         + "  ·  하드드롭 " + keyText(GameAction.HARD_DROP)
                         + "  ·  일시정지 " + keyText(GameAction.PAUSE) + "  ·  나가기 " + keyText(GameAction.QUIT);
                 UiPainter.drawCentered(g2d, help, width / 2, height - footerHeight / 2);
