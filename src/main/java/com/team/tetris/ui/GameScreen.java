@@ -5,6 +5,7 @@
 package com.team.tetris.ui;
 
 import java.awt.AlphaComposite;
+import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Font;
 import java.awt.FontMetrics;
@@ -41,6 +42,7 @@ import com.team.tetris.common.Screen;
 import com.team.tetris.common.constants.GameConstants;
 import com.team.tetris.common.events.BoardSnapshot;
 import com.team.tetris.common.events.CellCodes;
+import com.team.tetris.common.events.CellPosition;
 import com.team.tetris.common.events.GameEventListener;
 import com.team.tetris.game.GameAction;
 import com.team.tetris.game.GameEngine;
@@ -79,7 +81,7 @@ public class GameScreen extends JPanel implements Screen {
     private enum LineClearStage { POP, POP_HOLD, FADE, CLEARED }
     private static final LineClearStage[] LINE_CLEAR_STAGES = LineClearStage.values();
     /** 아이템 토스트 종류. 보드 색조와 헤더 뱃지를 정한다. */
-    private enum ItemEffectKind { FEVER, SLOW }
+    private enum ItemEffectKind { FEVER, SLOW, BOMB, ANVIL }
     private static final Color SLOW_COLOR = new Color(0x5FD8F0);
     /** 보드 상태 틴트 불투명도 (스펙: 13%). */
     private static final float BOARD_TINT_ALPHA = 0.13f;
@@ -87,6 +89,26 @@ public class GameScreen extends JPanel implements Screen {
     private static final int HARD_DROP_EFFECT_MS = 110;
     /** 잔상 개수와 각 잔상의 불투명도. 착지 위치에 가까울수록 진하다. */
     private static final float[] TRAIL_ALPHAS = {0.15f, 0.30f, 0.50f};
+    // 폭탄·무게추 연출 (컴포넌트 시트 "폭탄 폭발 이펙트"·"무게추 분쇄 이펙트", BombScreen·AnvilScreen 목업).
+    /** 폭탄: 범위 칸이 흰/노랑 체커로 번쩍이는 시간. 이후 빈칸에 회색 연기 점이 남는다. */
+    private static final int BOMB_FLASH_MS = 120;
+    /** 폭탄 연출 전체 시간 (번쩍임 + 연기 점). */
+    private static final int BOMB_EFFECT_MS = 330;
+    /** 무게추: 부순 칸 자리에 연기 퍼프가 뜨는 시간. 이후 작은 잔연기 점으로 바뀐다. */
+    private static final int ANVIL_PUFF_MS = 200;
+    /** 무게추 연출 전체 시간 (퍼프 + 잔연기). */
+    private static final int ANVIL_EFFECT_MS = 380;
+    /** 무게추 연기 색. steel 받침 위에 겹쳐도 보이도록 밝은 회색으로 둔다. */
+    private static final Color ANVIL_SMOKE = new Color(0xC9C4D6);
+    private static final int BOARD_EFFECT_TICK_MS = 30;
+    /** 회색 연기 색 (컴포넌트 시트: 회색 연기 퍼프, 알파 0.5→0.2). */
+    private static final Color SMOKE = UiColors.GARBAGE;
+    /** BOMB! 토스트 색 (BombScreen 목업: 빨간 테두리·제목). */
+    private static final Color BOMB_TOAST_COLOR = UiColors.PLAYER2;
+    /** ANVIL! 토스트 색 (AnvilScreen 목업: 회색 테두리). */
+    private static final Color ANVIL_TOAST_COLOR = new Color(0xC9C4D6);
+    private static final int BOMB_NOTIFICATION_MS = 1_600;
+    private static final int ANVIL_NOTIFICATION_MS = 1_600;
     /** 한 번 누르면 한 번만 일어나야 하는 동작. 이동·회전은 누르고 있으면 계속 반복된다. */
     private static final Set<GameAction> ONE_PRESS_ACTIONS =
             EnumSet.of(GameAction.HARD_DROP, GameAction.PAUSE, GameAction.QUIT);
@@ -139,14 +161,27 @@ public class GameScreen extends JPanel implements Screen {
                     || (landingPiece != null && landingCells == null)) {
                 return;
             }
+            boolean anvilFalls = containsAnvil(fallingCells);
+            boolean bombFalls = containsSymbol(fallingCells, BombItem.SYMBOL);
             onEdt(() -> {
                 if (lineClearAnimating) {
                     pendingFalling = fallingCells;
                     pendingLanding = landingCells;
                 } else {
-                    falling = fallingCells;
                     landing = landingCells;
                 }
+                // 폭탄·무게추 블록이 나타나는 순간 토스트를 한 번 띄운다.
+                // 폭탄이 터지거나 무게추가 블록을 부술 때는 다시 띄우지 않는다.
+                if (anvilFalls && !anvilFalling) {
+                    showItemEffect("ANVIL!", "지나가는 줄의 블럭 분쇄  ·  점수 없음", ANVIL_TOAST_COLOR,
+                            ANVIL_NOTIFICATION_MS, ItemEffectKind.ANVIL);
+                }
+                if (bombFalls && !bombFalling) {
+                    showItemEffect("BOMB!", "주변 블럭 제거  ·  점수 없음", BOMB_TOAST_COLOR,
+                            BOMB_NOTIFICATION_MS, ItemEffectKind.BOMB);
+                }
+                anvilFalling = anvilFalls;
+                bombFalling = bombFalls;
                 repaint();
             });
         }
@@ -179,7 +214,6 @@ public class GameScreen extends JPanel implements Screen {
                     board = beforeClear;
                 }
                 pendingBoard = null;
-                falling = null;
                 pendingFalling = null;
                 landing = null;
                 pendingLanding = null;
@@ -230,6 +264,53 @@ public class GameScreen extends JPanel implements Screen {
         }
 
         @Override
+        public void onHardDropped(BoardSnapshot fallingBefore, BoardSnapshot fallingAfter) {
+            int[][] from = copyBoard(Objects.requireNonNull(fallingBefore, "fallingBefore"));
+            int[][] to = copyBoard(Objects.requireNonNull(fallingAfter, "fallingAfter"));
+            if (from == null || to == null) return;
+            onEdt(() -> startHardDropEffect(from, to));
+        }
+
+        @Override
+        public void onBombExploded(CellPosition center, List<CellPosition> blastCells) {
+            Objects.requireNonNull(center, "center");
+            List<CellPosition> cells = List.copyOf(Objects.requireNonNull(blastCells, "blastCells"));
+            // 꽉 찬 행은 폭발 범위에서 빠지므로, 점선 박스는 중심을 포함한 칸들을 감싸는 사각형으로 그린다.
+            int top = center.row();
+            int bottom = center.row();
+            int left = center.col();
+            int right = center.col();
+            for (CellPosition cell : cells) {
+                top = Math.min(top, cell.row());
+                bottom = Math.max(bottom, cell.row());
+                left = Math.min(left, cell.col());
+                right = Math.max(right, cell.col());
+            }
+            int[] area = {Math.max(0, top), Math.max(0, left),
+                    Math.min(GameConstants.BOARD_ROWS - 1, bottom), Math.min(GameConstants.BOARD_COLS - 1, right)};
+            onEdt(() -> {
+                bombCenter = center;
+                bombCells = cells;
+                bombArea = area;
+                bombElapsedMs = 0;
+                restartBoardEffectTimer();
+                repaint();
+            });
+        }
+
+        @Override
+        public void onAnvilCrushed(List<CellPosition> crushedCells) {
+            List<CellPosition> cells = List.copyOf(Objects.requireNonNull(crushedCells, "crushedCells"));
+            if (cells.isEmpty()) return;
+            onEdt(() -> {
+                anvilCells = cells;
+                anvilElapsedMs = 0;
+                restartBoardEffectTimer();
+                repaint();
+            });
+        }
+
+        @Override
         public void onGameOver(int finalScore) {
             onEdt(() -> {
                 if (gameOver) {
@@ -270,7 +351,6 @@ public class GameScreen extends JPanel implements Screen {
     /** 레벨업 카드가 뜬 뒤 지난 시간. 음수이면 카드가 없다. */
     private int levelUpElapsedMs = -1;
     private int[][] pendingBoard;
-    private int[][] falling;
     private int[][] pendingFalling;
     private int[][] landing;
     private int[][] pendingLanding;
@@ -286,6 +366,21 @@ public class GameScreen extends JPanel implements Screen {
         clearHardDropEffect();
         repaint();
     });
+    /** 폭탄이 터진 칸(폭탄 자리)과 지운 칸. 연출이 끝나면 null이다. */
+    private CellPosition bombCenter;
+    private List<CellPosition> bombCells;
+    /** 폭발 범위를 감싸는 점선 박스 {위 행, 왼쪽 열, 아래 행, 오른쪽 열}. */
+    private int[] bombArea;
+    private int bombElapsedMs;
+    /** 지금 떨어지는 블록이 무게추인지. false→true로 바뀌는 순간 ANVIL! 토스트를 띄운다. */
+    private boolean anvilFalling;
+    /** 지금 떨어지는 블록에 폭탄이 붙어 있는지. false→true로 바뀌는 순간 BOMB! 토스트를 띄운다. */
+    private boolean bombFalling;
+    /** 무게추가 방금 부순 칸. 연출이 끝나면 null이다. */
+    private List<CellPosition> anvilCells;
+    private int anvilElapsedMs;
+    // 폭탄·무게추 연출이 진행되는 동안에만 도는 타이머. 둘 다 끝나면 스스로 멈춘다(상시 루프 아님).
+    private final Timer boardEffectTimer = new Timer(BOARD_EFFECT_TICK_MS, event -> advanceBoardEffects());
 
     private static Timer createOneShot(int delayMs, Runnable action) {
         Timer timer = new Timer(delayMs, event -> action.run());
@@ -391,7 +486,6 @@ public class GameScreen extends JPanel implements Screen {
                 board = pendingBoard;
                 pendingBoard = null;
             }
-            falling = pendingFalling;
             pendingFalling = null;
             landing = pendingLanding;
             pendingLanding = null;
@@ -515,11 +609,8 @@ public class GameScreen extends JPanel implements Screen {
             confirmQuit();
             return;
         }
-        // 하드드롭 연출에 쓸 출발 위치(낙하 블록)와 도착 위치(고스트)는 엔진이 블록을 고정하기 전에 잡아 둔다.
-        int[][] dropFrom = action == GameAction.HARD_DROP ? falling : null;
-        int[][] dropTo = action == GameAction.HARD_DROP ? landing : null;
+        // 하드드롭 연출은 엔진의 onHardDropped 알림으로 시작한다. 키가 화면을 거치지 않는 대전에서도 같은 경로를 쓴다.
         if (!engine.handle(action)) return;
-        if (dropFrom != null && dropTo != null) startHardDropEffect(dropFrom, dropTo);
         if (action == GameAction.PAUSE) router.showScreen(ScreenRouter.PAUSE);
         if (action == GameAction.QUIT) router.showScreen(ScreenRouter.MAIN_MENU);
     }
@@ -562,6 +653,57 @@ public class GameScreen extends JPanel implements Screen {
         dropTrail = null;
         squashedCells = null;
         dropDistance = 0;
+    }
+
+    private void restartBoardEffectTimer() {
+        if (!boardEffectTimer.isRunning()) boardEffectTimer.start();
+    }
+
+    private void advanceBoardEffects() {
+        if (bombCells != null) {
+            bombElapsedMs += BOARD_EFFECT_TICK_MS;
+            if (bombElapsedMs >= BOMB_EFFECT_MS) {
+                bombCenter = null;
+                bombCells = null;
+                bombArea = null;
+            }
+        }
+        if (anvilCells != null) {
+            anvilElapsedMs += BOARD_EFFECT_TICK_MS;
+            if (anvilElapsedMs >= ANVIL_EFFECT_MS) anvilCells = null;
+        }
+        if (bombCells == null && anvilCells == null) boardEffectTimer.stop();
+        repaint();
+    }
+
+    private static boolean containsAnvil(int[][] cells) {
+        if (cells == null) return false;
+        for (int[] row : cells) {
+            for (int code : row) {
+                if (isAnvil(code)) return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean containsSymbol(int[][] cells, char symbol) {
+        if (cells == null) return false;
+        for (int[] row : cells) {
+            for (int code : row) {
+                if (code != BoardSnapshot.EMPTY && CellCodes.symbol(code) == symbol) return true;
+            }
+        }
+        return false;
+    }
+
+    private void clearItemBoardEffects() {
+        boardEffectTimer.stop();
+        anvilFalling = false;
+        bombFalling = false;
+        bombCenter = null;
+        bombCells = null;
+        bombArea = null;
+        anvilCells = null;
     }
 
     private static int topRow(int[][] cells) {
@@ -607,6 +749,7 @@ public class GameScreen extends JPanel implements Screen {
         shownLevel = -1;
         levelUpElapsedMs = -1;
         clearHardDropEffect();
+        clearItemBoardEffects();
         flashingRows = new int[0];
         lineClearAnimating = false;
         bestScoreNotificationShown = false;
@@ -618,7 +761,6 @@ public class GameScreen extends JPanel implements Screen {
         itemEffectElapsedMs = 0;
         itemEffectDurationMs = 0;
         pendingBoard = null;
-        falling = null;
         pendingFalling = null;
         landing = null;
         pendingLanding = null;
@@ -998,6 +1140,8 @@ public class GameScreen extends JPanel implements Screen {
         if (flashingRows.length > 0) {
             drawLineClearPop(g2d, x, y, cellSize, width);
         }
+        drawBombBlast(g2d, x, y, cellSize);
+        drawAnvilPuffs(g2d, x, y, cellSize);
 
         if (lineClearAnimating && pendingFalling != null) {
             // 깜빡이는 동안에도 엔진은 다음 블록을 움직이므로, 그 블록은 보이게 그린다.
@@ -1050,6 +1194,106 @@ public class GameScreen extends JPanel implements Screen {
                 int middle = x + pitch * (3 + row % 4) + pitch / 2;
                 UiPainter.drawSparkle(g2d, middle, rowY + pitch / 8, Math.round(sparkle * 0.7f), UiColors.ACCENT);
             }
+        }
+    }
+
+    /** 체커 무늬: 폭탄 칸에서 짝수 칸 떨어진 칸(모서리·가운데)은 노랑, 나머지(변 가운데)는 흰색 (목업 배치). */
+    private boolean isBombCorner(CellPosition cell) {
+        return (Math.abs(cell.row() - bombCenter.row()) + Math.abs(cell.col() - bombCenter.col())) % 2 == 0;
+    }
+
+    /**
+     * 폭탄 폭발 (컴포넌트 시트 "폭탄 폭발 이펙트", BombScreen 목업).
+     * ② 폭발 플래시: 범위 칸을 흰(cream)/노랑(accent) 체커로 칠하고, 폭탄 자리에 폭탄 아이콘, 범위를 감싸는
+     * accent 점선 박스, 박스 모서리 근처에 ✦ 3개. ③ 다음 순간: 빈칸 위에 회색 연기 점이 남았다가 사라진다.
+     */
+    private void drawBombBlast(Graphics2D g2d, int x, int y, int pitch) {
+        if (bombCells == null) return;
+        int inset = cellInset(pitch);
+        int size = pitch - inset * 2;
+        Graphics2D blast = (Graphics2D) g2d.create();
+        try {
+            if (bombElapsedMs < BOMB_FLASH_MS) {
+                int arc = CellPainter.radius(size) * 2;
+                for (CellPosition cell : bombCells) {
+                    if (cell.equals(bombCenter)) continue;
+                    blast.setColor(isBombCorner(cell) ? UiColors.ACCENT : UiColors.CREAM);
+                    blast.fillRoundRect(x + cell.col() * pitch + inset, y + cell.row() * pitch + inset, size, size,
+                            arc, arc);
+                }
+                CellPainter.drawBombItem(blast, x + bombCenter.col() * pitch + inset,
+                        y + bombCenter.row() * pitch + inset, size, UiColors.ACCENT, BombItem.SYMBOL);
+
+                int left = x + bombArea[1] * pitch;
+                int top = y + bombArea[0] * pitch;
+                int width = (bombArea[3] - bombArea[1] + 1) * pitch;
+                int height = (bombArea[2] - bombArea[0] + 1) * pitch;
+                float dash = Math.max(3f, pitch * 0.2f);
+                blast.setStroke(new BasicStroke(2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 10f,
+                        new float[]{dash, dash * 0.7f}, 0f));
+                blast.setColor(UiColors.ACCENT);
+                int boxArc = CellPainter.radius(pitch) * 2;
+                blast.drawRoundRect(left, top, width, height, boxArc, boxArc);
+
+                int sparkle = Math.max(4, Math.round(pitch * 0.22f));
+                UiPainter.drawSparkle(blast, left, top, sparkle, UiColors.ACCENT);
+                UiPainter.drawSparkle(blast, left + width + sparkle, top - sparkle / 2, sparkle, UiColors.PLAYER2);
+                UiPainter.drawSparkle(blast, left + width, top + height, sparkle, UiColors.ACCENT);
+            } else {
+                // 연기 점: 알파 0.5에서 0.2로 옅어진다. 체커의 cream 칸 자리(가장자리 십자)에 찍는다.
+                float progress = (float) (bombElapsedMs - BOMB_FLASH_MS) / (BOMB_EFFECT_MS - BOMB_FLASH_MS);
+                blast.setColor(UiColors.withAlpha(SMOKE, 0.5f - 0.3f * Math.min(1f, progress)));
+                int dot = Math.max(3, Math.round(size * 0.2f));
+                for (CellPosition cell : bombCells) {
+                    if (isBombCorner(cell) && !cell.equals(bombCenter)) continue;
+                    int centerX = x + cell.col() * pitch + pitch / 2;
+                    int centerY = y + cell.row() * pitch + pitch / 2;
+                    blast.fillOval(centerX - dot / 2, centerY - dot / 2, dot, dot);
+                }
+            }
+        } finally {
+            blast.dispose();
+        }
+    }
+
+    /**
+     * 무게추 분쇄 (컴포넌트 시트 "무게추 분쇄 이펙트", AnvilScreen 목업).
+     * ② 분쇄: 부순 칸 자리에 회색 연기 퍼프 2~3개(지름 칸×0.5~0.7, 알파 0.5→0.2).
+     * ③ 잔연기: 작은 회색 점으로 남았다가 사라진다. 한 줄씩 내려갈 때마다 반복되어 "뚫고 내려가는" 느낌을 준다.
+     */
+    private void drawAnvilPuffs(Graphics2D g2d, int x, int y, int pitch) {
+        if (anvilCells == null) return;
+        Graphics2D smoke = (Graphics2D) g2d.create();
+        try {
+            if (anvilElapsedMs < ANVIL_PUFF_MS) {
+                // 받침과 겹쳐 그리되 steel 위에서도 보이도록 밝은 회색을 진하게 시작해 옅게 끝낸다 (0.85→0.35).
+                float progress = (float) anvilElapsedMs / ANVIL_PUFF_MS;
+                smoke.setColor(UiColors.withAlpha(ANVIL_SMOKE, 0.85f - 0.5f * progress));
+                for (CellPosition cell : anvilCells) {
+                    float left = x + cell.col() * pitch;
+                    float top = y + cell.row() * pitch;
+                    // {가로 중심, 세로 중심, 지름} (칸 크기 비율). 칸 아래쪽에 모여 받침 밑으로 살짝 삐져나온다.
+                    float[][] puffs = cell.col() % 2 == 0
+                            ? new float[][]{{0.30f, 0.70f, 0.62f}, {0.78f, 0.82f, 0.50f}}
+                            : new float[][]{{0.50f, 0.62f, 0.70f}, {0.18f, 0.88f, 0.50f}, {0.84f, 0.50f, 0.50f}};
+                    for (float[] puff : puffs) {
+                        int diameter = Math.round(pitch * puff[2]);
+                        smoke.fillOval(Math.round(left + pitch * puff[0] - diameter / 2f),
+                                Math.round(top + pitch * puff[1] - diameter / 2f), diameter, diameter);
+                    }
+                }
+            } else {
+                float progress = (float) (anvilElapsedMs - ANVIL_PUFF_MS) / (ANVIL_EFFECT_MS - ANVIL_PUFF_MS);
+                smoke.setColor(UiColors.withAlpha(ANVIL_SMOKE, 0.6f - 0.4f * Math.min(1f, progress)));
+                int dot = Math.max(3, Math.round(pitch * 0.2f));
+                for (CellPosition cell : anvilCells) {
+                    int centerX = x + cell.col() * pitch + pitch / 2;
+                    int centerY = y + cell.row() * pitch + Math.round(pitch * 0.85f);
+                    smoke.fillOval(centerX - dot / 2, centerY - dot / 2, dot, dot);
+                }
+            }
+        } finally {
+            smoke.dispose();
         }
     }
 
