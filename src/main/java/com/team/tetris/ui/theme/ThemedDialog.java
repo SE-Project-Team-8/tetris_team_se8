@@ -83,7 +83,7 @@ public final class ThemedDialog {
                                   int defaultIndex, String... options) {
         Window owner = parent == null ? null
                 : parent instanceof Window window ? window : SwingUtilities.getWindowAncestor(parent);
-        float scale = UiPainter.scale(owner != null ? owner.getWidth() : (int) UiPainter.BASE_WIDTH);
+        float scale = dialogScale(owner);
         JDialog dialog = new JDialog(owner, title, Dialog.ModalityType.APPLICATION_MODAL);
         dialog.setUndecorated(true);
         dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
@@ -144,6 +144,14 @@ public final class ThemedDialog {
         }
         dialog.setVisible(true);
         return result[0];
+    }
+
+    /** 1인 창 L(600×800)을 1.0으로 보는 배율. 폭과 높이 중 작은 쪽을 따라, 넓은 대전 창에서 팝업만 커지지 않게 한다. */
+    static float dialogScale(Window owner) {
+        if (owner == null || owner.getWidth() <= 0 || owner.getHeight() <= 0) return 1f;
+        float byWidth = UiPainter.scale(owner.getWidth());
+        float byHeight = Math.max(0.5f, owner.getHeight() / 800f);
+        return Math.min(byWidth, byHeight);
     }
 
     private static void bindKeys(JComponent root, JDialog dialog, List<PillButton> buttons, int[] result) {
