@@ -791,8 +791,8 @@ public final class VersusScreen extends JPanel implements Screen {
         g2d.setColor(UiColors.PLAYER2);
         UiPainter.drawText(g2d, p2, width - margin - UiPainter.textWidth(g2d.getFontMetrics(), p2), baseline);
         g2d.setColor(UiColors.withAlpha(UiColors.TEXT_MUTED, 0.85f));
-        String shared = VersusCheckScreen.keyName(current.keyBindings().keyFor(GameAction.PAUSE)) + " 일시정지  ·  "
-                + VersusCheckScreen.keyName(current.keyBindings().keyFor(GameAction.QUIT)) + " 나가기";
+        String shared = keyName(current.keyBindings().keyFor(GameAction.PAUSE)) + " 일시정지  ·  "
+                + keyName(current.keyBindings().keyFor(GameAction.QUIT)) + " 나가기";
         UiPainter.drawCentered(g2d, shared, width / 2, baseline);
     }
 
@@ -810,12 +810,26 @@ public final class VersusScreen extends JPanel implements Screen {
         return moves + "  ·  하드드롭 " + versusKeyName(keys.keyFor(player, GameAction.HARD_DROP));
     }
 
+    /** 키 코드 하나의 짧은 이름: 화살표는 기호로, 나머지는 Esc·Shift·Enter처럼 짧은 영어로 쓴다. */
+    static String keyName(int keyCode) {
+        return switch (keyCode) {
+            case KeyEvent.VK_LEFT -> "←";
+            case KeyEvent.VK_RIGHT -> "→";
+            case KeyEvent.VK_UP -> "↑";
+            case KeyEvent.VK_DOWN -> "↓";
+            case KeyEvent.VK_ESCAPE -> "Esc";
+            case KeyEvent.VK_SHIFT -> "Shift";
+            case KeyEvent.VK_ENTER -> "Enter";
+            default -> KeyEvent.getKeyText(keyCode);
+        };
+    }
+
     /**
      * 대전 키({@link SidedKey}) 이름. 쪽을 정한 키는 "Left Shift"·"Right Shift"처럼 영어로 쓴다.
      * 다른 키 이름(Space·Enter·Esc)과 같은 영어 표기로 맞춘다.
      */
     static String versusKeyName(int key) {
-        String name = VersusCheckScreen.keyName(SidedKey.keyCode(key));
+        String name = keyName(SidedKey.keyCode(key));
         return switch (SidedKey.side(key)) {
             case SidedKey.LEFT -> "Left " + name;
             case SidedKey.RIGHT -> "Right " + name;
@@ -875,8 +889,8 @@ public final class VersusScreen extends JPanel implements Screen {
             buttonY += buttonHeight + buttonGap;
         }
         GameSettings current = settings.get();
-        String help = VersusCheckScreen.keyName(current.keyBindings().keyFor(GameAction.PAUSE)) + " 키로 바로 재개  ·  "
-                + VersusCheckScreen.keyName(current.keyBindings().keyFor(GameAction.QUIT)) + " 메인 화면으로";
+        String help = keyName(current.keyBindings().keyFor(GameAction.PAUSE)) + " 키로 바로 재개  ·  "
+                + keyName(current.keyBindings().keyFor(GameAction.QUIT)) + " 메인 화면으로";
         g2d.setFont(UiFonts.body(Math.round(12 * scale)));
         g2d.setColor(UiColors.withAlpha(UiColors.TEXT_MUTED, 0.8f));
         UiPainter.drawCentered(g2d, help, width / 2, cardY + cardHeight - Math.round(22 * scale));
