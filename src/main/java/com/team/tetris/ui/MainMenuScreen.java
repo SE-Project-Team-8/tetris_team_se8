@@ -35,15 +35,23 @@ public class MainMenuScreen extends JPanel implements Screen {
     private int selectedIndex = 0;
     private final PressFeedback press = new PressFeedback(this);
 
+    /** 대전 모드 항목은 "준비 중" 안내를 띄운다. */
     public MainMenuScreen(ScreenRouter router, Runnable startNormal, Runnable startItemMode) {
+        this(router, startNormal, startItemMode, null);
+    }
+
+    /**
+     * @param openVersus 대전 모드 항목의 동작(게임 방식 선택 화면 열기). null이면 "준비 중" 안내를 띄운다.
+     */
+    public MainMenuScreen(ScreenRouter router, Runnable startNormal, Runnable startItemMode, Runnable openVersus) {
     Objects.requireNonNull(router, "router");
     Objects.requireNonNull(startNormal, "startNormal");
     Objects.requireNonNull(startItemMode, "startItemMode");
     menuItems = List.of(
         new MenuItem("게임 시작", startNormal),
         new MenuItem("아이템 모드", startItemMode),
-        // TODO 대전 모드·P2P 대전 화면이 생기면 안내 대신 해당 화면을 여는 동작으로 바꾼다.
-        new MenuItem("대전 모드", () -> showComingSoon("대전 모드")),
+        new MenuItem("대전 모드", openVersus != null ? openVersus : () -> showComingSoon("대전 모드")),
+        // TODO P2P 대전 화면이 생기면 안내 대신 해당 화면을 여는 동작으로 바꾼다.
         new MenuItem("P2P 대전", () -> showComingSoon("P2P 대전")),
         new MenuItem("설정", () -> router.showScreen(ScreenRouter.SETTINGS)),
         new MenuItem("스코어보드", () -> router.showScreen(ScreenRouter.SCOREBOARD)),

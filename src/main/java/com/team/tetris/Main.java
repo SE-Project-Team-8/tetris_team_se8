@@ -23,6 +23,7 @@ import com.team.tetris.game.BlockBoardDriver;
 import com.team.tetris.game.GameEngine;
 import com.team.tetris.game.item.ItemRegistry;
 import com.team.tetris.game.versus.VersusInput;
+import com.team.tetris.game.versus.MatchResult;
 import com.team.tetris.game.versus.VersusMatch;
 import com.team.tetris.scoreboard.ScoreRecord;
 import com.team.tetris.scoreboard.ScoreboardRepository;
@@ -36,7 +37,10 @@ import com.team.tetris.ui.PauseScreen;
 import com.team.tetris.ui.ScoreboardScreen;
 import com.team.tetris.ui.ScreenRouter;
 import com.team.tetris.ui.SettingsScreen;
+import com.team.tetris.ui.BattleSelectScreen;
 import com.team.tetris.ui.VersusCheckScreen;
+import com.team.tetris.ui.VersusResultScreen;
+import com.team.tetris.ui.VersusScreen;
 import com.team.tetris.ui.theme.ThemedDialog;
 
 /** Composition root for the game engine, screens, settings, and ranking storage. */
@@ -97,6 +101,12 @@ public final class Main {
         private final VersusMatch versusMatch = new VersusMatch(VersusMatch.standard(items, () -> settings.difficulty()));
         private final VersusInput versusInput = new VersusInput(versusMatch, settings.versusKeyMap());
         private final Optional<VersusMode> versusCheck;
+        // 로컬 대전 화면: 방식 선택 → 대전 → 승자 화면.
+        private final VersusResultScreen versusResultScreen = new VersusResultScreen(router, this::startVersus);
+        private final VersusScreen versusScreen = new VersusScreen(router, versusMatch, versusInput, () -> settings,
+                items, this::showVersusResult);
+        private final BattleSelectScreen battleSelectScreen =
+                new BattleSelectScreen(router, () -> settings, this::startVersus);
         private int finalScore;
         private int bestScoreLoadGeneration;
         private int bestScore = -1;
@@ -109,7 +119,8 @@ public final class Main {
             listener.setDelegate(gameScreen.eventListener());
             applySettings(settings);
             router.addScreen(ScreenRouter.MAIN_MENU, new MainMenuScreen(router,
-                    () -> startGame(false), () -> startGame(true)));
+                    () -> startGame(false), () -> startGame(true),
+                    () -> router.showScreen(ScreenRouter.BATTLE_SELECT)));
             router.addScreen(ScreenRouter.GAME, gameScreen);
             router.addScreen(ScreenRouter.PAUSE,
                     new PauseScreen(router, engine, () -> settings.keyBindings()));
@@ -119,6 +130,9 @@ public final class Main {
                     new SettingsScreen(router, settingsRepository, scoreboardRepository,
                             () -> settings, this::applySettings, this::onScoresReset));
             router.addScreen(ScreenRouter.SCOREBOARD, scoreboardScreen);
+            router.addScreen(ScreenRouter.BATTLE_SELECT, battleSelectScreen);
+            router.addScreen(ScreenRouter.VERSUS, versusScreen);
+            router.addScreen(ScreenRouter.VERSUS_RESULT, versusResultScreen);
             versusCheck.ifPresent(mode -> router.addScreen(VersusCheckScreen.NAME,
                     new VersusCheckScreen(router, versusMatch, versusInput, () -> settings, mode)));
             router.addWindowListener(new java.awt.event.WindowAdapter() {
@@ -127,6 +141,17 @@ public final class Main {
                     versusMatch.close();
                 }
             });
+        }
+
+        /** 고른 방식으로 새 대전을 연다. 방식 선택 화면과 승자 화면의 "다시 대전"이 부른다. */
+        private void startVersus(VersusMode mode) {
+            versusScreen.prepare(mode);
+            router.showScreen(ScreenRouter.VERSUS);
+        }
+
+        private void showVersusResult(MatchResult result) {
+            versusResultScreen.setResult(result, versusMatch.mode());
+            router.showScreen(ScreenRouter.VERSUS_RESULT);
         }
 
         private void show() {
