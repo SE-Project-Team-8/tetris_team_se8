@@ -116,6 +116,8 @@ class SettingsKeyChipTest {
 
     private static void collect(Container root, String simpleName, List<Component> found) {
         for (Component child : root.getComponents()) {
+            // 숨겨진 대전 키 칸(1인용을 보고 있을 때)은 세지 않는다.
+            if (!child.isVisible()) continue;
             if (child.getClass().getSimpleName().equals(simpleName)) found.add(child);
             if (child instanceof Container container) collect(container, simpleName, found);
         }

@@ -118,6 +118,8 @@ class CounterclockwiseKeyScreenTest {
 
     private static void collectLabels(Container root, List<String> labels) {
         for (Component child : root.getComponents()) {
+            // 숨겨진 대전 키 칸(1인용을 보고 있을 때)은 세지 않는다.
+            if (!child.isVisible()) continue;
             if (child instanceof JLabel label) labels.add(label.getText());
             if (child instanceof Container container) collectLabels(container, labels);
         }

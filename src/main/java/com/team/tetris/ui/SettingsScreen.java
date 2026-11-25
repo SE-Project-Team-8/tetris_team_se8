@@ -6,6 +6,9 @@ import com.team.tetris.game.GameAction;
 import com.team.tetris.scoreboard.ScoreboardRepository;
 import com.team.tetris.settings.GameSettings;
 import com.team.tetris.settings.KeyBindings;
+import com.team.tetris.settings.VersusKeyBindings;
+import com.team.tetris.common.battle.Player;
+import com.team.tetris.game.versus.SidedKey;
 import com.team.tetris.settings.SettingsRepository;
 import com.team.tetris.ui.theme.PillButton;
 import com.team.tetris.ui.theme.ThemedDialog;
@@ -45,6 +48,7 @@ import java.beans.PropertyChangeListener;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -87,6 +91,25 @@ public final class SettingsScreen extends JPanel implements Screen {
             new SegmentedControl<>(Difficulty.values(), Difficulty::name);
     private final EnumMap<GameAction, KeyChip> keyFields = new EnumMap<>(GameAction.class);
     private final EnumMap<GameAction, Integer> selectedKeys = new EnumMap<>(GameAction.class);
+    /** 조작 키 영역에 보여 줄 대상 (인계서 7단계). 대전 P1·P2는 자기 키 다섯 개만 보인다. */
+    private enum KeyTarget { SINGLE, P1, P2 }
+    private final SegmentedControl<KeyTarget> keyTarget = new SegmentedControl<>(
+            KeyTarget.values(), value -> switch (value) {
+                case SINGLE -> "1인용";
+                case P1 -> "대전 P1";
+                case P2 -> "대전 P2";
+            });
+    /** 대전 키 칸을 늘어놓는 순서 (두 열 격자): 이동 / 드롭 / 회전. */
+    private static final List<GameAction> VERSUS_KEY_ORDER = List.of(
+            GameAction.MOVE_LEFT, GameAction.MOVE_RIGHT,
+            GameAction.SOFT_DROP, GameAction.HARD_DROP,
+            GameAction.ROTATE_CLOCKWISE);
+    private final EnumMap<GameAction, KeyChip> versusFields = new EnumMap<>(GameAction.class);
+    /** 플레이어별로 고른 대전 키 ({@link SidedKey} 값). 저장하기 전까지 화면에만 있다. */
+    private final EnumMap<Player, EnumMap<GameAction, Integer>> selectedVersus = new EnumMap<>(Player.class);
+    private JPanel singleGrid;
+    private KeyHeader keyHeader;
+    private JPanel versusGrid;
     // 배율이 바뀔 때 글자 크기를 다시 맞출 라벨·버튼 목록.
     private final List<JLabel> rowLabels = new ArrayList<>();
     private final List<JLabel> keyLabels = new ArrayList<>();
@@ -123,20 +146,18 @@ public final class SettingsScreen extends JPanel implements Screen {
         addSettingRow("화면 크기", size);
         addSettingRow("난이도", difficulty);
         addSettingRow("색맹 모드", color);
+        keyTarget.setOnChange(this::showKeyTarget);
+        keyTarget.highlightPillsOnFocus();
 
+        // 조작 키 대상 선택(1인용 / 대전 P1 / 대전 P2)은 카드 한 줄을 더 쓰지 않고 안내 줄 오른쪽에 둔다.
+        // 카드를 따로 두면 S 창에서 1인용 키 목록까지 스크롤해야 한다.
         keySection.setForeground(UiColors.TEXT_MUTED);
-        keySection.setAlignmentX(Component.LEFT_ALIGNMENT);
-        form.add(Box.createVerticalStrut(6));
-        form.add(keySection);
+        keyHeader = new KeyHeader(keySection, keyTarget);
+        keyHeader.setAlignmentX(Component.LEFT_ALIGNMENT);
+        form.add(keyHeader);
         form.add(Box.createVerticalStrut(8));
-        JPanel keyGrid = new JPanel(new GridLayout(0, 2, 10, 10)) {
-            // BoxLayout이 남는 세로 공간까지 늘리지 않게 내용 높이로 묶는다.
-            @Override public Dimension getMaximumSize() {
-                return new Dimension(Integer.MAX_VALUE, getPreferredSize().height);
-            }
-        };
-        keyGrid.setOpaque(false);
-        keyGrid.setAlignmentX(Component.LEFT_ALIGNMENT);
+        JPanel keyGrid = newKeyGrid();
+        singleGrid = keyGrid;
         for (GameAction action : KEY_ORDER) {
             KeyChip field = new KeyChip();
             // 눌렀지만 아직 지정하지 않은 수정 키. 다른 키 없이 떼면 그때 지정한다.
@@ -197,6 +218,20 @@ public final class SettingsScreen extends JPanel implements Screen {
             keyGrid.add(card);
         }
         form.add(keyGrid);
+        versusGrid = newKeyGrid();
+        for (GameAction action : VERSUS_KEY_ORDER) {
+            KeyChip field = new KeyChip();
+            addVersusKeyListener(field, action);
+            versusFields.put(action, field);
+            JLabel label = new CardLabel(action == GameAction.ROTATE_CLOCKWISE ? "회전" : actionLabel(action));
+            label.setForeground(UiColors.TEXT_PRIMARY);
+            keyLabels.add(label);
+            SettingCard card = new SettingCard(label, field);
+            cards.add(card);
+            versusGrid.add(card);
+        }
+        versusGrid.setVisible(false);
+        form.add(versusGrid);
 
         JScrollPane formScroll = new JScrollPane(form);
         formScroll.setBorder(BorderFactory.createEmptyBorder());
@@ -272,9 +307,11 @@ public final class SettingsScreen extends JPanel implements Screen {
         hint.setFont(UiFonts.body(Math.round(12 * scale)));
         for (JLabel label : rowLabels) label.setFont(UiFonts.display(Math.round(18 * scale)));
         for (JLabel label : keyLabels) label.setFont(UiFonts.display(Math.round(15 * scale)));
-        for (SegmentedControl<?> control : List.of(size, difficulty, color)) control.applyScale(scale);
+        for (SegmentedControl<?> control : List.of(size, difficulty, color, keyTarget)) control.applyScale(scale);
         keyFields.values().forEach(chip -> chip.applyScale(scale));
+        versusFields.values().forEach(chip -> chip.applyScale(scale));
         for (SettingCard card : cards) card.applyScale(scale);
+        if (keyHeader != null) keyHeader.applyScale(scale);
         for (PillButton button : buttons) {
             button.setFontSize(Math.round(15 * scale));
             FontMetrics metrics = button.getFontMetrics(UiFonts.display(Math.round(15 * scale)));
@@ -290,12 +327,112 @@ public final class SettingsScreen extends JPanel implements Screen {
         selectedKeys.clear();
         selectedKeys.putAll(settings.keyBindings().keys());
         keyFields.forEach((action, field) -> field.setKey(selectedKeys.get(action)));
+        for (Player player : Player.values()) {
+            selectedVersus.put(player, new EnumMap<>(settings.versusKeys().keys(player)));
+        }
+        showKeyTarget();
+    }
+
+    /** 고른 대상의 키 칸만 보여 준다. 대전 P1·P2는 같은 칸 다섯 개에 그 플레이어의 키를 채운다. */
+    private void showKeyTarget() {
+        KeyTarget target = keyTarget.getSelected();
+        boolean versus = target != KeyTarget.SINGLE;
+        singleGrid.setVisible(!versus);
+        versusGrid.setVisible(versus);
+        if (versus && !selectedVersus.isEmpty()) {
+            Map<GameAction, Integer> keys = selectedVersus.get(playerOf(target));
+            versusFields.forEach((action, field) -> field.setLabel(VersusScreen.versusKeyName(keys.get(action))));
+        }
+        form.revalidate();
+        form.repaint();
+    }
+
+    private static Player playerOf(KeyTarget target) {
+        return target == KeyTarget.P2 ? Player.P2 : Player.P1;
+    }
+
+    private static JPanel newKeyGrid() {
+        JPanel grid = new JPanel(new GridLayout(0, 2, 10, 10)) {
+            // BoxLayout이 남는 세로 공간까지 늘리지 않게 내용 높이로 묶는다.
+            @Override public Dimension getMaximumSize() {
+                return new Dimension(Integer.MAX_VALUE, getPreferredSize().height);
+            }
+        };
+        grid.setOpaque(false);
+        grid.setAlignmentX(Component.LEFT_ALIGNMENT);
+        return grid;
+    }
+
+    /**
+     * 대전 키 칸: 키를 {@code SidedKey.of(코드, 위치)}로 받아 왼쪽·오른쪽 Shift를 구분해 저장한다.
+     * 수정 키는 1인용 칸처럼 단독으로 눌렀다 뗄 때 지정한다 (Shift+Tab으로 칸을 옮겨도 바뀌지 않게).
+     */
+    private void addVersusKeyListener(KeyChip field, GameAction action) {
+        int[] pendingModifier = {KeyEvent.VK_UNDEFINED};
+        field.addFocusListener(new FocusAdapter() {
+            @Override public void focusLost(FocusEvent event) {
+                pendingModifier[0] = KeyEvent.VK_UNDEFINED;
+            }
+        });
+        field.addKeyListener(new KeyAdapter() {
+            @Override public void keyPressed(KeyEvent event) {
+                int keyCode = event.getKeyCode();
+                if (keyCode <= KeyEvent.VK_UNDEFINED || keyCode > 0xFFFF || keyCode == KeyEvent.VK_TAB) {
+                    pendingModifier[0] = KeyEvent.VK_UNDEFINED;
+                    return;
+                }
+                if (isModifier(keyCode)) {
+                    pendingModifier[0] = keyCode;
+                    event.consume();
+                    return;
+                }
+                pendingModifier[0] = KeyEvent.VK_UNDEFINED;
+                assignVersusKey(field, action, SidedKey.of(keyCode, event.getKeyLocation()), event);
+            }
+
+            @Override public void keyReleased(KeyEvent event) {
+                if (pendingModifier[0] != KeyEvent.VK_UNDEFINED && event.getKeyCode() == pendingModifier[0]) {
+                    pendingModifier[0] = KeyEvent.VK_UNDEFINED;
+                    assignVersusKey(field, action, SidedKey.of(event.getKeyCode(), event.getKeyLocation()), event);
+                }
+            }
+        });
+    }
+
+    /** 대전 키 하나를 바꾼다. 일시정지·나가기 키나 다른 대전 키(상대 포함)와 겹치면 받지 않는다. */
+    void assignVersusKey(KeyChip field, GameAction action, int key, KeyEvent event) {
+        if (event != null) event.consume();
+        Player player = playerOf(keyTarget.getSelected());
+        for (GameAction shared : VersusKeyBindings.SHARED_ACTIONS) {
+            if (SidedKey.overlaps(key, selectedKeys.get(shared))) {
+                showMessage("일시정지·나가기 키와 겹치는 키입니다.", "키 중복", ThemedDialog.Tone.WARNING);
+                return;
+            }
+        }
+        EnumMap<GameAction, Integer> changed = new EnumMap<>(selectedVersus.get(player));
+        changed.put(action, key);
+        try {
+            new VersusKeyBindings(player == Player.P1 ? changed : selectedVersus.get(Player.P1),
+                    player == Player.P2 ? changed : selectedVersus.get(Player.P2));
+        } catch (IllegalArgumentException duplicate) {
+            showMessage("이미 다른 동작에 쓰이는 키입니다.", "키 중복", ThemedDialog.Tone.WARNING);
+            return;
+        }
+        selectedVersus.put(player, changed);
+        field.setLabel(VersusScreen.versusKeyName(key));
     }
 
     private void saveSelected() {
         try {
-            save(new GameSettings(size.getSelected(), color.getSelected(), new KeyBindings(selectedKeys),
-                    difficulty.getSelected(), currentSettings.get().versusKeys()));
+            GameSettings settings = new GameSettings(size.getSelected(), color.getSelected(),
+                    new KeyBindings(selectedKeys), difficulty.getSelected(),
+                    new VersusKeyBindings(selectedVersus.get(Player.P1), selectedVersus.get(Player.P2)));
+            // 1인용 일시정지·나가기 키를 대전 키와 같게 바꾸는 것은 막지 않고 알려만 준다 (인계서 7단계).
+            if (!settings.versusKeyClashes().isEmpty()) {
+                showMessage("일시정지·나가기 키가 대전 키와 겹칩니다.\n대전 중에는 그 키가 일시정지·나가기로만 쓰입니다.",
+                        "키 겹침", ThemedDialog.Tone.WARNING);
+            }
+            save(settings);
         } catch (IllegalArgumentException invalid) {
             showMessage("동작마다 서로 다른 키를 지정해 주세요.", "키 설정 오류",
                     ThemedDialog.Tone.WARNING);
@@ -442,6 +579,35 @@ public final class SettingsScreen extends JPanel implements Screen {
     }
 
     /**
+     * 조작 키 안내 줄과 대상 선택(1인용 / 대전 P1 / 대전 P2). 바탕 없이 안내 글자만 보이고,
+     * 대상 선택에 포커스가 있으면 방향키로 고른 알약에 노란 링이 생긴다 ({@link SegmentedControl#highlightPillsOnFocus()}).
+     */
+    private static final class KeyHeader extends JPanel {
+        KeyHeader(JLabel label, JComponent control) {
+            super(new BorderLayout(8, 0));
+            setOpaque(false);
+            add(label, BorderLayout.CENTER);
+            add(control, BorderLayout.EAST);
+            // 안내 줄 아무 곳이나 눌러도 대상 선택을 고른다.
+            addMouseListener(new MouseAdapter() {
+                @Override public void mousePressed(MouseEvent event) {
+                    control.requestFocusInWindow();
+                }
+            });
+        }
+
+        void applyScale(float scale) {
+            int vertical = Math.round(4 * scale);
+            setBorder(BorderFactory.createEmptyBorder(vertical, 0, vertical, Math.round(2 * scale)));
+        }
+
+        @Override
+        public Dimension getMaximumSize() {
+            return new Dimension(Integer.MAX_VALUE, getPreferredSize().height);
+        }
+    }
+
+    /**
      * 설정 한 줄을 감싸는 둥근 카드. 안의 컨트롤에 포커스가 있으면 노란 테두리와 `>`로 선택을 표시한다.
      */
     private static final class SettingCard extends JPanel {
@@ -553,9 +719,28 @@ public final class SettingsScreen extends JPanel implements Screen {
             }
         }
 
+        private Runnable onChange = () -> { };
+        /** 카드 테두리로 포커스를 보여 줄 수 없는 자리(조작 키 대상 선택)에서는 고른 알약에 노란 링을 둘러 보여 준다. */
+        private boolean highlightPillsOnFocus;
+
+        void highlightPillsOnFocus() {
+            highlightPillsOnFocus = true;
+            revalidate();
+        }
+
+        private int ringPadding() {
+            return highlightPillsOnFocus ? 5 : 2;
+        }
+
+        void setOnChange(Runnable onChange) {
+            this.onChange = Objects.requireNonNull(onChange, "onChange");
+        }
+
         private void setSelectedIndex(int index) {
+            boolean changed = selected != index;
             selected = index;
             repaint();
+            if (changed) onChange.run();
         }
 
         private int itemWidth(FontMetrics metrics, int index) {
@@ -580,7 +765,9 @@ public final class SettingsScreen extends JPanel implements Screen {
             int width = gap * (values.length - 1);
             for (int index = 0; index < values.length; index++) width += itemWidth(metrics, index);
             // 선택 항목의 하단 음영이 잘리지 않게 여유를 둔다.
-            return new Dimension(width + 4, pillHeight() + 4);
+            // 포커스 링을 그리는 칸은 링이 잘리지 않게 사방 여백을 더 둔다.
+            int pad = ringPadding();
+            return new Dimension(width + pad * 2, pillHeight() + pad * 2);
         }
 
         private int pillHeight() {
@@ -596,8 +783,10 @@ public final class SettingsScreen extends JPanel implements Screen {
                 FontMetrics metrics = g2d.getFontMetrics();
                 int height = pillHeight();
                 // 카드가 더 높게 늘려도 알약은 자기 높이로 세로 가운데에 그린다.
-                g2d.translate(0, Math.max(0, (getHeight() - 4 - height) / 2));
-                int x = 2;
+                int pad = ringPadding();
+                g2d.translate(0, Math.max(pad, (getHeight() - height) / 2 - 1));
+                int x = pad;
+                boolean ring = highlightPillsOnFocus && isFocusOwner();
                 for (int index = 0; index < values.length; index++) {
                     int width = itemWidth(metrics, index);
                     String text = label.apply(values[index]);
@@ -606,6 +795,11 @@ public final class SettingsScreen extends JPanel implements Screen {
                         g2d.fillRoundRect(x, 3, width, height, height, height);
                         g2d.setColor(UiColors.ACCENT);
                         g2d.fillRoundRect(x, 0, width, height, height, height);
+                        if (ring) {
+                            // 방향키로 고른 알약 하나에만 틈을 두고 노란 링을 둘러 지금 위치를 보여 준다.
+                            UiPainter.strokeRoundRect(g2d, x - 4, -4, width + 8, height + 8, (height + 8) / 2,
+                                    UiColors.ACCENT, 2f);
+                        }
                         g2d.setColor(UiColors.TEXT_ON_ACCENT);
                     } else {
                         UiPainter.drawPanel(g2d, x, 0, width, height, height / 2,
@@ -639,6 +833,12 @@ public final class SettingsScreen extends JPanel implements Screen {
                 @Override public void focusGained(FocusEvent event) { repaint(); }
                 @Override public void focusLost(FocusEvent event) { repaint(); }
             });
+        }
+
+        void setLabel(String label) {
+            text = Objects.requireNonNull(label, "label");
+            revalidate();
+            repaint();
         }
 
         void setKey(int keyCode) {
@@ -697,6 +897,8 @@ public final class SettingsScreen extends JPanel implements Screen {
         private static JButton zeroButton() {
             JButton button = new JButton();
             button.setPreferredSize(new Dimension(0, 0));
+            // 크기 0인 화살표 버튼이 Tab 순서에 끼어 "나가기" 칸과 저장 버튼 사이에 보이지 않는 칸 두 개가 생기던 문제를 막는다.
+            button.setFocusable(false);
             return button;
         }
     }

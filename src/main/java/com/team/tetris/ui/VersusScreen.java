@@ -41,6 +41,7 @@ import com.team.tetris.common.events.GameEventListener;
 import com.team.tetris.game.GameAction;
 import com.team.tetris.game.item.ItemRegistry;
 import com.team.tetris.game.versus.MatchResult;
+import com.team.tetris.game.versus.SidedKey;
 import com.team.tetris.game.versus.VersusInput;
 import com.team.tetris.game.versus.VersusListener;
 import com.team.tetris.game.versus.VersusMatch;
@@ -799,14 +800,27 @@ public final class VersusScreen extends JPanel implements Screen {
     private static final List<GameAction> KEY_HINT_ORDER = List.of(
             GameAction.ROTATE_CLOCKWISE, GameAction.MOVE_LEFT, GameAction.SOFT_DROP, GameAction.MOVE_RIGHT);
 
-    /** "W A S D · 하드드롭 왼쪽 Shift"처럼 이동·회전 키 넷과 하드드롭 키를 현재 설정값으로 쓴다. */
+    /** "W A S D · 하드드롭 Left Shift"처럼 이동·회전 키 넷과 하드드롭 키를 현재 설정값으로 쓴다. */
     static String playerKeys(GameSettings settings, Player player) {
         VersusKeyBindings keys = settings.versusKeys();
         StringJoiner moves = new StringJoiner(" ");
         for (GameAction action : KEY_HINT_ORDER) {
-            moves.add(VersusCheckScreen.versusKeyName(keys.keyFor(player, action)));
+            moves.add(versusKeyName(keys.keyFor(player, action)));
         }
-        return moves + "  ·  하드드롭 " + VersusCheckScreen.versusKeyName(keys.keyFor(player, GameAction.HARD_DROP));
+        return moves + "  ·  하드드롭 " + versusKeyName(keys.keyFor(player, GameAction.HARD_DROP));
+    }
+
+    /**
+     * 대전 키({@link SidedKey}) 이름. 쪽을 정한 키는 "Left Shift"·"Right Shift"처럼 영어로 쓴다.
+     * 다른 키 이름(Space·Enter·Esc)과 같은 영어 표기로 맞춘다.
+     */
+    static String versusKeyName(int key) {
+        String name = VersusCheckScreen.keyName(SidedKey.keyCode(key));
+        return switch (SidedKey.side(key)) {
+            case SidedKey.LEFT -> "Left " + name;
+            case SidedKey.RIGHT -> "Right " + name;
+            default -> name;
+        };
     }
 
     /** 승패가 난 뒤 결과 화면으로 넘어가기 전 잠깐 띄우는 승리 배너 (컴포넌트 시트 "토스트 / 승리 배너"). */
