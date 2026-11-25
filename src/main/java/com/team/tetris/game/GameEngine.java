@@ -38,6 +38,7 @@ public final class GameEngine implements AutoCloseable {
         /** Move exactly one cell if possible; never lock or spawn automatically. */
         boolean moveDown();
         boolean rotateClockwise();
+        default boolean rotateCounterclockwise() { return false; }
         /** Move to the last legal row, return actual distance; do not lock/spawn. */
         int hardDrop();
         /** Weights award neither gravity/soft-drop nor hard-drop points. */
@@ -342,6 +343,12 @@ public final class GameEngine implements AutoCloseable {
             case SOFT_DROP -> state == GameState.RUNNING && dropOneCell();
             case HARD_DROP -> state == GameState.RUNNING && hardDrop();
         };
+    }
+
+    /** Rotates the falling piece 90 degrees counterclockwise while the game is running. Call on the EDT. */
+    public boolean rotateCounterclockwise() {
+        requireEdt();
+        return state == GameState.RUNNING && publishIfMoved(board.rotateCounterclockwise());
     }
 
     private boolean hardDrop() {

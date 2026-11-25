@@ -33,7 +33,7 @@
 
 이 네 단계 밖의 파일(`BlockBoardDriver`, `GameEngine`, `GameScreen`, `Main`, `CellCodes`)은 건드리지 않는다.
 
-### 예: 3×3 폭탄 (포함형, 보드 효과) — 실제 구현은 `BombItem`
+### 예: 5×5 폭탄 (포함형, 보드 효과) — 실제 구현은 `BombItem`
 
 ```java
 public final class BombItem implements EmbeddedItem {

@@ -24,4 +24,14 @@ public enum Rotation {
             case LEFT -> SPAWN;
         };
     }
+
+    /** 같은 기준점에서 반시계 방향 90도 회전한 상태. */
+    public Rotation counterclockwise() {
+        return switch (this) {
+            case SPAWN -> LEFT;
+            case LEFT -> REVERSE;
+            case REVERSE -> RIGHT;
+            case RIGHT -> SPAWN;
+        };
+    }
 }

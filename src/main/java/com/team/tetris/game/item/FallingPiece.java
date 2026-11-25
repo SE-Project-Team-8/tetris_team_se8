@@ -26,6 +26,8 @@ public interface FallingPiece {
 
     boolean rotateClockwise(Board board);
 
+    default boolean rotateCounterclockwise(Board board) { return false; }
+
     /** 마지막 유효 위치까지 내려가고 실제 이동 칸 수를 돌려준다. 고정하지 않는다. */
     int hardDrop(Board board);
 
