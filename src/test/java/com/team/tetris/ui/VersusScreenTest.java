@@ -183,6 +183,25 @@ class VersusScreenTest {
     }
 
     @Test
+    void theTimeLimitStartsWithTheChosenMinutesAndRematchKeepsThem() throws Exception {
+        Fixture f = new Fixture();
+        try {
+            edt(() -> {
+                f.screen.prepare(VersusMode.TIME_LIMIT, 60);
+                f.router.showScreen(ScreenRouter.VERSUS);
+                assertEquals(60, f.match.remainingSeconds(), "One minute was chosen");
+                f.router.showScreen(ScreenRouter.MAIN_MENU);
+                f.show(VersusMode.TIME_LIMIT);   // 다시 대전: 같은 시간
+                assertEquals(60, f.match.remainingSeconds());
+                for (int second = 0; second < 60; second++) f.clock.tick.run();
+                assertEquals(VersusMatch.State.ENDED, f.match.state(), "The match ends after the chosen minute");
+            });
+        } finally {
+            f.close();
+        }
+    }
+
+    @Test
     void theKeyHintFollowsTheVersusKeySettings() {
         GameSettings settings = GameSettings.defaults();
         assertEquals("W A S D  ·  하드드롭 왼쪽 Shift", VersusScreen.playerKeys(settings, Player.P1));

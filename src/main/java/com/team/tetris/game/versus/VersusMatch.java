@@ -100,12 +100,22 @@ public final class VersusMatch implements AutoCloseable {
         seat(player).view = Objects.requireNonNull(playerListener, "playerListener");
     }
 
-    /** 새 판을 시작한다. 진행 중이던 판은 결과 없이 버린다. */
+    /** 새 판을 시작한다. 진행 중이던 판은 결과 없이 버린다. 시간제한은 기본 제한 시간(3분)이다. */
     public void start(VersusMode mode) {
+        start(mode, GameConstants.VERSUS_TIME_LIMIT_SECONDS);
+    }
+
+    /**
+     * 새 판을 시작한다. 진행 중이던 판은 결과 없이 버린다.
+     *
+     * @param timeLimitSeconds 시간제한 방식의 제한 시간(초). 방식 선택 화면에서 1~5분을 고른다. 다른 방식에서는 쓰지 않는다
+     */
+    public void start(VersusMode mode, int timeLimitSeconds) {
         this.mode = Objects.requireNonNull(mode, "mode");
+        if (timeLimitSeconds <= 0) throw new IllegalArgumentException("timeLimitSeconds must be positive");
         clock.stop();
         stopEngines();
-        remainingSeconds = mode == VersusMode.TIME_LIMIT ? GameConstants.VERSUS_TIME_LIMIT_SECONDS : 0;
+        remainingSeconds = mode == VersusMode.TIME_LIMIT ? timeLimitSeconds : 0;
         clockElapsedMillis = 0;
         for (Seat seat : seats.values()) {
             seat.queue.clear();

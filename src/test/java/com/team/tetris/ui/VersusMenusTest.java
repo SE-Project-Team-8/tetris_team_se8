@@ -50,7 +50,8 @@ class VersusMenusTest {
         edt(() -> {
             ScreenRouter router = new ScreenRouter();
             try {
-                BattleSelectScreen select = new BattleSelectScreen(router, GameSettings::defaults, started::add);
+                BattleSelectScreen select = new BattleSelectScreen(router, GameSettings::defaults,
+                        (mode, seconds) -> started.add(mode));
                 router.addScreen(ScreenRouter.MAIN_MENU, stub());
                 router.addScreen(ScreenRouter.BATTLE_SELECT, select);
                 router.setVisible(true);
@@ -70,6 +71,37 @@ class VersusMenusTest {
 
                 select.handleKey(KeyEvent.VK_ESCAPE);
                 assertEquals(ScreenRouter.MAIN_MENU, router.getCurrentScreenName());
+            } finally {
+                router.dispose();
+            }
+        });
+    }
+
+    @Test
+    void theTimeLimitCardChoosesOneToFiveMinutes() throws Exception {
+        List<Integer> seconds = new ArrayList<>();
+        edt(() -> {
+            ScreenRouter router = new ScreenRouter();
+            try {
+                BattleSelectScreen select = new BattleSelectScreen(router, GameSettings::defaults,
+                        (mode, limit) -> seconds.add(limit));
+                router.addScreen(ScreenRouter.BATTLE_SELECT, select);
+                router.setVisible(true);
+                router.showScreen(ScreenRouter.BATTLE_SELECT);
+                assertEquals(3, select.selectedMinutes(), "Three minutes by default");
+                select.handleKey(KeyEvent.VK_RIGHT);
+                assertEquals(3, select.selectedMinutes(), "Arrows change the time only on the time-limit card");
+
+                select.handleKey(KeyEvent.VK_UP);   // 일반 → 시간제한 (위로 돌아감)
+                assertEquals(VersusMode.TIME_LIMIT, select.selectedMode());
+                for (int i = 0; i < 4; i++) select.handleKey(KeyEvent.VK_RIGHT);
+                assertEquals(5, select.selectedMinutes(), "Five minutes at most");
+                paint(select);
+                select.handleKey(KeyEvent.VK_ENTER);
+                for (int i = 0; i < 6; i++) select.handleKey(KeyEvent.VK_LEFT);
+                assertEquals(1, select.selectedMinutes(), "One minute at least");
+                select.handleKey(KeyEvent.VK_ENTER);
+                assertEquals(List.of(300, 60), seconds, "The chosen minutes start the match in seconds");
             } finally {
                 router.dispose();
             }

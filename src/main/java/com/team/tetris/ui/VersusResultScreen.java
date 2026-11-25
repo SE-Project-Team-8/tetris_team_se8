@@ -149,7 +149,10 @@ public final class VersusResultScreen extends JPanel implements Screen {
         Player winner = result.winner();
         Color color = winner == null ? UiColors.ACCENT : VersusScreen.playerColor(winner);
         String title = winner == null ? "무승부" : winner.name() + " 승리!";
-        String reason = result.reason() == MatchResult.Reason.TIME_UP ? "시간 종료" : "상대가 더 쌓을 수 없음";
+        // 사유는 시간 종료일 때만 적는다. 쌓을 수 없어서 끝난 경우는 승자 표시만으로 충분하다.
+        String reason = result.reason() == MatchResult.Reason.TIME_UP ? "시간 종료" : null;
+        // 사유 줄이 없으면 제목을 조금 내려 배너 가운데에 둔다.
+        int titleBaseline = y + Math.round((reason == null ? 92 : 82) * scale);
         int x = centerX - width / 2;
         int radius = Math.round(22 * scale);
         g2d.setColor(UiColors.darker(color, 0.55f));
@@ -160,12 +163,14 @@ public final class VersusResultScreen extends JPanel implements Screen {
         UiPainter.drawCentered(g2d, "대전 모드 — " + VersusScreen.modeName(mode), centerX, y + Math.round(30 * scale));
         g2d.setFont(UiFonts.display(Math.round(44 * scale)));
         g2d.setColor(UiColors.darker(color, 0.55f));
-        UiPainter.drawCentered(g2d, title, centerX + Math.round(2 * scale), y + Math.round(84 * scale));
+        UiPainter.drawCentered(g2d, title, centerX + Math.round(2 * scale), titleBaseline + Math.round(2 * scale));
         g2d.setColor(color);
-        UiPainter.drawCentered(g2d, title, centerX, y + Math.round(82 * scale));
-        g2d.setFont(UiFonts.body(Math.round(14 * scale)));
-        g2d.setColor(UiColors.TEXT_SECONDARY);
-        UiPainter.drawCentered(g2d, reason, centerX, y + height - Math.round(18 * scale));
+        UiPainter.drawCentered(g2d, title, centerX, titleBaseline);
+        if (reason != null) {
+            g2d.setFont(UiFonts.body(Math.round(14 * scale)));
+            g2d.setColor(UiColors.TEXT_SECONDARY);
+            UiPainter.drawCentered(g2d, reason, centerX, y + height - Math.round(18 * scale));
+        }
     }
 
     /** 플레이어 점수 카드. 이긴 쪽은 플레이어색 테두리로 강조한다. */

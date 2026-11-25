@@ -143,9 +143,15 @@ public final class Main {
             });
         }
 
-        /** 고른 방식으로 새 대전을 연다. 방식 선택 화면과 승자 화면의 "다시 대전"이 부른다. */
+        /** 승자 화면의 "다시 대전": 같은 방식, 같은 제한 시간으로 새 대전을 연다. */
         private void startVersus(VersusMode mode) {
             versusScreen.prepare(mode);
+            router.showScreen(ScreenRouter.VERSUS);
+        }
+
+        /** 방식 선택 화면: 고른 방식과 시간제한 방식의 제한 시간(초)으로 새 대전을 연다. */
+        private void startVersus(VersusMode mode, int timeLimitSeconds) {
+            versusScreen.prepare(mode, timeLimitSeconds);
             router.showScreen(ScreenRouter.VERSUS);
         }
 

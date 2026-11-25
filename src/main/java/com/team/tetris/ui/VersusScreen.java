@@ -152,6 +152,8 @@ public final class VersusScreen extends JPanel implements Screen {
     private final PressFeedback pausePress = new PressFeedback(this);
 
     private VersusMode pendingMode;
+    /** 시간제한 방식의 제한 시간(초). 방식 선택 화면에서 고르고, "다시 대전"은 같은 시간으로 한다. */
+    private int timeLimitSeconds = GameConstants.VERSUS_TIME_LIMIT_SECONDS;
     private VersusMode mode = VersusMode.NORMAL;
     private int remainingSeconds;
     private boolean pauseMenuOpen;
@@ -185,9 +187,20 @@ public final class VersusScreen extends JPanel implements Screen {
         setFocusable(true);
     }
 
-    /** 다음에 이 화면이 보일 때 시작할 방식. 방식 선택·승자 화면이 화면을 넘기기 전에 부른다. */
+    /** 다음에 이 화면이 보일 때 시작할 방식. 시간제한은 마지막으로 고른 시간이다 ("다시 대전"). */
     public void prepare(VersusMode chosen) {
         pendingMode = Objects.requireNonNull(chosen, "mode");
+    }
+
+    /**
+     * 다음에 이 화면이 보일 때 시작할 방식과 시간제한 방식의 제한 시간. 방식 선택 화면이 화면을 넘기기 전에 부른다.
+     *
+     * @param seconds 제한 시간(초). 시간제한이 아닌 방식에서는 기억만 해 둔다
+     */
+    public void prepare(VersusMode chosen, int seconds) {
+        if (seconds <= 0) throw new IllegalArgumentException("seconds must be positive");
+        timeLimitSeconds = seconds;
+        prepare(chosen);
     }
 
     @Override
@@ -240,14 +253,14 @@ public final class VersusScreen extends JPanel implements Screen {
     private void start(VersusMode chosen) {
         mode = chosen;
         ended = null;
-        remainingSeconds = chosen == VersusMode.TIME_LIMIT ? GameConstants.VERSUS_TIME_LIMIT_SECONDS : 0;
+        remainingSeconds = chosen == VersusMode.TIME_LIMIT ? timeLimitSeconds : 0;
         pauseMenuOpen = false;
         effects.clear();
         attackTimer.stop();
         endTimer.stop();
         sides.values().forEach(PlayerSide::reset);
         input.releaseAll();
-        match.start(chosen);
+        match.start(chosen, timeLimitSeconds);
         repaint();
     }
 
@@ -803,7 +816,7 @@ public final class VersusScreen extends JPanel implements Screen {
         Player winner = ended.winner();
         Color color = winner == null ? UiColors.ACCENT : playerColor(winner);
         String title = winner == null ? "무승부" : winner.name() + " 승리!";
-        String subtitle = ended.reason() == MatchResult.Reason.TIME_UP ? "시간 종료" : "상대가 더 쌓을 수 없음";
+        String subtitle = ended.reason() == MatchResult.Reason.TIME_UP ? "시간 종료" : null;
         int boxWidth = Math.round(320 * scale);
         int boxHeight = Math.round(96 * scale);
         int boxX = (width - boxWidth) / 2;
@@ -811,10 +824,14 @@ public final class VersusScreen extends JPanel implements Screen {
         UiPainter.drawPanel(g2d, boxX, boxY, boxWidth, boxHeight, Math.round(18 * scale), UiColors.PANEL, color, 3f);
         g2d.setFont(UiFonts.display(Math.round(34 * scale)));
         g2d.setColor(color);
-        UiPainter.drawCentered(g2d, title, width / 2, boxY + Math.round(50 * scale));
-        g2d.setFont(UiFonts.body(Math.round(13 * scale)));
-        g2d.setColor(UiColors.TEXT_SECONDARY);
-        UiPainter.drawCentered(g2d, subtitle, width / 2, boxY + boxHeight - Math.round(16 * scale));
+        // 사유가 없으면 제목을 배너 가운데에 둔다.
+        UiPainter.drawCentered(g2d, title, width / 2,
+                boxY + Math.round((subtitle == null ? 60 : 50) * scale));
+        if (subtitle != null) {
+            g2d.setFont(UiFonts.body(Math.round(13 * scale)));
+            g2d.setColor(UiColors.TEXT_SECONDARY);
+            UiPainter.drawCentered(g2d, subtitle, width / 2, boxY + boxHeight - Math.round(16 * scale));
+        }
     }
 
     /** 일시정지: 1인 모드 일시정지 화면과 같은 카드 (반투명 막 + 노란 테두리 카드 + 알약 버튼). */
