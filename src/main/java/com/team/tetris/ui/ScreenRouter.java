@@ -27,6 +27,10 @@ public class ScreenRouter extends JFrame {
     public static final String NAME_INPUT = "NAME_INPUT";
     public static final String SETTINGS = "SETTINGS";
     public static final String SCOREBOARD = "SCOREBOARD";
+    /** 로컬 대전: 게임 방식 선택 → 대전 → 승자 화면 (docs/battle/ui-handoff.md 1절). */
+    public static final String BATTLE_SELECT = "BATTLE_SELECT";
+    public static final String VERSUS = "VERSUS";
+    public static final String VERSUS_RESULT = "VERSUS_RESULT";
 
     private final CardLayout cardLayout;
     private final JPanel containerPanel;
