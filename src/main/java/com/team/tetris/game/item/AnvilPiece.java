@@ -8,6 +8,7 @@ import com.team.tetris.block.Board;
 import com.team.tetris.block.Cell;
 import com.team.tetris.common.events.CellCodes;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
@@ -21,6 +22,8 @@ public final class AnvilPiece implements FallingPiece {
     private final int code;
     private Anvil anvil;
     private boolean horizontalLocked;
+    /** 부순 칸. 엔진이 {@link #takeCrushedCells()}로 꺼내 화면에 알린다. */
+    private final List<Cell> crushed = new ArrayList<>();
 
     private AnvilPiece(Anvil anvil, StandaloneItem item) {
         this.anvil = Objects.requireNonNull(anvil, "anvil");
@@ -55,6 +58,9 @@ public final class AnvilPiece implements FallingPiece {
         // 부수기 전에 접촉을 먼저 기록한다. 장애물을 지웠다고 좌우 잠금이 풀리면 안 된다.
         if (candidate.cells().stream().anyMatch(cell -> board.cellAt(cell.row(), cell.col()).isPresent())) {
             horizontalLocked = true;
+        }
+        for (Cell cell : candidate.cells()) {
+            if (board.cellAt(cell.row(), cell.col()).isPresent()) crushed.add(cell);
         }
         board.eraseCells(candidate.cells());
         anvil = candidate;
@@ -107,6 +113,13 @@ public final class AnvilPiece implements FallingPiece {
     @Override
     public StandaloneItem item() {
         return item;
+    }
+
+    @Override
+    public List<Cell> takeCrushedCells() {
+        List<Cell> taken = List.copyOf(crushed);
+        crushed.clear();
+        return taken;
     }
 
     private boolean moveSideways(Board board, int deltaCol) {

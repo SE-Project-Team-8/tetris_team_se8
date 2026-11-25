@@ -12,13 +12,18 @@ import java.util.Set;
  *
  * @param clearsLines 완성 행 삭제와 줄 수 집계를 진행하는지
  * @param forcedRows 꽉 차 있지 않아도 함께 지울 행 (줄 삭제 아이템). 삭제된 줄은 기존 방식대로 점수에 든다
+ * @param blast 고정하며 터진 범위 (폭탄). 화면 연출 알림용이며 없으면 null
  */
-public record LockOutcome(boolean clearsLines, Set<Integer> forcedRows) {
+public record LockOutcome(boolean clearsLines, Set<Integer> forcedRows, Blast blast) {
     public LockOutcome {
         forcedRows = Set.copyOf(Objects.requireNonNull(forcedRows, "forcedRows"));
         if (!clearsLines && !forcedRows.isEmpty()) {
             throw new IllegalArgumentException("Forced rows need line clearing");
         }
+    }
+
+    public LockOutcome(boolean clearsLines, Set<Integer> forcedRows) {
+        this(clearsLines, forcedRows, null);
     }
 
     /** 보통의 줄 삭제를 진행한다. */

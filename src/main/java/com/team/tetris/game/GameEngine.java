@@ -1,8 +1,12 @@
 package com.team.tetris.game;
 
+import com.team.tetris.block.Cell;
 import com.team.tetris.common.events.BoardSnapshot;
+import com.team.tetris.common.events.CellPosition;
 import com.team.tetris.common.events.GameEventListener;
 import com.team.tetris.common.Difficulty;
+import com.team.tetris.common.battle.GarbageLine;
+import com.team.tetris.game.item.Blast;
 import com.team.tetris.game.item.GameEffects;
 import com.team.tetris.game.item.Item;
 
@@ -42,6 +46,10 @@ public final class GameEngine implements AutoCloseable {
         LockResult lockAndClearLines();
         /** Item carried by the piece the last lockAndClearLines() locked; null for a regular block. */
         default Item lockedItem() { return null; }
+        /** Blast of the piece the last lockAndClearLines() locked (bomb); null when nothing exploded. */
+        default Blast lockedBlast() { return null; }
+        /** Cells the falling piece crushed since the last call (anvil), then forgets them; empty by default. */
+        default List<Cell> takeCrushedCells() { return List.of(); }
         /** Composed 20 x 10 board; EMPTY = -1; falling piece is included. */
         BoardSnapshot snapshot();
         /** Cells occupied by the falling piece only, or null when unavailable. */
@@ -50,10 +58,37 @@ public final class GameEngine implements AutoCloseable {
         default BoardSnapshot landingSnapshot() { return null; }
         /** Preview block IDs use the block/UI team's agreed 0..6 mapping. */
         int[] nextBlockTypes();
+        /**
+         * Versus mode: insert received lines at the bottom, top to bottom, pushing the stack up. Called only
+         * between a lock and the next spawn. True means existing blocks were pushed out above the board.
+         */
+        default boolean insertGarbage(List<GarbageLine> lines) { return false; }
     }
 
+    /**
+     * Versus mode: the narrow channel through which an engine exchanges attack lines with its opponent.
+     * A single-player engine uses {@link #NONE}. See docs/battle/rules.md section 4 for the order of events.
+     */
+    public interface AttackLink {
+        /** The piece just locked cleared two or more lines; these are the lines to hand over, top to bottom. */
+        void send(List<GarbageLine> lines);
+
+        /** Called right before the next spawn: remove and return every line waiting for this player. */
+        List<GarbageLine> takeIncoming();
+
+        AttackLink NONE = new AttackLink() {
+            @Override public void send(List<GarbageLine> lines) { }
+            @Override public List<GarbageLine> takeIncoming() { return List.of(); }
+        };
+    }
+
+    /**
+     * @param attackLines versus mode: lines this lock hands to the opponent, top to bottom; empty when the
+     *                    lock cleared fewer than two lines
+     */
     public record LockResult(
-            int clearedLines, boolean topOut, List<Integer> clearedRows, BoardSnapshot boardBeforeClear) {
+            int clearedLines, boolean topOut, List<Integer> clearedRows, BoardSnapshot boardBeforeClear,
+            List<GarbageLine> attackLines) {
         public LockResult {
             if (clearedLines < 0 || clearedLines > 4) {
                 throw new IllegalArgumentException("clearedLines must be between 0 and 4");
@@ -65,6 +100,12 @@ public final class GameEngine implements AutoCloseable {
             if (!clearedRows.isEmpty() && boardBeforeClear == null) {
                 throw new IllegalArgumentException("A pre-clear board snapshot is required for cleared rows");
             }
+            attackLines = List.copyOf(Objects.requireNonNull(attackLines, "attackLines"));
+        }
+
+        public LockResult(int clearedLines, boolean topOut, List<Integer> clearedRows,
+                          BoardSnapshot boardBeforeClear) {
+            this(clearedLines, topOut, clearedRows, boardBeforeClear, List.of());
         }
 
         public LockResult(int clearedLines, boolean topOut, List<Integer> clearedRows) {
@@ -88,6 +129,14 @@ public final class GameEngine implements AutoCloseable {
 
         /** How far the current interval had run when the timer last stopped (or now, if running); 0 if unknown. */
         default int elapsedMillis() { return 0; }
+    }
+
+    /**
+     * A real-time timer on the EDT, the same kind the engine uses for gravity. For timers that live outside
+     * the engine, such as a versus match's time limit.
+     */
+    public static DropTimer newSwingTimer() {
+        return new SwingDropTimer();
     }
 
     /** Package-private so tests can drive its clock; the Swing timer itself is never replaced. */
@@ -153,6 +202,7 @@ public final class GameEngine implements AutoCloseable {
     private final DropTimer timer;
     private final DropTimer survivalTimer;
     private final Supplier<Difficulty> difficultySource;
+    private final AttackLink attackLink;
     private Difficulty difficulty = Difficulty.NORMAL;
     private GameState state = GameState.READY;
     private int score;
@@ -177,6 +227,13 @@ public final class GameEngine implements AutoCloseable {
                 new SwingDropTimer(), difficultySource);
     }
 
+    /** Versus mode: a real-time engine that exchanges attack lines through {@code attackLink}. */
+    public GameEngine(BoardDriver board, GameEventListener listener, Supplier<Difficulty> difficultySource,
+                      AttackLink attackLink) {
+        this(board, listener, new ScoreCalculator(), new DefaultSpeedPolicy(), new SwingDropTimer(),
+                new SwingDropTimer(), difficultySource, attackLink);
+    }
+
     public GameEngine(BoardDriver board, GameEventListener listener, ScoringPolicy scoring, DropTimer timer) {
         this(board, listener, scoring, new DefaultSpeedPolicy(), timer);
     }
@@ -189,6 +246,12 @@ public final class GameEngine implements AutoCloseable {
     public GameEngine(BoardDriver board, GameEventListener listener, ScoringPolicy scoring,
                       SpeedPolicy speedPolicy, DropTimer timer, DropTimer survivalTimer,
                       Supplier<Difficulty> difficultySource) {
+        this(board, listener, scoring, speedPolicy, timer, survivalTimer, difficultySource, AttackLink.NONE);
+    }
+
+    public GameEngine(BoardDriver board, GameEventListener listener, ScoringPolicy scoring,
+                      SpeedPolicy speedPolicy, DropTimer timer, DropTimer survivalTimer,
+                      Supplier<Difficulty> difficultySource, AttackLink attackLink) {
         this.board = Objects.requireNonNull(board, "board");
         this.listener = Objects.requireNonNull(listener, "listener");
         this.scoring = Objects.requireNonNull(scoring, "scoring");
@@ -197,6 +260,7 @@ public final class GameEngine implements AutoCloseable {
         this.timer = Objects.requireNonNull(timer, "timer");
         this.survivalTimer = Objects.requireNonNull(survivalTimer, "survivalTimer");
         this.difficultySource = Objects.requireNonNull(difficultySource, "difficultySource");
+        this.attackLink = Objects.requireNonNull(attackLink, "attackLink");
     }
 
     /** Start a fresh game. Resume a paused game with resume(), not start(). */
@@ -282,8 +346,12 @@ public final class GameEngine implements AutoCloseable {
 
     private boolean hardDrop() {
         boolean awardsPoints = board.awardsDropPoints();
+        BoardSnapshot before = board.fallingSnapshot();
         int distance = board.hardDrop();
         if (awardsPoints) award(scoring.dropPoints(distance, getLevel()));
+        publishCrushed();
+        BoardSnapshot after = board.fallingSnapshot();
+        if (before != null && after != null) listener.onHardDropped(before, after);
         lockAndAdvance();
         return true;
     }
@@ -315,6 +383,7 @@ public final class GameEngine implements AutoCloseable {
     private boolean dropOneCell() {
         if (board.moveDown()) {
             if (board.awardsDropPoints()) award(scoring.dropPoints(1, getLevel()));
+            publishCrushed();
             publishBoard();
         } else {
             lockAndAdvance();
@@ -324,6 +393,8 @@ public final class GameEngine implements AutoCloseable {
 
     private void lockAndAdvance() {
         LockResult result = Objects.requireNonNull(board.lockAndClearLines(), "lock result");
+        Blast blast = board.lockedBlast();
+        if (blast != null) listener.onBombExploded(position(blast.center()), positions(blast.cells()));
         if (!result.clearedRows().isEmpty()) {
             listener.onLinesCleared(result.clearedRows(), result.boardBeforeClear());
         }
@@ -332,7 +403,14 @@ public final class GameEngine implements AutoCloseable {
         // Item effects start after the locked piece's own points are awarded.
         Item item = board.lockedItem();
         if (item != null) item.onActivated(effects);
+        if (!result.attackLines().isEmpty()) attackLink.send(result.attackLines());
         if (result.topOut()) {
+            gameOver();
+            return;
+        }
+        // Received lines enter after this piece's own clear and before the next piece exists (rules.md 4).
+        List<GarbageLine> incoming = Objects.requireNonNull(attackLink.takeIncoming(), "incoming lines");
+        if (!incoming.isEmpty() && board.insertGarbage(incoming)) {
             gameOver();
             return;
         }
@@ -343,6 +421,20 @@ public final class GameEngine implements AutoCloseable {
         scheduleTimer();
         publishBoard();
         publishPreview();
+    }
+
+    /** Tell the screen which cells the falling piece (anvil) crushed, if any. */
+    private void publishCrushed() {
+        List<Cell> crushed = Objects.requireNonNull(board.takeCrushedCells(), "crushed cells");
+        if (!crushed.isEmpty()) listener.onAnvilCrushed(positions(crushed));
+    }
+
+    private static CellPosition position(Cell cell) {
+        return new CellPosition(cell.row(), cell.col());
+    }
+
+    private static List<CellPosition> positions(List<Cell> cells) {
+        return cells.stream().map(GameEngine::position).toList();
     }
 
     private boolean spawn() {

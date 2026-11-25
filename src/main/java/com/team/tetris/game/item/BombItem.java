@@ -40,6 +40,12 @@ public final class BombItem implements EmbeddedItem {
         return Set.of();
     }
 
+    /** 화면의 폭발 연출용: {@link #onLock}이 지울 범위와 같다. */
+    @Override
+    public Blast blastOf(BoardView board, Cell center) {
+        return new Blast(center, blastCells(board, center));
+    }
+
     /** 보드 안의 3×3 좌표 중 꽉 찬 행을 뺀 것. 빈 칸도 포함하며, 지우기는 {@link Board#eraseCells}가 한 번에 한다. */
     private static List<Cell> blastCells(BoardView board, Cell center) {
         List<Cell> cells = new ArrayList<>();

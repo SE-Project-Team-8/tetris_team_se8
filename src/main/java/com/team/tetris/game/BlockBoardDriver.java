@@ -5,12 +5,16 @@
 package com.team.tetris.game;
 
 import com.team.tetris.block.Board;
+import com.team.tetris.block.Cell;
 import com.team.tetris.block.TetrominoGenerator;
 import com.team.tetris.block.TetrominoType;
 import com.team.tetris.block.WeightedTetrominoGenerator;
 import com.team.tetris.common.Difficulty;
+import com.team.tetris.common.battle.GarbageLine;
 import com.team.tetris.common.constants.GameConstants;
 import com.team.tetris.common.events.BoardSnapshot;
+import com.team.tetris.common.events.CellCodes;
+import com.team.tetris.game.item.Blast;
 import com.team.tetris.game.item.EmbeddedItem;
 import com.team.tetris.game.item.FallingPiece;
 import com.team.tetris.game.item.Item;
@@ -22,6 +26,7 @@ import com.team.tetris.game.item.StandaloneItem;
 import com.team.tetris.game.item.WeightedItemSelector;
 
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
@@ -46,6 +51,7 @@ public final class BlockBoardDriver implements GameEngine.BoardDriver {
     private ItemPolicy itemPolicy = ItemPolicy.none();
     private FallingPiece current;
     private Item lockedItem;
+    private Blast lockedBlast;
 
     public BlockBoardDriver() {
         this(ItemRegistry.defaults());
@@ -97,6 +103,7 @@ public final class BlockBoardDriver implements GameEngine.BoardDriver {
         board.clear();
         current = null;
         lockedItem = null;
+        lockedBlast = null;
         itemPolicy.reset();
         preview.clear();
         fillPreview();
@@ -142,20 +149,61 @@ public final class BlockBoardDriver implements GameEngine.BoardDriver {
     @Override
     public GameEngine.LockResult lockAndClearLines() {
         FallingPiece locking = requireCurrent();
+        // 공격 줄에서 뺄 칸. 고정하면 조각이 사라지므로 그 전에 잡아 둔다.
+        List<Cell> lockedCells = List.copyOf(locking.cells());
         LockOutcome outcome = locking.lock(board);
         lockedItem = locking.item();
+        lockedBlast = outcome.blast();
         current = null;
         if (!outcome.clearsLines()) return new GameEngine.LockResult(0, false);
         BoardSnapshot boardBeforeClear = snapshot();
         List<Integer> clearedRows = board.clearLinesIncludingAndGetRows(outcome.forcedRows());
         itemPolicy.onLinesCleared(clearedRows.size());
         return new GameEngine.LockResult(clearedRows.size(), false, clearedRows,
-                clearedRows.isEmpty() ? null : boardBeforeClear);
+                clearedRows.isEmpty() ? null : boardBeforeClear,
+                attackLines(clearedRows, boardBeforeClear, lockedCells));
+    }
+
+    /**
+     * 대전 모드에서 상대에게 넘길 줄 (3차 요구사항 p.4). 한 번에 2줄 이상 지웠을 때만 생기며, 지워진 줄에서
+     * 방금 고정한 블록의 칸을 뺀 모양을 위에서 아래 순서로 돌려준다. 넘길 칸이 하나도 없는 줄은 뺀다.
+     */
+    private static List<GarbageLine> attackLines(List<Integer> clearedRows, BoardSnapshot boardBeforeClear,
+                                                 List<Cell> lockedCells) {
+        if (clearedRows.size() < GameConstants.MIN_ATTACK_CLEARED_LINES) return List.of();
+        List<GarbageLine> lines = new ArrayList<>();
+        for (int row : clearedRows) {
+            int[] cells = boardBeforeClear.cells()[row];
+            int shape = 0;
+            for (int col = 0; col < cells.length; col++) {
+                if (cells[col] != BoardSnapshot.EMPTY && !lockedCells.contains(new Cell(row, col))) {
+                    shape |= 1 << col;
+                }
+            }
+            if (GarbageLine.isSendable(shape)) lines.add(new GarbageLine(shape));
+        }
+        return List.copyOf(lines);
+    }
+
+    @Override
+    public boolean insertGarbage(List<GarbageLine> lines) {
+        if (current != null) throw new IllegalStateException("Garbage enters between a lock and the next spawn");
+        return board.insertRowsAtBottom(lines);
     }
 
     @Override
     public Item lockedItem() {
         return lockedItem;
+    }
+
+    @Override
+    public Blast lockedBlast() {
+        return lockedBlast;
+    }
+
+    @Override
+    public List<Cell> takeCrushedCells() {
+        return current == null ? List.of() : current.takeCrushedCells();
     }
 
     @Override
@@ -168,8 +216,8 @@ public final class BlockBoardDriver implements GameEngine.BoardDriver {
         int[][] cells = new int[board.rows()][board.cols()];
         for (int row = 0; row < board.rows(); row++) {
             for (int col = 0; col < board.cols(); col++) {
-                cells[row][col] = board.cellAt(row, col)
-                        .map(TetrominoType::id).orElse(BoardSnapshot.EMPTY);
+                cells[row][col] = board.isGarbage(row, col) ? CellCodes.GARBAGE
+                        : board.cellAt(row, col).map(TetrominoType::id).orElse(BoardSnapshot.EMPTY);
             }
         }
         if (current != null) current.paint(cells);

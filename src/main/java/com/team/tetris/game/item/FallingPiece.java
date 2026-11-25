@@ -49,4 +49,12 @@ public interface FallingPiece {
 
     /** 이 조각이 실은 아이템. 일반 블록(아이템 없음)은 null. */
     Item item();
+
+    /**
+     * 지난 호출 뒤 이 조각이 이동하며 부순 칸(실제로 블록이 있던 칸)을 꺼내고 비운다. 화면 연출 알림용이다.
+     * 블록을 부수지 않는 조각은 늘 빈 목록 (기본값).
+     */
+    default List<Cell> takeCrushedCells() {
+        return List.of();
+    }
 }
