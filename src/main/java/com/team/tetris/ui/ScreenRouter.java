@@ -31,6 +31,9 @@ public class ScreenRouter extends JFrame {
     public static final String BATTLE_SELECT = "BATTLE_SELECT";
     public static final String VERSUS = "VERSUS";
     public static final String VERSUS_RESULT = "VERSUS_RESULT";
+    /** P2P 대전: 접속·대기실 화면과 경기 화면 (docs/p2p-handoff.md). */
+    public static final String P2P_LOBBY = "P2P_LOBBY";
+    public static final String P2P_GAME = "P2P_GAME";
 
     private final CardLayout cardLayout;
     private final JPanel containerPanel;
