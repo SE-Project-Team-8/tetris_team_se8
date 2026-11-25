@@ -129,11 +129,41 @@ public final class SettingsScreen extends JPanel implements Screen {
         keyGrid.setAlignmentX(Component.LEFT_ALIGNMENT);
         for (GameAction action : GameAction.values()) {
             KeyChip field = new KeyChip();
+            // 눌렀지만 아직 지정하지 않은 수정 키. 다른 키 없이 떼면 그때 지정한다.
+            int[] pendingModifier = {KeyEvent.VK_UNDEFINED};
+            // Shift+Tab은 포커스 이동이 Tab을 먼저 가져가므로, 칸을 벗어나면 대기 중이던 수정 키를 버린다.
+            field.addFocusListener(new FocusAdapter() {
+                @Override public void focusLost(FocusEvent event) {
+                    pendingModifier[0] = KeyEvent.VK_UNDEFINED;
+                }
+            });
             field.addKeyListener(new KeyAdapter() {
                 @Override public void keyPressed(KeyEvent event) {
                     int keyCode = event.getKeyCode();
                     // Tab은 다음 항목으로 넘어가는 데 쓰므로 조작 키로 받지 않는다.
-                    if (keyCode <= KeyEvent.VK_UNDEFINED || keyCode > 0xFFFF || keyCode == KeyEvent.VK_TAB) return;
+                    if (keyCode <= KeyEvent.VK_UNDEFINED || keyCode > 0xFFFF || keyCode == KeyEvent.VK_TAB) {
+                        pendingModifier[0] = KeyEvent.VK_UNDEFINED;
+                        return;
+                    }
+                    // Shift·Ctrl·Alt·Meta는 Shift+Tab처럼 다른 키와 함께 누르는 경우가 많다.
+                    // 누르는 순간 지정하면 Shift+Tab으로 이전 칸에 가려다 Shift로 바뀌므로, 단독으로 눌렀다 뗄 때 지정한다.
+                    if (isModifier(keyCode)) {
+                        pendingModifier[0] = keyCode;
+                        event.consume();
+                        return;
+                    }
+                    pendingModifier[0] = KeyEvent.VK_UNDEFINED;
+                    assign(keyCode, event);
+                }
+
+                @Override public void keyReleased(KeyEvent event) {
+                    if (pendingModifier[0] != KeyEvent.VK_UNDEFINED && event.getKeyCode() == pendingModifier[0]) {
+                        pendingModifier[0] = KeyEvent.VK_UNDEFINED;
+                        assign(event.getKeyCode(), event);
+                    }
+                }
+
+                private void assign(int keyCode, KeyEvent event) {
                     for (var entry : selectedKeys.entrySet()) {
                         if (entry.getKey() != action && entry.getValue() == keyCode) {
                             showMessage("이미 다른 동작에 쓰이는 키입니다.", "키 중복",
@@ -344,6 +374,12 @@ public final class SettingsScreen extends JPanel implements Screen {
         buttons.add(button);
         row.add(button);
         return button;
+    }
+
+    /** 다른 키와 함께 누르는 수정 키(Shift·Ctrl·Alt·Meta·AltGr)인지. */
+    private static boolean isModifier(int keyCode) {
+        return keyCode == KeyEvent.VK_SHIFT || keyCode == KeyEvent.VK_CONTROL || keyCode == KeyEvent.VK_ALT
+                || keyCode == KeyEvent.VK_META || keyCode == KeyEvent.VK_ALT_GRAPH;
     }
 
     private static String actionLabel(GameAction action) {
