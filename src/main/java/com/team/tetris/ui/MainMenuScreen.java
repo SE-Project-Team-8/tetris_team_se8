@@ -1,6 +1,5 @@
 package com.team.tetris.ui;
 
-import java.awt.Color;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.event.KeyAdapter;
@@ -26,12 +25,6 @@ import com.team.tetris.ui.theme.UiPainter;
  * - Enter 또는 Space로 선택된 메뉴를 실행한다.
  */
 public class MainMenuScreen extends JPanel implements Screen {
-    /** 로고 타일에 쓰는 블럭색. 팔레트 모드와 무관한 장식이라 일반 팔레트 값을 고정으로 쓴다. */
-    private static final Color[] LOGO_COLORS = {
-            new Color(0x4FC3E8), new Color(0xFFD34E), new Color(0xB07FE8),
-            new Color(0x6FD66F), new Color(0xFF7F7F), new Color(0xFFA94F)
-    };
-
     // 창 크기 L(600px) 기준 수치. 그릴 때 UiPainter.scale()을 곱한다.
     private static final int LOGO_TILE = 52;
     private static final int LOGO_TO_MENU_GAP = 68;
@@ -165,7 +158,7 @@ public class MainMenuScreen extends JPanel implements Screen {
      * @return 로고 아래 y. 메뉴 버튼은 그 아래부터 놓는다.
      */
     private static int drawTitle(Graphics2D g2d, int width, int top, int tile) {
-        return UiPainter.drawLogo(g2d, "TETRIS", width / 2, top, tile, LOGO_COLORS);
+        return UiPainter.drawLogo(g2d, "TETRIS", width / 2, top, tile, UiColors.LOGO_TILES);
     }
 
     /** 메뉴 버튼 전체 묶음의 높이. */

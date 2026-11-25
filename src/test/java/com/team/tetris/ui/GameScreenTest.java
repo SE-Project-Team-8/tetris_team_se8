@@ -168,7 +168,8 @@ class GameScreenTest {
             // 카드는 우측 패널 열의 LEVEL 패널 아래 빈 자리에 뜬다. LEVEL 숫자는 원래 주황색이라 그 아래만 본다.
             Rectangle cardArea = new Rectangle(WIDTH / 2, Math.round(HEIGHT * 0.57f), WIDTH / 2,
                     Math.round(HEIGHT * 0.25f));
-            Rectangle boardArea = new Rectangle(0, 0, WIDTH / 2, HEIGHT);
+            // 헤더의 TETRIS 로고 타일에도 같은 주황이 있으므로 헤더 아래 보드 쪽만 본다.
+            Rectangle boardArea = new Rectangle(0, HEIGHT / 10, WIDTH / 2, HEIGHT - HEIGHT / 10);
             assertEquals(0, countColor(fixture.render(), cardArea, LEVEL), "No notification at the first level");
 
             fixture.engine.handle(GameAction.HARD_DROP);

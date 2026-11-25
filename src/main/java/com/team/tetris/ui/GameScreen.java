@@ -8,6 +8,7 @@ import java.awt.AlphaComposite;
 import java.awt.Color;
 import java.awt.Font;
 import java.awt.FontMetrics;
+import java.awt.GradientPaint;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.event.ActionEvent;
@@ -891,12 +892,45 @@ public class GameScreen extends JPanel implements Screen {
     }
 
     /** 화면 제목과 우측 상단의 모드·난이도 뱃지. */
+    /**
+     * 헤더 제목: 시작 메뉴의 타일 로고와 달리 타일 없이 글자 자체를 블럭색으로 칠한 캔디 글자.
+     * 글자마다 위는 cream을 섞어 밝게, 아래는 블럭색으로 내려가는 그라데이션을 주고 짙은 음영을 아래에 깐다.
+     */
+    private static void drawHeaderTitle(Graphics2D g2d, int x, int headerHeight, float scale) {
+        Graphics2D title = (Graphics2D) g2d.create();
+        try {
+            title.setFont(UiFonts.display(Math.round(32 * scale)));
+            FontMetrics metrics = title.getFontMetrics();
+            int depth = Math.max(2, Math.round(3 * scale));
+            int baseline = UiPainter.centeredBaseline(metrics, 0, headerHeight) - depth / 2;
+            int letterGap = Math.max(1, Math.round(2 * scale));
+            String text = "TETRIS";
+            int letterX = x;
+            for (int index = 0; index < text.length(); index++) {
+                String letter = String.valueOf(text.charAt(index));
+                Color color = UiColors.LOGO_TILES[index % UiColors.LOGO_TILES.length];
+                title.setColor(UiColors.darker(color, 0.55f));
+                title.drawString(letter, letterX, baseline + depth);
+                title.setPaint(new GradientPaint(0, baseline - metrics.getAscent(), blend(color, UiColors.CREAM, 0.35f),
+                        0, baseline, color));
+                title.drawString(letter, letterX, baseline);
+                letterX += metrics.stringWidth(letter) + letterGap;
+            }
+        } finally {
+            title.dispose();
+        }
+    }
+
+    /** {@code from}에 {@code to}를 {@code amount}만큼 섞은 색. */
+    private static Color blend(Color from, Color to, float amount) {
+        return new Color(
+                Math.round(from.getRed() + (to.getRed() - from.getRed()) * amount),
+                Math.round(from.getGreen() + (to.getGreen() - from.getGreen()) * amount),
+                Math.round(from.getBlue() + (to.getBlue() - from.getBlue()) * amount));
+    }
+
     private void drawHeader(Graphics2D g2d, int margin, int width, int headerHeight, float scale) {
-        g2d.setFont(UiFonts.display(Math.round(26 * scale)));
-        g2d.setColor(UiColors.TEXT_PRIMARY);
-        FontMetrics metrics = g2d.getFontMetrics();
-        int titleBaseline = (headerHeight - metrics.getHeight()) / 2 + metrics.getAscent();
-        g2d.drawString("TETRIS", margin, titleBaseline);
+        drawHeaderTitle(g2d, margin, headerHeight, scale);
 
         int badgeHeight = Math.round(22 * scale);
         int badgeY = (headerHeight - badgeHeight) / 2;
