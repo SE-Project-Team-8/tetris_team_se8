@@ -1,5 +1,5 @@
 /*
- * BombItem(B) 테스트. onLock의 3×3 범위·보드 경계 잘림·꽉 찬 행 제외·행 압축 없음과,
+ * BombItem(B) 테스트. onLock의 5×5 범위·보드 경계 잘림·꽉 찬 행 제외·행 압축 없음과,
  * 실제 BlockBoardDriver·GameEngine 경로의 표시, 폭발, 폭탄 블록이 완성한 줄 삭제, 지운 칸 점수 없음을 검증한다.
  */
 package com.team.tetris.game.item;
@@ -39,15 +39,15 @@ class BombItemTest {
     }
 
     @Test
-    void erasesTheThreeByThreeAroundTheBombAndForcesNoRows() {
+    void erasesTheFiveByFiveAroundTheBombAndForcesNoRows() {
         Board board = new Board();
-        for (int row : new int[]{14, 16}) {
-            for (int col : new int[]{2, 4, 6}) placeSquare(board, row, col); // rows 14-17, cols 2-7
+        for (int row : new int[]{12, 14, 16, 18}) {
+            for (int col : new int[]{0, 2, 4, 6}) placeSquare(board, row, col); // rows 12-19, cols 0-7
         }
         assertEquals(Set.of(), BOMB.onLock(board, new Cell(15, 4)));
-        for (int row = 14; row <= 17; row++) {
-            for (int col = 2; col <= 7; col++) {
-                boolean blasted = row <= 16 && col >= 3 && col <= 5;
+        for (int row = 12; row <= 19; row++) {
+            for (int col = 0; col <= 7; col++) {
+                boolean blasted = row >= 13 && row <= 17 && col >= 2 && col <= 6;
                 assertEquals(!blasted, board.cellAt(row, col).isPresent(), row + "," + col);
             }
         }
@@ -58,16 +58,22 @@ class BombItemTest {
         Board board = new Board();
         placeSquare(board, 16, 0);
         placeSquare(board, 18, 0);
+        placeSquare(board, 18, 2);
+        placeSquare(board, 0, 6);
         placeSquare(board, 0, 8);
+        placeSquare(board, 2, 8);
         BOMB.onLock(board, new Cell(19, 0));
         BOMB.onLock(board, new Cell(0, 9));
-        for (int row = 18; row <= 19; row++) {
-            for (int col = 0; col <= 1; col++) assertTrue(board.cellAt(row, col).isEmpty(), row + "," + col);
+        for (int rowOffset = 0; rowOffset <= 2; rowOffset++) {
+            for (int colOffset = 0; colOffset <= 2; colOffset++) {
+                assertTrue(board.cellAt(19 - rowOffset, colOffset).isEmpty(), "bottom-left blast");
+                assertTrue(board.cellAt(rowOffset, 9 - colOffset).isEmpty(), "top-right blast");
+            }
         }
-        assertTrue(board.cellAt(17, 0).isPresent(), "The row above the clipped blast stays");
-        for (int row = 0; row <= 1; row++) {
-            for (int col = 8; col <= 9; col++) assertTrue(board.cellAt(row, col).isEmpty(), row + "," + col);
-        }
+        assertTrue(board.cellAt(16, 0).isPresent(), "The row above the bottom-left blast stays");
+        assertTrue(board.cellAt(19, 3).isPresent(), "The column right of the bottom-left blast stays");
+        assertTrue(board.cellAt(3, 9).isPresent(), "The row below the top-right blast stays");
+        assertTrue(board.cellAt(0, 6).isPresent(), "The column left of the top-right blast stays");
     }
 
     @Test
@@ -84,7 +90,8 @@ class BombItemTest {
         assertTrue(board.cellAt(17, 4).isEmpty());
         assertTrue(board.cellAt(17, 5).isEmpty());
         assertTrue(board.cellAt(18, 8).isPresent(), "Columns outside the blast are untouched");
-        assertTrue(board.cellAt(16, 4).isPresent(), "The block above the blast stays where it was");
+        assertTrue(board.cellAt(16, 4).isEmpty());
+        assertTrue(board.cellAt(15, 4).isPresent(), "The block above the blast stays where it was");
         assertTrue(board.cellAt(15, 5).isPresent());
     }
 
@@ -103,27 +110,27 @@ class BombItemTest {
     }
 
     @Test
-    void bombErasesTheThreeByThreeAroundItWithoutDroppingTheRest() {
+    void bombErasesTheFiveByFiveAroundItWithoutDroppingTheRest() {
         Board board = new Board();
         BlockBoardDriver driver = bombDriver(board, BOTTOM_RIGHT);
         earnBomb(driver, board);
         landTheRegularPreview(driver); // A regular O now sits at rows 18-19, cols 4-5.
         placeSquare(board, 16, 2);
         placeSquare(board, 16, 6);
+        placeSquare(board, 16, 8);
         placeSquare(board, 14, 6);
 
         assertTrue(driver.spawnNextBlock());
         assertEquals(16, driver.hardDrop(), "The bomb block lands on rows 16-17, B at (17, 5)");
         assertEquals(0, driver.lockAndClearLines().clearedLines(), "Erased cells are not cleared lines");
 
-        // Blast: rows 16-18, cols 4-6.
-        for (int row = 16; row <= 18; row++) {
-            for (int col = 4; col <= 6; col++) assertTrue(board.cellAt(row, col).isEmpty(), row + "," + col);
+        // Blast: rows 15-19, cols 3-7.
+        for (int row = 15; row <= 19; row++) {
+            for (int col = 3; col <= 7; col++) assertTrue(board.cellAt(row, col).isEmpty(), row + "," + col);
         }
-        assertTrue(board.cellAt(19, 4).isPresent(), "The row below the blast is untouched");
-        assertTrue(board.cellAt(16, 3).isPresent(), "Columns outside the blast are untouched");
-        assertTrue(board.cellAt(17, 7).isPresent());
-        assertTrue(board.cellAt(15, 6).isPresent(), "Blocks above the blast stay floating");
+        assertTrue(board.cellAt(16, 2).isPresent(), "The column left of the blast is untouched");
+        assertTrue(board.cellAt(17, 8).isPresent(), "The column right of the blast is untouched");
+        assertTrue(board.cellAt(14, 6).isPresent(), "Blocks above the blast stay floating");
         assertTrue(board.cellAt(14, 7).isPresent());
     }
 
@@ -136,20 +143,20 @@ class BombItemTest {
         // Row 17 is full except cols 4-5, where the bomb block will land.
         assertTrue(board.tryPlace(new Tetromino(TetrominoType.I, Rotation.SPAWN, 16, 0)));
         assertTrue(board.tryPlace(new Tetromino(TetrominoType.I, Rotation.SPAWN, 16, 6)));
-        placeSquare(board, 15, 6); // Rows 15-16, cols 6-7: half inside the blast.
+        placeSquare(board, 15, 7); // Rows 15-16, cols 7-8: half inside the blast.
 
         assertTrue(driver.spawnNextBlock());
-        driver.hardDrop(); // Lands on rows 16-17 with B at (16, 5); blast rows 15-17, cols 4-6.
+        driver.hardDrop(); // Lands on rows 16-17 with B at (16, 5), blasting rows 14-18, cols 3-7.
         assertEquals(1, driver.lockAndClearLines().clearedLines());
 
         // Row 17 was removed, so everything above it moved down one row.
         for (int col = 0; col < 10; col++) {
-            boolean expected = col == 7;
+            boolean expected = col == 8;
             assertEquals(expected, board.cellAt(17, col).isPresent(), "row 17, col " + col);
             assertEquals(expected, board.cellAt(16, col).isPresent(), "row 16, col " + col);
         }
-        assertTrue(board.cellAt(18, 4).isPresent(), "The regular O below the cleared row stays");
-        assertTrue(board.cellAt(19, 5).isPresent());
+        assertTrue(board.cellAt(18, 4).isEmpty(), "The blast reaches two rows below the bomb");
+        assertTrue(board.cellAt(19, 5).isPresent(), "The row below the blast stays");
     }
 
     @Test

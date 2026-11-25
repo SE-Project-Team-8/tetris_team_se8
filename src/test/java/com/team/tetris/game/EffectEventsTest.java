@@ -40,8 +40,11 @@ class EffectEventsTest {
 
             assertEquals(List.of("hardDropped", "bombExploded", "linesCleared"), rig.events.order);
             assertEquals(new CellPosition(18, 4), rig.events.bombCenter, "the bomb rides the O's top-left cell");
-            assertEquals(List.of(cell(17, 3), cell(17, 4), cell(17, 5), cell(18, 3), cell(18, 4), cell(18, 5)),
-                    rig.events.blastCells, "3×3 around the bomb, without row 19 that was already full");
+            assertEquals(List.of(
+                    cell(16, 2), cell(16, 3), cell(16, 4), cell(16, 5), cell(16, 6),
+                    cell(17, 2), cell(17, 3), cell(17, 4), cell(17, 5), cell(17, 6),
+                    cell(18, 2), cell(18, 3), cell(18, 4), cell(18, 5), cell(18, 6)),
+                    rig.events.blastCells, "5×5 clipped at the floor and excluding the already full row 19");
             rig.engine.close();
         });
     }
