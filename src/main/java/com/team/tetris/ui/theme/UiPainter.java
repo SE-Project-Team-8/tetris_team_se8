@@ -32,6 +32,8 @@ public final class UiPainter {
         SELECTED,
         /** 클릭·Enter 직후 80ms 동안의 눌린 모습. */
         PRESSED,
+        /** 눌림 뒤 화면이 바뀌기 직전의 확정 플래시: 선택 모습 + 크림 테두리 + 오른쪽 위 ✦. */
+        CONFIRMED,
         /** 선택할 수 없는 항목. */
         DISABLED
     }
@@ -116,7 +118,7 @@ public final class UiPainter {
                                       String label, ButtonState state, boolean centered, float fontSize) {
         Graphics2D g2 = (Graphics2D) g.create();
         try {
-            if (state == ButtonState.SELECTED) {
+            if (state == ButtonState.SELECTED || state == ButtonState.CONFIRMED) {
                 // 선택 항목은 중심 기준으로 5% 확대한다.
                 AffineTransform t = new AffineTransform();
                 double cx = x + width / 2.0;
@@ -132,7 +134,8 @@ public final class UiPainter {
 
             int arc = height;
             int shadow = Math.max(2, Math.round(height * 0.09f));
-            boolean filled = state == ButtonState.SELECTED || state == ButtonState.PRESSED;
+            boolean filled = state == ButtonState.SELECTED || state == ButtonState.PRESSED
+                    || state == ButtonState.CONFIRMED;
             Color fill = filled ? UiColors.ACCENT : UiColors.PANEL;
             int top = y;
             if (state == ButtonState.PRESSED) {
@@ -148,6 +151,12 @@ public final class UiPainter {
             g2.fillRoundRect(x, top, width, height, arc, arc);
             if (!filled) {
                 strokeRoundRect(g2, x, top, width, height, height / 2, UiColors.PANEL_BORDER, 2f);
+            }
+            if (state == ButtonState.CONFIRMED) {
+                // 확정 플래시: 크림 테두리를 두르고 오른쪽 위 모서리에 ✦를 띄운다 (컴포넌트 시트 "버튼 선택(클릭) 이펙트" ③).
+                float stroke = Math.max(2f, height * 0.06f);
+                strokeRoundRect(g2, x, top, width, height, height / 2, UiColors.CREAM, stroke);
+                drawSparkle(g2, x + width - height * 0.08f, top - height * 0.06f, height * 0.2f, UiColors.CREAM);
             }
 
             Color textColor = filled ? UiColors.TEXT_ON_ACCENT : UiColors.TEXT_PRIMARY;
@@ -166,6 +175,20 @@ public final class UiPainter {
         } finally {
             g2.dispose();
         }
+    }
+
+    /** 네 갈래 반짝임(✦). 서체에 기댈 필요 없이 도형으로 그린다. */
+    private static void drawSparkle(Graphics2D g, float cx, float cy, float radius, Color color) {
+        float waist = radius * 0.28f;
+        java.awt.geom.Path2D.Float star = new java.awt.geom.Path2D.Float();
+        star.moveTo(cx, cy - radius);
+        star.quadTo(cx + waist * 0.4f, cy - waist * 0.4f, cx + radius, cy);
+        star.quadTo(cx + waist * 0.4f, cy + waist * 0.4f, cx, cy + radius);
+        star.quadTo(cx - waist * 0.4f, cy + waist * 0.4f, cx - radius, cy);
+        star.quadTo(cx - waist * 0.4f, cy - waist * 0.4f, cx, cy - radius);
+        star.closePath();
+        g.setColor(color);
+        g.fill(star);
     }
 
     /**

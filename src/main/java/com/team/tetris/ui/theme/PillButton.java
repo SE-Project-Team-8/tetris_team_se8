@@ -18,6 +18,8 @@ import javax.swing.KeyStroke;
 public class PillButton extends JButton {
     private boolean primary;
     private float fontSize = 18f;
+    /** 눌린 뒤 동작을 실행하기 직전의 확정 플래시 중인지. */
+    private boolean confirming;
 
     /**
      * @param label 버튼 글자
@@ -76,6 +78,29 @@ public class PillButton extends JButton {
         }
     }
 
+    /**
+     * 눌림(마우스·Space·Enter)이 끝나면 확정 플래시(크림 테두리 + ✦)를 잠깐 보여 준 뒤 동작을 실행한다.
+     * 플래시 중에 다시 눌러도 동작은 한 번만 실행된다.
+     */
+    @Override
+    protected void fireActionPerformed(ActionEvent event) {
+        int flash = PressFeedback.confirmMillis();
+        if (flash <= 0) {
+            super.fireActionPerformed(event);
+            return;
+        }
+        if (confirming) return;
+        confirming = true;
+        repaint();
+        javax.swing.Timer timer = new javax.swing.Timer(flash, done -> {
+            confirming = false;
+            repaint();
+            super.fireActionPerformed(event);
+        });
+        timer.setRepeats(false);
+        timer.start();
+    }
+
     @Override
     protected void paintComponent(Graphics g) {
         Graphics2D g2d = (Graphics2D) g.create();
@@ -84,14 +109,17 @@ public class PillButton extends JButton {
             UiPainter.ButtonState state;
             if (!isEnabled()) {
                 state = UiPainter.ButtonState.DISABLED;
+            } else if (confirming) {
+                state = UiPainter.ButtonState.CONFIRMED;
             } else if (getModel().isPressed()) {
                 state = UiPainter.ButtonState.PRESSED;
             } else {
                 state = primary ? UiPainter.ButtonState.SELECTED : UiPainter.ButtonState.NORMAL;
             }
-            // 선택 상태의 5% 확대와 하단 음영이 버튼 영역 밖으로 잘리지 않게 약간 안쪽에 그린다.
+            // 선택 상태의 5% 확대와 하단 음영, 확정 플래시의 오른쪽 위 ✦가 버튼 영역 밖으로 잘리지 않게 안쪽에 그린다.
             int inset = Math.round(getHeight() * 0.08f);
-            UiPainter.drawPillButton(g2d, inset, 0, getWidth() - inset * 2, getHeight() - inset,
+            int top = Math.round(getHeight() * 0.06f);
+            UiPainter.drawPillButton(g2d, inset, top, getWidth() - inset * 2, getHeight() - inset - top,
                     getText(), state, true, fontSize);
         } finally {
             g2d.dispose();
