@@ -67,9 +67,12 @@ public class GameScreen extends JPanel implements Screen {
     private static final Color ITEM_MODE_BADGE = new Color(0xB07FE8);
     /** 보드 상태 틴트 불투명도 (스펙: 13%). */
     private static final float BOARD_TINT_ALPHA = 0.13f;
-    /** 한 번 누르면 한 번만 일어나야 하는 동작. 이동·회전은 누르고 있으면 계속 반복된다. */
-    private static final Set<GameAction> ONE_PRESS_ACTIONS =
-            EnumSet.of(GameAction.HARD_DROP, GameAction.PAUSE, GameAction.QUIT);
+    /**
+     * 한 번 누르면 한 번만 일어나야 하는 동작. 이동·소프트 드롭은 누르고 있으면 계속 반복된다.
+     * 회전은 OS 자동 반복을 따르면 1초에 30번 가까이 돌아서(PC 설정마다 다르다) 누를 때 한 번만 돈다. 대전도 같다.
+     */
+    private static final Set<GameAction> ONE_PRESS_ACTIONS = EnumSet.of(GameAction.HARD_DROP,
+            GameAction.ROTATE_CLOCKWISE, GameAction.ROTATE_COUNTERCLOCKWISE, GameAction.PAUSE, GameAction.QUIT);
     private static final int BEST_SCORE_TICK_MS = 30;
     private static final int BEST_SCORE_HOLD_MS = 500;
     private static final int BEST_SCORE_FADE_MS = 1_500;

@@ -1,5 +1,5 @@
 /*
- * 대전 회전 키의 누름 반복: 이동보다 늦게 시작하고 느리게 반복해서, 짧게 누르면 한 번만 돈다 (1인 모드와 같은 느낌).
+ * 대전 회전 키는 길게 눌러도 한 번만 돈다 (1인 모드와 같은 느낌). 이동 키는 계속 반복한다.
  */
 package com.team.tetris.game.versus;
 
@@ -35,20 +35,22 @@ class RotationRepeatTest {
             });
 
     @Test
-    void rotationWaitsLongerAndRepeatsSlowerThanMovement() {
+    void holdingARotationKeyRotatesOnceButMovementKeepsRepeating() {
         input.keyPressed(KeyEvent.VK_W, KeyEvent.KEY_LOCATION_STANDARD);
-        assertEquals(List.of(GameAction.ROTATE_CLOCKWISE), handled, "A press rotates once right away");
-        Timer rotate = timers.getLast();
-        assertEquals(VersusInput.ROTATE_REPEAT_DELAY_MILLIS, rotate.interval);
-        assertTrue(VersusInput.ROTATE_REPEAT_DELAY_MILLIS > VersusInput.REPEAT_DELAY_MILLIS,
-                "A short tap does not rotate twice");
-        rotate.fire();
-        assertEquals(VersusInput.ROTATE_REPEAT_INTERVAL_MILLIS, rotate.interval, "Held rotation repeats slowly");
-        assertTrue(VersusInput.ROTATE_REPEAT_INTERVAL_MILLIS > VersusInput.REPEAT_INTERVAL_MILLIS);
-        assertEquals(2, handled.size());
+        input.keyPressed(KeyEvent.VK_W, KeyEvent.KEY_LOCATION_STANDARD);   // OS 자동 반복
+        assertEquals(List.of(GameAction.ROTATE_CLOCKWISE), handled, "A held rotation key rotates once");
+        assertTrue(timers.isEmpty(), "No repeat timer for rotation");
+
+        input.keyReleased(KeyEvent.VK_W, KeyEvent.KEY_LOCATION_STANDARD);
+        input.keyPressed(KeyEvent.VK_W, KeyEvent.KEY_LOCATION_STANDARD);
+        assertEquals(2, handled.size(), "Pressing again rotates again");
 
         input.keyPressed(KeyEvent.VK_A, KeyEvent.KEY_LOCATION_STANDARD);
-        assertEquals(VersusInput.REPEAT_DELAY_MILLIS, timers.getLast().interval, "Movement keeps its quick repeat");
+        Timer move = timers.getLast();
+        assertEquals(VersusInput.REPEAT_DELAY_MILLIS, move.interval, "Movement keeps its quick repeat");
+        move.fire();
+        assertEquals(VersusInput.REPEAT_INTERVAL_MILLIS, move.interval);
+        assertEquals(4, handled.size());
     }
 
     private static final class Timer implements GameEngine.DropTimer {

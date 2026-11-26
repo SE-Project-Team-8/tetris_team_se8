@@ -78,7 +78,7 @@ class VersusInputTest {
         assertTrue(input.keyPressed(KeyEvent.VK_CONTROL, RIGHT), "the other Ctrl is a separate press");
         assertEquals(List.of(move(Player.P2, GameAction.ROTATE_CLOCKWISE), move(Player.P2, GameAction.ROTATE_CLOCKWISE)),
                 match.moves);
-        assertEquals(2, timers.size(), "each held Ctrl repeats on its own");
+        assertEquals(0, timers.size(), "rotation does not repeat while held");
     }
 
     @Test
@@ -204,7 +204,8 @@ class VersusInputTest {
         assertThrows(IllegalArgumentException.class, () -> new PlayerMove(Player.P1, GameAction.PAUSE));
         assertThrows(IllegalArgumentException.class, () -> new PlayerMove(Player.P2, GameAction.QUIT));
         assertFalse(new PlayerMove(Player.P1, GameAction.HARD_DROP).repeats());
-        assertTrue(new PlayerMove(Player.P1, GameAction.ROTATE_CLOCKWISE).repeats());
+        assertFalse(new PlayerMove(Player.P1, GameAction.ROTATE_CLOCKWISE).repeats());
+        assertTrue(new PlayerMove(Player.P1, GameAction.MOVE_LEFT).repeats());
     }
 
     @Test

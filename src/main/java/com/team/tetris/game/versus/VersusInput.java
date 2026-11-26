@@ -19,7 +19,8 @@ import java.util.function.Supplier;
  *
  * OS의 자동 반복은 마지막에 누른 키 하나만 반복하므로, 한 사람이 키를 누르고 있는 중에 다른 사람이 키를 누르면 앞사람의
  * 반복이 끊긴다. 그래서 OS 반복은 무시하고, 눌린 키마다 반복 타이머를 따로 돌린다. 새로 누른 키는 바로 한 번 실행하고,
- * {@link #REPEAT_DELAY_MILLIS} 뒤부터 {@link #REPEAT_INTERVAL_MILLIS}마다 반복한다. 하드드롭은 반복하지 않는다.
+ * {@link #REPEAT_DELAY_MILLIS} 뒤부터 {@link #REPEAT_INTERVAL_MILLIS}마다 반복한다. 하드드롭과 회전은 반복하지 않는다
+ * ({@link PlayerMove#repeats()}).
  *
  * 키는 키 코드와 위치(왼쪽·오른쪽)로 받는다. 키 표의 키는 {@link SidedKey}라서 왼쪽 Shift와 오른쪽 Shift를 다른
  * 사람에게 줄 수 있다. 쪽을 정하지 않은 표의 키는 어느 쪽에서 눌려도 맞는다.
@@ -32,13 +33,6 @@ public final class VersusInput {
     public static final int REPEAT_DELAY_MILLIS = 170;
     /** 첫 반복 뒤의 반복 간격. */
     public static final int REPEAT_INTERVAL_MILLIS = 50;
-    /**
-     * 회전 키의 첫 반복까지. 이동처럼 170ms로 두면 평소처럼 톡 눌러도 두 번 돌아서 1인 모드보다 예민하게 느껴진다.
-     * 1인 모드(OS 자동 반복, 보통 0.5초 안팎)처럼 짧게 누르면 한 번만 돌게 길게 둔다.
-     */
-    public static final int ROTATE_REPEAT_DELAY_MILLIS = 450;
-    /** 회전 키를 계속 누르고 있을 때의 반복 간격. 한 바퀴를 눈으로 따라갈 수 있게 이동보다 느리다. */
-    public static final int ROTATE_REPEAT_INTERVAL_MILLIS = 150;
 
     /** 조작을 받는 쪽. 실제로는 {@link VersusMatch}다. */
     interface Target {
@@ -122,14 +116,10 @@ public final class VersusInput {
     private void startRepeat(int keyCode, PlayerMove move) {
         GameEngine.DropTimer timer = Objects.requireNonNull(timers.get(), "timer");
         repeating.put(keyCode, timer);
-        boolean rotate = move.action() == GameAction.ROTATE_CLOCKWISE
-                || move.action() == GameAction.ROTATE_COUNTERCLOCKWISE;
-        int delay = rotate ? ROTATE_REPEAT_DELAY_MILLIS : REPEAT_DELAY_MILLIS;
-        int interval = rotate ? ROTATE_REPEAT_INTERVAL_MILLIS : REPEAT_INTERVAL_MILLIS;
         // 첫 지연이 간격보다 길어서 한 번 기다린 뒤 간격으로 다시 건다 (SwingDropTimer는 첫 지연이 간격 이하만 받는다).
-        timer.start(delay, () -> {
+        timer.start(REPEAT_DELAY_MILLIS, () -> {
             if (repeatOnce(keyCode, move, timer)) {
-                timer.start(interval, () -> repeatOnce(keyCode, move, timer));
+                timer.start(REPEAT_INTERVAL_MILLIS, () -> repeatOnce(keyCode, move, timer));
             }
         });
     }

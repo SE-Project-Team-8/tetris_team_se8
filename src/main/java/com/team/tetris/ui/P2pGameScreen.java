@@ -48,7 +48,9 @@ import com.team.tetris.ui.theme.UiPainter;
  * 나가기는 확인 뒤 연결을 끊고 P2P 첫 화면으로. 연결이 끊기면 오류를 알리고 첫 화면으로 돌아간다.
  */
 public final class P2pGameScreen extends JPanel implements Screen {
-    private static final Set<GameAction> ONE_PRESS = EnumSet.of(GameAction.HARD_DROP, GameAction.PAUSE, GameAction.QUIT);
+    /** 누를 때 한 번만 일어나는 조작. 회전도 1인 모드처럼 길게 눌러도 한 번만 돈다. */
+    private static final Set<GameAction> ONE_PRESS = EnumSet.of(GameAction.HARD_DROP,
+            GameAction.ROTATE_CLOCKWISE, GameAction.ROTATE_COUNTERCLOCKWISE, GameAction.PAUSE, GameAction.QUIT);
     private static final Color DIMMED_OVERLAY = new Color(0x14, 0x0F, 0x28, 184);
     /** 경기가 끝난 뒤 승리 배너를 보여 주고 대기실로 돌아가기까지의 시간. */
     static final int END_BANNER_MS = 2_500;
@@ -188,7 +190,7 @@ public final class P2pGameScreen extends JPanel implements Screen {
         return keyPressed(event.getKeyCode());
     }
 
-    /** 1인용 키 설정으로 조작을 골라 세션에 넘긴다. 하드드롭·일시정지·나가기는 누를 때 한 번만. */
+    /** 1인용 키 설정으로 조작을 골라 세션에 넘긴다. 하드드롭·회전·일시정지·나가기는 누를 때 한 번만. */
     boolean keyPressed(int keyCode) {
         KeyBindings keys = settings.get().keyBindings();
         GameAction action = keys.actionFor(keyCode).orElse(null);

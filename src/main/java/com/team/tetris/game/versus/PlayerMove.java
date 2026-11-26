@@ -23,8 +23,12 @@ public record PlayerMove(Player player, GameAction action) {
         }
     }
 
-    /** 누르고 있으면 반복되는 조작인지. 하드드롭은 누를 때 한 번만 (input.md 3절). */
+    /**
+     * 누르고 있으면 반복되는 조작인지. 이동과 소프트 드롭만 반복한다. 하드드롭은 누를 때 한 번만 (input.md 3절).
+     * 회전도 누를 때 한 번만 돈다: 길게 누르고 있어도 계속 돌지 않아, 1인 모드와 같은 느낌이 된다.
+     */
     public boolean repeats() {
-        return action != GameAction.HARD_DROP;
+        return action != GameAction.HARD_DROP && action != GameAction.ROTATE_CLOCKWISE
+                && action != GameAction.ROTATE_COUNTERCLOCKWISE;
     }
 }
