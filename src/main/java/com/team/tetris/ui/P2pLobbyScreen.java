@@ -141,6 +141,8 @@ public final class P2pLobbyScreen extends JPanel implements Screen {
                 switch (keyCode) {
                     case KeyEvent.VK_LEFT -> changeMode(-1);
                     case KeyEvent.VK_RIGHT -> changeMode(1);
+                    case KeyEvent.VK_UP -> changeMinutes(1);
+                    case KeyEvent.VK_DOWN -> changeMinutes(-1);
                     case KeyEvent.VK_ENTER -> {
                         if (!session.localReady()) press.press(0, session::ready);
                     }
@@ -192,6 +194,17 @@ public final class P2pLobbyScreen extends JPanel implements Screen {
         for (int i = 0; i < MODES.length; i++) if (MODES[i] == session.mode()) index = i;
         int next = Math.max(0, Math.min(MODES.length - 1, index + delta));
         session.selectMode(MODES[next]);
+    }
+
+    /**
+     * 시간제한 방식일 때 서버만 ↑↓로 제한 시간(1~5분)을 바꾼다. 양 끝에서는 더 가지 않는다.
+     * 바꾸면 세션이 양쪽 준비를 다시 받는다.
+     */
+    private void changeMinutes(int delta) {
+        if (!session.isHost() || session.mode() != VersusMode.TIME_LIMIT) return;
+        int next = Math.max(P2pSession.MIN_TIME_LIMIT_MINUTES,
+                Math.min(P2pSession.MAX_TIME_LIMIT_MINUTES, session.timeLimitMinutes() + delta));
+        session.selectMode(VersusMode.TIME_LIMIT, next);
     }
 
     private void confirmLeave() {
@@ -362,8 +375,12 @@ public final class P2pLobbyScreen extends JPanel implements Screen {
         int inner = Math.round(22 * scale);
         g2d.setFont(UiFonts.display(Math.round(14 * scale)));
         g2d.setColor(UiColors.TEXT_SECONDARY);
-        UiPainter.drawText(g2d, session.isHost() ? "게임 방식  ·  ←→로 선택" : "게임 방식 (서버가 선택)", x + inner,
-                y + Math.round(28 * scale));
+        boolean timed = session.mode() == VersusMode.TIME_LIMIT;
+        String heading = !session.isHost() ? "게임 방식 (서버가 선택)"
+                : timed ? "게임 방식  ·  ←→ 방식  ·  ↑↓ 시간" : "게임 방식  ·  ←→로 선택";
+        UiPainter.drawText(g2d, heading, x + inner, y + Math.round(28 * scale));
+        // 시간제한이면 오른쪽 위에 제한 시간 1~5분 알약을 둔다. 클라이언트도 서버가 고른 시간을 본다.
+        if (timed) drawMinutes(g2d, x + width - inner, y + Math.round(14 * scale), scale);
         int pillHeight = Math.round(32 * scale);
         int pillY = y + height - pillHeight - Math.round(14 * scale);
         int pillX = x + inner;
@@ -379,6 +396,28 @@ public final class P2pLobbyScreen extends JPanel implements Screen {
             g2d.setColor(chosen ? UiColors.TEXT_ON_ACCENT : UiColors.TEXT_PRIMARY);
             UiPainter.drawCentered(g2d, label, pillX + pillWidth / 2, UiPainter.centeredBaseline(metrics, pillY, pillHeight));
             pillX += pillWidth + Math.round(10 * scale);
+        }
+    }
+
+    /** 제한 시간 알약 1~5분 (대전 방식 선택 화면과 같은 모양). 고른 시간은 노랑으로 채운다. */
+    private void drawMinutes(Graphics2D g2d, int right, int top, float scale) {
+        int pillHeight = Math.round(24 * scale);
+        int pillWidth = Math.round(44 * scale);
+        int gap = Math.round(6 * scale);
+        int count = P2pSession.MAX_TIME_LIMIT_MINUTES - P2pSession.MIN_TIME_LIMIT_MINUTES + 1;
+        int x = right - count * pillWidth - (count - 1) * gap;
+        g2d.setFont(UiFonts.display(Math.round(13 * scale)));
+        FontMetrics metrics = g2d.getFontMetrics();
+        for (int value = P2pSession.MIN_TIME_LIMIT_MINUTES; value <= P2pSession.MAX_TIME_LIMIT_MINUTES; value++) {
+            boolean chosen = value == session.timeLimitMinutes();
+            Color fill = chosen ? UiColors.ACCENT : UiColors.BOARD;
+            UiPainter.drawPanel(g2d, x, top, pillWidth, pillHeight, pillHeight / 2, fill,
+                    chosen ? fill : UiColors.PANEL_BORDER, 1.5f);
+            g2d.setColor(chosen ? UiColors.TEXT_ON_ACCENT : UiColors.TEXT_SECONDARY);
+            String label = value + "분";
+            UiPainter.drawText(g2d, label, x + (pillWidth - UiPainter.textWidth(metrics, label)) / 2,
+                    UiPainter.centeredBaseline(metrics, top, pillHeight));
+            x += pillWidth + gap;
         }
     }
 

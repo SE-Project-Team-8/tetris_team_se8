@@ -28,9 +28,11 @@ import com.team.tetris.common.Screen;
 import com.team.tetris.common.battle.Player;
 import com.team.tetris.common.constants.GameConstants;
 import com.team.tetris.common.events.BoardSnapshot;
+import com.team.tetris.common.events.CellPosition;
 import com.team.tetris.game.GameAction;
 import com.team.tetris.game.item.ItemRegistry;
 import com.team.tetris.game.versus.MatchResult;
+import com.team.tetris.p2p.P2pEffectListener;
 import com.team.tetris.p2p.P2pSession;
 import com.team.tetris.settings.GameSettings;
 import com.team.tetris.settings.KeyBindings;
@@ -65,6 +67,45 @@ public final class P2pGameScreen extends JPanel implements Screen {
     private boolean dialogOpen;
     private int previousWidth;
     private int previousHeight;
+    /** 플레이어별로 받은 이펙트 수 (테스트용). */
+    private final int[] effectsShown = new int[Player.values().length];
+    /**
+     * 두 보드의 경기 이펙트(줄 삭제·하드드롭·폭탄·모루·피버·슬로우). 로컬 대전과 같은 BoardView 연출을 그대로 쓴다.
+     * 세션은 이펙트를 그 보드 갱신보다 먼저 EDT에서 알려 준다 (docs/p2p-handoff.md, 이슈 #77).
+     */
+    private final P2pEffectListener effects = new P2pEffectListener() {
+        @Override public void linesCleared(Player player, List<Integer> rows, BoardSnapshot boardBeforeClear) {
+            effectsShown[player.ordinal()]++;
+            VersusBoards.Side side = boards.side(player);
+            side.linesCleared(rows);   // 공격 연출이 지운 줄 높이에서 출발한다
+            side.board.onLinesCleared(rows, boardBeforeClear);
+        }
+
+        @Override public void hardDropped(Player player, BoardSnapshot fallingBefore, BoardSnapshot fallingAfter) {
+            effectsShown[player.ordinal()]++;
+            boards.side(player).board.onHardDropped(fallingBefore, fallingAfter);
+        }
+
+        @Override public void bombExploded(Player player, CellPosition center, List<CellPosition> blastCells) {
+            effectsShown[player.ordinal()]++;
+            boards.side(player).board.onBombExploded(center, blastCells);
+        }
+
+        @Override public void anvilCrushed(Player player, List<CellPosition> crushedCells) {
+            effectsShown[player.ordinal()]++;
+            boards.side(player).board.onAnvilCrushed(crushedCells);
+        }
+
+        @Override public void feverActivated(Player player, int seconds) {
+            effectsShown[player.ordinal()]++;
+            boards.side(player).board.onFeverActivated(seconds);
+        }
+
+        @Override public void slowDownActivated(Player player, int previousLevel, int currentLevel) {
+            effectsShown[player.ordinal()]++;
+            boards.side(player).board.onSlowDownActivated(previousLevel, currentLevel);
+        }
+    };
     /** 방금 끝난 경기 결과. 승리 배너를 띄우는 동안만 값이 있다. */
     private MatchResult ended;
     private final Timer endTimer = new Timer(END_BANNER_MS, event -> leaveToLobby());
@@ -95,6 +136,7 @@ public final class P2pGameScreen extends JPanel implements Screen {
             boards.setLabel(player, player.name() + (player == session.localPlayer() ? " (나)" : ""));
         }
         KeyboardFocusManager.getCurrentKeyboardFocusManager().addKeyEventDispatcher(dispatcher);
+        session.setEffectListener(effects);
         refreshBoards();
         requestFocusInWindow();
         repaint();
@@ -103,6 +145,7 @@ public final class P2pGameScreen extends JPanel implements Screen {
     @Override
     public void onHide() {
         KeyboardFocusManager.getCurrentKeyboardFocusManager().removeKeyEventDispatcher(dispatcher);
+        session.setEffectListener(null);
         boards.stopEffects();
         endTimer.stop();
         ended = null;
@@ -145,6 +188,11 @@ public final class P2pGameScreen extends JPanel implements Screen {
     private void leaveToLobby() {
         endTimer.stop();
         if (ScreenRouter.P2P_GAME.equals(router.getCurrentScreenName())) router.showScreen(ScreenRouter.P2P_LOBBY);
+    }
+
+    /** 그 플레이어 보드로 받은 이펙트 수 (테스트용). */
+    int effectsShown(Player player) {
+        return effectsShown[player.ordinal()];
     }
 
     /** 승리 배너를 띄우고 있는지. */
@@ -251,7 +299,9 @@ public final class P2pGameScreen extends JPanel implements Screen {
         g2d.setFont(UiFonts.display(Math.round(28 * scale)));
         g2d.setColor(UiColors.TEXT_PRIMARY);
         FontMetrics metrics = g2d.getFontMetrics();
-        UiPainter.drawText(g2d, "P2P 대전 — " + VersusScreen.modeName(session.mode()), margin,
+        String title = "P2P 대전 — " + VersusScreen.modeName(session.mode())
+                + (session.isTimed() ? " " + session.timeLimitMinutes() + "분" : "");
+        UiPainter.drawText(g2d, title, margin,
                 UiPainter.centeredBaseline(metrics, 0, header));
         int right = width - margin;
         if (session.isTimed()) {

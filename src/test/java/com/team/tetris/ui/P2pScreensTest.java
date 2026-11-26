@@ -114,6 +114,24 @@ class P2pScreensTest {
             paint(host.lobby);
             paint(client.lobby);
 
+            // 시간제한에서는 서버만 ↑↓로 제한 시간(1~5분)을 바꾸고, 클라이언트에도 반영된다.
+            edt(() -> host.lobby.handleKey(KeyEvent.VK_RIGHT));
+            waitFor(() -> client.session.mode() == VersusMode.TIME_LIMIT);
+            edt(() -> client.lobby.handleKey(KeyEvent.VK_UP));
+            edt(() -> host.lobby.handleKey(KeyEvent.VK_UP));
+            waitFor(() -> client.session.timeLimitMinutes() == 4);
+            edt(() -> {
+                for (int press = 0; press < 6; press++) host.lobby.handleKey(KeyEvent.VK_UP);
+            });
+            waitFor(() -> client.session.timeLimitMinutes() == P2pSession.MAX_TIME_LIMIT_MINUTES);
+            edt(() -> host.lobby.handleKey(KeyEvent.VK_DOWN));
+            waitFor(() -> client.session.timeLimitMinutes() == 4);
+            paint(host.lobby);
+            paint(client.lobby);
+            // 다시 아이템 방식으로 (아래 경기는 끝까지 쌓아서 끝낸다)
+            edt(() -> host.lobby.handleKey(KeyEvent.VK_LEFT));
+            waitFor(() -> client.session.mode() == VersusMode.ITEM);
+
             edt(() -> host.lobby.handleKey(KeyEvent.VK_ENTER));     // 서버 준비
             edt(() -> client.lobby.handleKey(KeyEvent.VK_ENTER));   // 클라이언트 준비 → 시작
             waitFor(() -> ScreenRouter.P2P_GAME.equals(host.router.getCurrentScreenName())
@@ -122,6 +140,9 @@ class P2pScreensTest {
             // 내 키는 내 보드를 움직이고, 그 보드가 상대 화면에도 전달된다.
             edt(() -> client.game.keyPressed(KeyEvent.VK_SPACE));
             waitFor(() -> host.session.board(Player.P2) != null && host.session.board(Player.P2).score() > 0);
+            // 하드드롭 이펙트가 내 화면과 상대 화면의 같은 보드(P2)에 그려진다.
+            waitFor(() -> client.game.effectsShown(Player.P2) > 0 && host.game.effectsShown(Player.P2) > 0);
+            assertEquals(0, host.game.effectsShown(Player.P1), "Nothing happened on the host's own board yet");
             paint(host.game);
             paint(client.game);
 
