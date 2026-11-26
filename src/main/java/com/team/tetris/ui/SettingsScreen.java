@@ -99,11 +99,11 @@ public final class SettingsScreen extends JPanel implements Screen {
                 case P1 -> "대전 P1";
                 case P2 -> "대전 P2";
             });
-    /** 대전 키 칸을 늘어놓는 순서 (두 열 격자): 이동 / 드롭 / 회전. */
+    /** 대전 키 칸을 늘어놓는 순서 (두 열 격자): 이동 / 드롭 / 회전. 1인용 칸과 같은 자리다. */
     private static final List<GameAction> VERSUS_KEY_ORDER = List.of(
             GameAction.MOVE_LEFT, GameAction.MOVE_RIGHT,
             GameAction.SOFT_DROP, GameAction.HARD_DROP,
-            GameAction.ROTATE_CLOCKWISE);
+            GameAction.ROTATE_CLOCKWISE, GameAction.ROTATE_COUNTERCLOCKWISE);
     private final EnumMap<GameAction, KeyChip> versusFields = new EnumMap<>(GameAction.class);
     /** 플레이어별로 고른 대전 키 ({@link SidedKey} 값). 저장하기 전까지 화면에만 있다. */
     private final EnumMap<Player, EnumMap<GameAction, Integer>> selectedVersus = new EnumMap<>(Player.class);
@@ -223,7 +223,7 @@ public final class SettingsScreen extends JPanel implements Screen {
             KeyChip field = new KeyChip();
             addVersusKeyListener(field, action);
             versusFields.put(action, field);
-            JLabel label = new CardLabel(action == GameAction.ROTATE_CLOCKWISE ? "회전" : actionLabel(action));
+            JLabel label = new CardLabel(actionLabel(action));
             label.setForeground(UiColors.TEXT_PRIMARY);
             keyLabels.add(label);
             SettingCard card = new SettingCard(label, field);

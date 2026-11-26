@@ -46,7 +46,7 @@ class VersusKeySettingsTest {
     }
 
     @Test
-    void eachPlayerHasFiveKeysThatAreSavedWithTheirSide() throws Exception {
+    void eachPlayerHasSixKeysThatAreSavedWithTheirSide() throws Exception {
         AtomicReference<GameSettings> saved = new AtomicReference<>();
         CountDownLatch savedLatch = new CountDownLatch(1);
         ScreenRouter[] router = new ScreenRouter[1];
@@ -70,9 +70,10 @@ class VersusKeySettingsTest {
             press(target, KeyEvent.VK_RIGHT, KeyEvent.KEY_LOCATION_STANDARD);   // 1인용 → 대전 P1
             List<Component> p1 = visible(settings, "KeyChip");
             assertEquals(VersusKeyBindings.PLAYER_ACTIONS.size(), p1.size(),
-                    "A versus player shows only its five keys, without pause and quit");
-            // 대전 칸 순서: 왼쪽 이동, 오른쪽 이동, 소프트 드롭, 하드 드롭, 회전
-            press(p1.get(3), KeyEvent.VK_Q, KeyEvent.KEY_LOCATION_STANDARD);
+                    "A versus player shows only its six keys, without pause and quit");
+            // 대전 칸 순서: 왼쪽 이동, 오른쪽 이동, 소프트 드롭, 하드 드롭, 오른쪽 회전, 왼쪽 회전
+            press(p1.get(3), KeyEvent.VK_E, KeyEvent.KEY_LOCATION_STANDARD);
+            press(p1.get(5), KeyEvent.VK_R, KeyEvent.KEY_LOCATION_STANDARD);
 
             press(target, KeyEvent.VK_RIGHT, KeyEvent.KEY_LOCATION_STANDARD);   // 대전 P1 → 대전 P2
             List<Component> p2 = visible(settings, "KeyChip");
@@ -92,7 +93,8 @@ class VersusKeySettingsTest {
             edt(() -> router[0].dispose());
         }
         VersusKeyBindings keys = saved.get().versusKeys();
-        assertEquals(KeyEvent.VK_Q, keys.keyFor(Player.P1, GameAction.HARD_DROP));
+        assertEquals(KeyEvent.VK_E, keys.keyFor(Player.P1, GameAction.HARD_DROP));
+        assertEquals(KeyEvent.VK_R, keys.keyFor(Player.P1, GameAction.ROTATE_COUNTERCLOCKWISE));
         assertEquals(KeyEvent.VK_A, keys.keyFor(Player.P1, GameAction.MOVE_LEFT), "Untouched keys stay");
         assertEquals(KeyEvent.VK_J, keys.keyFor(Player.P2, GameAction.MOVE_LEFT));
         assertEquals(SidedKey.right(KeyEvent.VK_SHIFT), keys.keyFor(Player.P2, GameAction.HARD_DROP),

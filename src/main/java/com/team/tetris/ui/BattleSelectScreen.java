@@ -160,7 +160,7 @@ public final class BattleSelectScreen extends JPanel implements Screen {
             }
 
             y += Math.round(10 * scale);
-            drawKeysPanel(g2d, margin, y, contentWidth, Math.round(70 * scale), scale);
+            drawKeysPanel(g2d, margin, y, contentWidth, Math.round(92 * scale), scale);
 
             int buttonWidth = Math.round(180 * scale);
             int buttonHeight = Math.round(50 * scale);
@@ -227,7 +227,7 @@ public final class BattleSelectScreen extends JPanel implements Screen {
         }
     }
 
-    /** 조작 키 패널: 현재 설정값의 P1(왼쪽, P1색)·P2(오른쪽, P2색) 키. */
+    /** 조작 키 패널: 현재 설정값의 P1(P1색)·P2(P2색) 키를 한 줄씩. 왼쪽 회전 키까지 들어가 한 줄에 둘을 놓으면 겹친다. */
     private void drawKeysPanel(Graphics2D g2d, int x, int y, int width, int height, float scale) {
         UiPainter.drawPanel(g2d, x, y, width, height, Math.round(16 * scale), UiColors.BOARD, UiColors.PANEL_BORDER, 1f);
         int inner = Math.round(22 * scale);
@@ -236,12 +236,11 @@ public final class BattleSelectScreen extends JPanel implements Screen {
         UiPainter.drawText(g2d, "조작", x + inner, y + Math.round(24 * scale));
         g2d.setFont(UiFonts.body(Math.round(12 * scale)));
         int baseline = y + height - Math.round(16 * scale);
+        int lineGap = Math.round(22 * scale);
         GameSettings current = settings.get();
         g2d.setColor(UiColors.PLAYER1);
-        UiPainter.drawText(g2d, "P1: " + VersusScreen.playerKeys(current, Player.P1), x + inner, baseline);
-        String p2 = "P2: " + VersusScreen.playerKeys(current, Player.P2);
+        UiPainter.drawText(g2d, "P1: " + VersusScreen.playerKeys(current, Player.P1), x + inner, baseline - lineGap);
         g2d.setColor(UiColors.PLAYER2);
-        FontMetrics metrics = g2d.getFontMetrics();
-        UiPainter.drawText(g2d, p2, x + width - inner - UiPainter.textWidth(metrics, p2), baseline);
+        UiPainter.drawText(g2d, "P2: " + VersusScreen.playerKeys(current, Player.P2), x + inner, baseline);
     }
 }

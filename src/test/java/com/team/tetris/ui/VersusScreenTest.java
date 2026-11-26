@@ -204,8 +204,8 @@ class VersusScreenTest {
     @Test
     void theKeyHintFollowsTheVersusKeySettings() {
         GameSettings settings = GameSettings.defaults();
-        assertEquals("W A S D  ·  하드드롭 Left Shift", VersusScreen.playerKeys(settings, Player.P1));
-        assertEquals("↑ ← ↓ →  ·  하드드롭 Enter", VersusScreen.playerKeys(settings, Player.P2));
+        assertEquals("W A S D  ·  왼쪽 회전 Q  ·  하드드롭 Left Shift", VersusScreen.playerKeys(settings, Player.P1));
+        assertEquals("↑ ← ↓ →  ·  왼쪽 회전 /  ·  하드드롭 Enter", VersusScreen.playerKeys(settings, Player.P2));
         assertEquals(1024, VersusScreen.windowSize(GameSettings.ScreenSize.SMALL)[0]);
         assertEquals(800, VersusScreen.windowSize(GameSettings.ScreenSize.LARGE)[1]);
     }

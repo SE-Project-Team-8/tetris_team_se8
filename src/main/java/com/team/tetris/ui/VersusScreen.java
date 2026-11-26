@@ -358,14 +358,15 @@ public final class VersusScreen extends JPanel implements Screen {
     private static final List<GameAction> KEY_HINT_ORDER = List.of(
             GameAction.ROTATE_CLOCKWISE, GameAction.MOVE_LEFT, GameAction.SOFT_DROP, GameAction.MOVE_RIGHT);
 
-    /** "W A S D · 하드드롭 Left Shift"처럼 이동·회전 키 넷과 하드드롭 키를 현재 설정값으로 쓴다. */
+    /** "W A S D · Q 왼쪽 회전 · Left Shift 하드드롭"처럼 이동·회전 키 넷, 왼쪽 회전 키, 하드드롭 키를 현재 설정값으로 쓴다. */
     static String playerKeys(GameSettings settings, Player player) {
         VersusKeyBindings keys = settings.versusKeys();
         StringJoiner moves = new StringJoiner(" ");
         for (GameAction action : KEY_HINT_ORDER) {
             moves.add(versusKeyName(keys.keyFor(player, action)));
         }
-        return moves + "  ·  하드드롭 " + versusKeyName(keys.keyFor(player, GameAction.HARD_DROP));
+        return moves + "  ·  왼쪽 회전 " + versusKeyName(keys.keyFor(player, GameAction.ROTATE_COUNTERCLOCKWISE))
+                + "  ·  하드드롭 " + versusKeyName(keys.keyFor(player, GameAction.HARD_DROP));
     }
 
     /** 키 코드 하나의 짧은 이름: 화살표는 기호로, 나머지는 Esc·Shift·Enter처럼 짧은 영어로 쓴다. */
@@ -378,6 +379,10 @@ public final class VersusScreen extends JPanel implements Screen {
             case KeyEvent.VK_ESCAPE -> "Esc";
             case KeyEvent.VK_SHIFT -> "Shift";
             case KeyEvent.VK_ENTER -> "Enter";
+            case KeyEvent.VK_SLASH -> "/";
+            case KeyEvent.VK_PERIOD -> ".";
+            case KeyEvent.VK_COMMA -> ",";
+            case KeyEvent.VK_SEMICOLON -> ";";
             default -> KeyEvent.getKeyText(keyCode);
         };
     }
