@@ -30,25 +30,26 @@ class ButtonConfirmFlashTest {
 
     @Test
     void aDrawnMenuButtonIsPressedThenFlashesThenRunsItsAction() throws Exception {
-        List<UiPainter.ButtonState> seen = new ArrayList<>();
+        // 상태가 바뀔 때마다 화면을 다시 그리므로, 다시 그릴 때의 상태를 차례로 적는다 (기기 속도와 상관없다).
+        List<String> seen = new ArrayList<>();
         CountDownLatch ran = new CountDownLatch(1);
         PressFeedback[] press = new PressFeedback[1];
         SwingUtilities.invokeAndWait(() -> {
-            press[0] = new PressFeedback(new JPanel());
+            JPanel screen = new JPanel() {
+                @Override public void repaint() {
+                    if (press != null && press[0] != null) seen.add(press[0].stateOf(2, 2).name());
+                }
+            };
+            press[0] = new PressFeedback(screen);
             press[0].press(2, () -> {
-                seen.add(null);   // 동작이 실행된 시점
+                seen.add("ACTION");
                 ran.countDown();
             });
-            seen.add(press[0].stateOf(2, 2));
         });
-        Thread.sleep(PressFeedback.PRESS_MS + PressFeedback.CONFIRM_MS / 3);
-        SwingUtilities.invokeAndWait(() -> seen.add(press[0].stateOf(2, 2)));
         assertTrue(ran.await(2, TimeUnit.SECONDS));
-        SwingUtilities.invokeAndWait(() -> seen.add(press[0].stateOf(2, 2)));
-        assertEquals(UiPainter.ButtonState.PRESSED, seen.get(0));
-        assertEquals(UiPainter.ButtonState.CONFIRMED, seen.get(1), "The confirm flash comes after the press");
-        assertEquals(null, seen.get(2), "The action runs after the flash");
-        assertEquals(UiPainter.ButtonState.SELECTED, seen.get(3));
+        SwingUtilities.invokeAndWait(() -> assertEquals(
+                List.of("PRESSED", "CONFIRMED", "SELECTED", "ACTION"), seen,
+                "② press, then ③ the confirm flash, then the action"));
     }
 
     @Test

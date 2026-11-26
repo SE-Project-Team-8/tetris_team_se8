@@ -128,8 +128,13 @@ class VersusScreenTest {
             // 회색 뭉치가 날아가는 동안에는 새 줄이 아직 비어 있다.
             assertEquals(f.queueCell(frames[0], Player.P2), f.queueCell(frames[1], Player.P2),
                     "The new lines wait for the comet to arrive");
-            Thread.sleep(900);
-            edt(() -> frames[2] = f.paint());
+            // 혜성이 도착하고 깜빡임이 끝나면 대기열에 회색 줄이 보인다. 느린 기기를 생각해 최대 5초 기다린다.
+            long deadline = System.currentTimeMillis() + 5_000;
+            do {
+                Thread.sleep(50);
+                edt(() -> frames[2] = f.paint());
+            } while (f.queueCell(frames[0], Player.P2) == f.queueCell(frames[2], Player.P2)
+                    && System.currentTimeMillis() < deadline);
             assertNotEquals(f.queueCell(frames[0], Player.P2), f.queueCell(frames[2], Player.P2),
                     "After the flash the queue shows the grey lines");
 
@@ -156,7 +161,8 @@ class VersusScreenTest {
                 assertTrue(f.screen.keyPressed(KeyEvent.VK_A, KeyEvent.KEY_LOCATION_STANDARD),
                         "Keys are swallowed while the result is shown");
             });
-            Thread.sleep(1_400);
+            long deadline = System.currentTimeMillis() + 5_000;
+            while (f.result.get() == null && System.currentTimeMillis() < deadline) Thread.sleep(50);
             MatchResult result = f.result.get();
             assertNotNull(result, "The result screen receives the result");
             assertEquals(MatchResult.Reason.TIME_UP, result.reason());

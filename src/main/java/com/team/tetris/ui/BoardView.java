@@ -12,6 +12,7 @@ import java.awt.Graphics2D;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
+import java.util.function.LongSupplier;
 
 import javax.swing.Timer;
 
@@ -103,14 +104,15 @@ final class BoardView {
     private List<CellPosition> bombCells;
     /** 폭발 범위를 감싸는 점선 박스 {위 행, 왼쪽 열, 아래 행, 오른쪽 열}. */
     private int[] bombArea;
-    private int bombElapsedMs;
+    /** 폭발이 시작된 시각({@link #clock}, ns). */
+    private long bombStartNanos;
     /** 지금 떨어지는 블록이 무게추인지. false→true로 바뀌는 순간 ANVIL! 토스트를 띄운다. */
     private boolean anvilFalling;
     /** 지금 떨어지는 블록에 폭탄이 붙어 있는지. false→true로 바뀌는 순간 BOMB! 토스트를 띄운다. */
     private boolean bombFalling;
     /** 무게추가 방금 부순 칸. 연출이 끝나면 null이다. */
     private List<CellPosition> anvilCells;
-    private int anvilElapsedMs;
+    private long anvilStartNanos;
     // 폭탄·무게추 연출이 진행되는 동안에만 도는 타이머. 둘 다 끝나면 스스로 멈춘다(상시 루프 아님).
     private final Timer boardEffectTimer;
 
@@ -119,8 +121,26 @@ final class BoardView {
     private Color itemEffectColor;
     /** 지금 떠 있는 아이템 토스트 종류. 슬로우다운 색조는 토스트가 떠 있는 동안만 보인다. */
     private ItemEffectKind itemEffectKind;
-    private int itemEffectElapsedMs;
+    private long itemEffectStartNanos;
     private int itemEffectDurationMs;
+
+    /**
+     * 연출 경과 시간을 재는 시계(ns). 타이머 틱 수로 세면 느린 PC에서 틱이 늦거나 합쳐질 때 연출이 원래보다 오래 남으므로,
+     * 실제 시각으로 잰다. 테스트는 정해 둔 시각을 돌려주는 시계로 바꿔 기기 속도와 상관없이 확인한다.
+     */
+    private static volatile LongSupplier clock = System::nanoTime;
+
+    static void setClockForTests(LongSupplier testClock) {
+        clock = testClock == null ? System::nanoTime : testClock;
+    }
+
+    private static long now() {
+        return clock.getAsLong();
+    }
+
+    private static int elapsedMs(long startNanos) {
+        return (int) Math.min(Integer.MAX_VALUE, Math.max(0L, (now() - startNanos) / 1_000_000L));
+    }
     private final Timer itemEffectTimer;
 
     /**
@@ -163,7 +183,6 @@ final class BoardView {
         itemEffectSubtitle = null;
         itemEffectColor = null;
         itemEffectKind = null;
-        itemEffectElapsedMs = 0;
         itemEffectDurationMs = 0;
         pendingBoard = null;
         pendingFalling = null;
@@ -302,7 +321,7 @@ final class BoardView {
         bombCells = cells;
         bombArea = new int[]{Math.max(0, top), Math.max(0, left),
                 Math.min(GameConstants.BOARD_ROWS - 1, bottom), Math.min(GameConstants.BOARD_COLS - 1, right)};
-        bombElapsedMs = 0;
+        bombStartNanos = now();
         restartBoardEffectTimer();
         repaint.run();
     }
@@ -311,7 +330,7 @@ final class BoardView {
         List<CellPosition> cells = List.copyOf(Objects.requireNonNull(crushedCells, "crushedCells"));
         if (cells.isEmpty()) return;
         anvilCells = cells;
-        anvilElapsedMs = 0;
+        anvilStartNanos = now();
         restartBoardEffectTimer();
         repaint.run();
     }
@@ -393,7 +412,7 @@ final class BoardView {
      * 피버는 제목 양옆에 별, 슬로우다운은 제목 앞에 ▼를 도형으로 그린다.
      */
     void paintToast(Graphics2D g2d, int boardX, int boardY, int boardWidth, int boardHeight, float scale) {
-        if (itemEffectTitle == null) return;
+        if (itemEffectTitle == null || elapsedMs(itemEffectStartNanos) >= itemEffectDurationMs) return;
         Graphics2D toast = (Graphics2D) g2d.create();
         try {
             toast.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, itemEffectFade()));
@@ -462,15 +481,14 @@ final class BoardView {
         itemEffectSubtitle = subtitle;
         itemEffectColor = color;
         itemEffectKind = kind;
-        itemEffectElapsedMs = 0;
+        itemEffectStartNanos = now();
         itemEffectDurationMs = durationMs;
         itemEffectTimer.restart();
         repaint.run();
     }
 
     private void advanceItemEffectAnimation() {
-        itemEffectElapsedMs += ITEM_EFFECT_TICK_MS;
-        if (itemEffectElapsedMs >= itemEffectDurationMs) {
+        if (elapsedMs(itemEffectStartNanos) >= itemEffectDurationMs) {
             itemEffectTitle = null;
             itemEffectSubtitle = null;
             itemEffectColor = null;
@@ -483,8 +501,9 @@ final class BoardView {
     private float itemEffectFade() {
         if (itemEffectDurationMs <= 0) return 0f;
         int fadeStart = itemEffectDurationMs - ITEM_EFFECT_FADE_MS;
-        if (itemEffectElapsedMs <= fadeStart) return 1f;
-        return Math.max(0f, (float) (itemEffectDurationMs - itemEffectElapsedMs) / ITEM_EFFECT_FADE_MS);
+        int elapsed = elapsedMs(itemEffectStartNanos);
+        if (elapsed <= fadeStart) return 1f;
+        return Math.max(0f, (float) (itemEffectDurationMs - elapsed) / ITEM_EFFECT_FADE_MS);
     }
 
     private void advanceLineClearAnimation() {
@@ -518,16 +537,14 @@ final class BoardView {
 
     private void advanceBoardEffects() {
         if (bombCells != null) {
-            bombElapsedMs += BOARD_EFFECT_TICK_MS;
-            if (bombElapsedMs >= BOMB_EFFECT_MS) {
+            if (elapsedMs(bombStartNanos) >= BOMB_EFFECT_MS) {
                 bombCenter = null;
                 bombCells = null;
                 bombArea = null;
             }
         }
         if (anvilCells != null) {
-            anvilElapsedMs += BOARD_EFFECT_TICK_MS;
-            if (anvilElapsedMs >= ANVIL_EFFECT_MS) anvilCells = null;
+            if (elapsedMs(anvilStartNanos) >= ANVIL_EFFECT_MS) anvilCells = null;
         }
         if (bombCells == null && anvilCells == null) boardEffectTimer.stop();
         repaint.run();
@@ -584,6 +601,8 @@ final class BoardView {
      */
     private void drawBombBlast(Graphics2D g2d, int x, int y, int pitch) {
         if (bombCells == null) return;
+        int bombElapsedMs = elapsedMs(bombStartNanos);
+        if (bombElapsedMs >= BOMB_EFFECT_MS) return;   // 타이머가 지우기 전이어도 시간이 지났으면 그리지 않는다
         int inset = cellInset(pitch);
         int size = pitch - inset * 2;
         Graphics2D blast = (Graphics2D) g2d.create();
@@ -638,6 +657,8 @@ final class BoardView {
      */
     private void drawAnvilPuffs(Graphics2D g2d, int x, int y, int pitch) {
         if (anvilCells == null) return;
+        int anvilElapsedMs = elapsedMs(anvilStartNanos);
+        if (anvilElapsedMs >= ANVIL_EFFECT_MS) return;
         Graphics2D smoke = (Graphics2D) g2d.create();
         try {
             if (anvilElapsedMs < ANVIL_PUFF_MS) {

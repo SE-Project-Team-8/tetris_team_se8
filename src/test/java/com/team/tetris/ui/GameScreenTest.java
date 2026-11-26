@@ -118,15 +118,22 @@ class GameScreenTest {
             assertTrue(piece.y < HEIGHT / 3 && piece.width < ONE_CELL, "Only the spawned cell is added: " + piece);
             assertTrue(countColor(withPiece, piece, CREAM) > 0, "Its L item border comes from the pending board");
         });
-        Thread.sleep(700);
+        // 느린 기기에서는 줄 삭제 플래시가 늦게 끝날 수 있어서, 끝날 때까지(최대 5초) 기다린다.
+        long deadline = System.currentTimeMillis() + 5_000;
+        Rectangle[] remaining = {new Rectangle()};
+        while (remaining[0] != null && System.currentTimeMillis() < deadline) {
+            Thread.sleep(50);
+            edt(() -> {
+                Fixture expected = new Fixture();
+                expected.events().onBoardUpdated(new BoardSnapshot(after));
+                expected.events().onLandingUpdated(nextPiece, new BoardSnapshot(board(Map.of(18, TetrominoType.O.id()))));
+                remaining[0] = difference(expected.render(), holder[0].render());
+                expected.dispose();
+            });
+        }
         edt(() -> {
             Fixture fixture = holder[0];
-            BufferedImage shown = fixture.render();
-            Fixture expected = new Fixture();
-            expected.events().onBoardUpdated(new BoardSnapshot(after));
-            expected.events().onLandingUpdated(nextPiece, new BoardSnapshot(board(Map.of(18, TetrominoType.O.id()))));
-            assertNull(difference(expected.render(), shown), "After the flash the latest board and ghost are shown");
-            expected.dispose();
+            assertNull(remaining[0], "After the flash the latest board and ghost are shown");
             fixture.dispose();
         });
     }

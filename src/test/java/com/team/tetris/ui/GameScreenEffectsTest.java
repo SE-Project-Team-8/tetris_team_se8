@@ -16,9 +16,11 @@ import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
 
 import javax.swing.SwingUtilities;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -57,9 +59,23 @@ class GameScreenEffectsTest {
         @Override public void stop() { }
     };
 
+    /** 연출 시계. 실제 시간 대신 테스트가 직접 앞으로 돌려, 느린 CI 기기에서도 같은 순간을 그린다. */
+    private final AtomicLong clockNanos = new AtomicLong(1_000_000_000L);
+
     @BeforeEach
     void requireDisplay() {
         assumeFalse(GraphicsEnvironment.isHeadless(), "ScreenRouter is a window");
+        BoardView.setClockForTests(clockNanos::get);
+    }
+
+    @AfterEach
+    void restoreClock() {
+        BoardView.setClockForTests(null);
+    }
+
+    /** 연출 시계를 그만큼 앞으로 돌린다. */
+    private void advance(long millis) {
+        clockNanos.addAndGet(millis * 1_000_000L);
     }
 
     @Test
@@ -142,13 +158,13 @@ class GameScreenEffectsTest {
         assertEquals(cell(images[0], 8, 1), cell(images[1], 8, 1), "Just outside the 5×5 blast is untouched");
         assertEquals(0, countInToastArea(images[1], BOMB_TOAST), "The explosion itself does not show the toast");
 
-        Thread.sleep(200);
+        advance(200);
         edt(() -> images[2] = fixture[0].render());
         // ③ 다음 순간: 체커는 사라지고 빈칸 위 회색 연기 점만 남는다.
         assertNotEquals(ACCENT, cell(images[2], 8, 2), "The flash is over");
         assertNotEquals(cell(images[0], 9, 4), cell(images[2], 9, 4), "A smoke dot sits on the edge cell");
 
-        Thread.sleep(AFTER_EFFECTS_MS);
+        advance(AFTER_EFFECTS_MS);
         edt(() -> {
             images[3] = fixture[0].render();
             fixture[0].dispose();
@@ -202,7 +218,7 @@ class GameScreenEffectsTest {
         assertEquals(cell(images[0], 15, 8), cell(images[1], 15, 8), "Cells away from the anvil are untouched");
         assertEquals(0, countInToastArea(images[1], ANVIL_TOAST), "Crushing alone does not show the toast");
 
-        Thread.sleep(AFTER_EFFECTS_MS);
+        advance(AFTER_EFFECTS_MS);
         edt(() -> {
             images[2] = fixture[0].render();
             fixture[0].dispose();
@@ -227,7 +243,7 @@ class GameScreenEffectsTest {
         assertTrue(countInToastArea(images[0], ANVIL_TOAST) > 0, "The ANVIL! toast appears as soon as the anvil does");
 
         // 토스트가 끝난 뒤에도 같은 무게추가 내려가며 부수는 동안에는 다시 뜨지 않는다.
-        Thread.sleep(2_000);
+        advance(2_000);
         edt(() -> {
             fixture[0].events().onLandingUpdated(new BoardSnapshot(board(List.of(new CellPosition(5, 4),
                     new CellPosition(5, 5), new CellPosition(6, 3), new CellPosition(6, 4), new CellPosition(6, 5),
