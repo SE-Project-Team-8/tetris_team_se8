@@ -4,7 +4,6 @@ import com.team.tetris.common.Difficulty;
 import com.team.tetris.common.battle.GarbageLine;
 import com.team.tetris.common.battle.Player;
 import com.team.tetris.common.battle.VersusMode;
-import com.team.tetris.common.constants.GameConstants;
 import com.team.tetris.common.events.BoardSnapshot;
 import com.team.tetris.common.events.GameEventListener;
 import com.team.tetris.common.persistence.PropertiesFile;
@@ -24,6 +23,7 @@ import java.net.UnknownHostException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
@@ -31,6 +31,9 @@ import java.util.function.Supplier;
 /** Lobby and match coordination on the Swing EDT. Each peer runs its own game engine. */
 public final class P2pSession implements AutoCloseable {
     public static final int PORT = 47820;
+    public static final int MIN_TIME_LIMIT_MINUTES = 1;
+    public static final int MAX_TIME_LIMIT_MINUTES = 5;
+    private static final int DEFAULT_TIME_LIMIT_MINUTES = 3;
     private static final String LAST_IP_KEY = "lastIp";
     private static final long PING_INTERVAL = TimeUnit.MILLISECONDS.toNanos(500);
     // Provisional values for LAN play until the team agrees on the lag and disconnect thresholds.
@@ -62,6 +65,7 @@ public final class P2pSession implements AutoCloseable {
     private boolean recentIpSaveFailed;
     private boolean error;
     private VersusMode mode = VersusMode.NORMAL;
+    private int timeLimitMinutes = DEFAULT_TIME_LIMIT_MINUTES;
     private int selection;
     private boolean localReady;
     private boolean remoteReady;
@@ -170,17 +174,29 @@ public final class P2pSession implements AutoCloseable {
     }
 
     public void selectMode(VersusMode selected) {
-        if (state != State.LOBBY || !isHost() || localReady || selected == mode) return;
-        updateMode(++selection, selected);
-        send(new P2pProtocol.Mode(selection, mode));
+        selectMode(selected, timeLimitMinutes);
     }
 
-    private void updateMode(int revision, VersusMode selected) {
+    /** Selects a mode and, for a timed match, its duration. A changed selection clears both ready flags. */
+    public void selectMode(VersusMode selected, int minutes) {
+        if (state != State.LOBBY || !isHost() || (localReady && selected != mode)) return;
+        Objects.requireNonNull(selected, "selected");
+        if (minutes < MIN_TIME_LIMIT_MINUTES || minutes > MAX_TIME_LIMIT_MINUTES) {
+            throw new IllegalArgumentException("P2P time limit must be between 1 and 5 minutes");
+        }
+        int selectedMinutes = selected == VersusMode.TIME_LIMIT ? minutes : timeLimitMinutes;
+        if (mode == selected && timeLimitMinutes == selectedMinutes) return;
+        updateMode(selection + 1, selected, selectedMinutes);
+        send(new P2pProtocol.Mode(selection, mode, timeLimitMinutes));
+        changed.run();
+    }
+
+    private void updateMode(int revision, VersusMode selected, int minutes) {
         selection = revision;
         mode = selected;
+        timeLimitMinutes = minutes;
         remoteReady = false;
         localReady = false;
-        changed.run();
     }
 
     public void ready() {
@@ -193,7 +209,7 @@ public final class P2pSession implements AutoCloseable {
 
     private void checkStart() {
         if (!isHost() || !localReady || !remoteReady) return;
-        P2pProtocol.Start start = new P2pProtocol.Start(round + 1, mode, difficulty.get());
+        P2pProtocol.Start start = new P2pProtocol.Start(round + 1, mode, difficulty.get(), timeLimitMinutes);
         send(start);
         startRound(start);
     }
@@ -210,7 +226,7 @@ public final class P2pSession implements AutoCloseable {
         remoteBoard = null;
         frameScheduled = false;
         incoming.clear();
-        seconds = isTimed() ? GameConstants.VERSUS_TIME_LIMIT_SECONDS : 0;
+        seconds = isTimed() ? (int) TimeUnit.MINUTES.toSeconds(start.timeLimitMinutes()) : 0;
         deadline = System.nanoTime() + seconds * SECOND;
 
         VersusMatch.PlayerSetup setup = VersusMatch.standard(items, start::difficulty);
@@ -329,7 +345,8 @@ public final class P2pSession implements AutoCloseable {
         switch (message) {
             case P2pProtocol.Mode m -> {
                 if (!isHost() && state == State.LOBBY && m.selection() > selection) {
-                    updateMode(m.selection(), m.mode());
+                    updateMode(m.selection(), m.mode(), m.timeLimitMinutes());
+                    changed.run();
                 }
             }
             case P2pProtocol.Ready m -> {
@@ -341,7 +358,8 @@ public final class P2pSession implements AutoCloseable {
             }
             case P2pProtocol.Start m -> {
                 if (!isHost() && state == State.LOBBY && localReady && remoteReady
-                        && m.round() == round + 1 && m.mode() == mode) startRound(m);
+                        && m.round() == round + 1 && m.mode() == mode
+                        && m.timeLimitMinutes() == timeLimitMinutes) startRound(m);
             }
             case P2pProtocol.Board m -> {
                 if (isCurrentRound(m.round())) {
@@ -481,6 +499,7 @@ public final class P2pSession implements AutoCloseable {
         recentIpSaveFailed = false;
         error = false;
         mode = VersusMode.NORMAL;
+        timeLimitMinutes = DEFAULT_TIME_LIMIT_MINUTES;
         selection = 0;
         round = 0;
         result = null;
@@ -507,6 +526,7 @@ public final class P2pSession implements AutoCloseable {
     public boolean recentIpSaveFailed() { return recentIpSaveFailed; }
     public boolean hasError() { return error; }
     public VersusMode mode() { return mode; }
+    public int timeLimitMinutes() { return timeLimitMinutes; }
     public boolean isTimed() { return mode == VersusMode.TIME_LIMIT; }
     public boolean localReady() { return localReady; }
     public boolean remoteReady() { return remoteReady; }
