@@ -156,7 +156,8 @@ public final class UiPainter {
                 // 확정 플래시: 크림 테두리를 두르고 오른쪽 위 모서리에 ✦를 띄운다 (컴포넌트 시트 "버튼 선택(클릭) 이펙트" ③).
                 float stroke = Math.max(2f, height * 0.06f);
                 strokeRoundRect(g2, x, top, width, height, height / 2, UiColors.CREAM, stroke);
-                drawSparkle(g2, x + width - height * 0.08f, top - height * 0.06f, height * 0.2f, UiColors.CREAM);
+                drawSparkle(g2, Math.round(x + width - height * 0.08f), Math.round(top - height * 0.06f),
+                        Math.max(4, Math.round(height * 0.2f)), UiColors.CREAM);
             }
 
             Color textColor = filled ? UiColors.TEXT_ON_ACCENT : UiColors.TEXT_PRIMARY;
@@ -175,20 +176,6 @@ public final class UiPainter {
         } finally {
             g2.dispose();
         }
-    }
-
-    /** 네 갈래 반짝임(✦). 서체에 기댈 필요 없이 도형으로 그린다. */
-    private static void drawSparkle(Graphics2D g, float cx, float cy, float radius, Color color) {
-        float waist = radius * 0.28f;
-        java.awt.geom.Path2D.Float star = new java.awt.geom.Path2D.Float();
-        star.moveTo(cx, cy - radius);
-        star.quadTo(cx + waist * 0.4f, cy - waist * 0.4f, cx + radius, cy);
-        star.quadTo(cx + waist * 0.4f, cy + waist * 0.4f, cx, cy + radius);
-        star.quadTo(cx - waist * 0.4f, cy + waist * 0.4f, cx - radius, cy);
-        star.quadTo(cx - waist * 0.4f, cy - waist * 0.4f, cx, cy - radius);
-        star.closePath();
-        g.setColor(color);
-        g.fill(star);
     }
 
     /**
