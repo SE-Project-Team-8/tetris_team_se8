@@ -397,16 +397,27 @@ public final class VersusScreen extends JPanel implements Screen {
 
     /** 승패가 난 뒤 결과 화면으로 넘어가기 전 잠깐 띄우는 승리 배너 (컴포넌트 시트 "토스트 / 승리 배너"). */
     private void drawEndBanner(Graphics2D g2d, int width, int height, float scale) {
+        drawWinnerBanner(g2d, width, height, scale, boards.vsCenterY(), ended, null);
+    }
+
+    /**
+     * 승리 배너. P2P 경기 화면도 같은 배너를 쓴다.
+     *
+     * @param note 사유 옆에 붙일 한마디(예: "내가 이겼어요"). 없으면 null.
+     */
+    static void drawWinnerBanner(Graphics2D g2d, int width, int height, float scale, int centerY,
+                                 MatchResult result, String note) {
         g2d.setColor(UiColors.withAlpha(UiColors.BACKGROUND, 0.45f));
         g2d.fillRect(0, 0, width, height);
-        Player winner = ended.winner();
+        Player winner = result.winner();
         Color color = winner == null ? UiColors.ACCENT : playerColor(winner);
         String title = winner == null ? "무승부" : winner.name() + " 승리!";
-        String subtitle = ended.reason() == MatchResult.Reason.TIME_UP ? "시간 종료" : null;
+        String reason = result.reason() == MatchResult.Reason.TIME_UP ? "시간 종료" : null;
+        String subtitle = reason == null ? note : note == null ? reason : reason + "  ·  " + note;
         int boxWidth = Math.round(320 * scale);
         int boxHeight = Math.round(96 * scale);
         int boxX = (width - boxWidth) / 2;
-        int boxY = boards.vsCenterY() - boxHeight / 2;
+        int boxY = centerY - boxHeight / 2;
         UiPainter.drawPanel(g2d, boxX, boxY, boxWidth, boxHeight, Math.round(18 * scale), UiColors.PANEL, color, 3f);
         g2d.setFont(UiFonts.display(Math.round(34 * scale)));
         g2d.setColor(color);

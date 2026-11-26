@@ -125,6 +125,18 @@ class P2pScreensTest {
             paint(host.game);
             paint(client.game);
 
+            // 한쪽이 끝까지 쌓으면 두 화면 모두 승리 배너를 잠깐 보여 준 뒤 대기실로 돌아간다.
+            waitFor(() -> {
+                if (client.session.state() == P2pSession.State.PLAYING) client.game.keyPressed(KeyEvent.VK_SPACE);
+                return host.game.showingResult() && client.game.showingResult();
+            });
+            assertEquals(Player.P1, host.session.result().winner());
+            assertEquals(ScreenRouter.P2P_GAME, host.router.getCurrentScreenName());
+            paint(host.game);
+            paint(client.game);
+            waitFor(() -> ScreenRouter.P2P_LOBBY.equals(host.router.getCurrentScreenName())
+                    && ScreenRouter.P2P_LOBBY.equals(client.router.getCurrentScreenName()));
+
             // 상대가 연결을 닫으면 끊김을 알리고 P2P 첫 화면으로 돌아온다.
             edt(client.session::close);
             waitFor(() -> host.session.state() == P2pSession.State.IDLE);

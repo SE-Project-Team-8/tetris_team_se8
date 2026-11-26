@@ -20,6 +20,7 @@ import java.util.function.Supplier;
 
 import javax.swing.JPanel;
 import javax.swing.SwingUtilities;
+import javax.swing.Timer;
 
 import com.team.tetris.block.ColorScheme;
 import com.team.tetris.block.TetrominoType;
@@ -29,6 +30,7 @@ import com.team.tetris.common.constants.GameConstants;
 import com.team.tetris.common.events.BoardSnapshot;
 import com.team.tetris.game.GameAction;
 import com.team.tetris.game.item.ItemRegistry;
+import com.team.tetris.game.versus.MatchResult;
 import com.team.tetris.p2p.P2pSession;
 import com.team.tetris.settings.GameSettings;
 import com.team.tetris.settings.KeyBindings;
@@ -48,6 +50,8 @@ import com.team.tetris.ui.theme.UiPainter;
 public final class P2pGameScreen extends JPanel implements Screen {
     private static final Set<GameAction> ONE_PRESS = EnumSet.of(GameAction.HARD_DROP, GameAction.PAUSE, GameAction.QUIT);
     private static final Color DIMMED_OVERLAY = new Color(0x14, 0x0F, 0x28, 184);
+    /** 경기가 끝난 뒤 승리 배너를 보여 주고 대기실로 돌아가기까지의 시간. */
+    static final int END_BANNER_MS = 2_500;
 
     private final ScreenRouter router;
     private final P2pSession session;
@@ -59,6 +63,9 @@ public final class P2pGameScreen extends JPanel implements Screen {
     private boolean dialogOpen;
     private int previousWidth;
     private int previousHeight;
+    /** 방금 끝난 경기 결과. 승리 배너를 띄우는 동안만 값이 있다. */
+    private MatchResult ended;
+    private final Timer endTimer = new Timer(END_BANNER_MS, event -> leaveToLobby());
 
     public P2pGameScreen(ScreenRouter router, P2pSession session, Supplier<GameSettings> settings, ItemRegistry items) {
         this.router = Objects.requireNonNull(router, "router");
@@ -95,6 +102,8 @@ public final class P2pGameScreen extends JPanel implements Screen {
     public void onHide() {
         KeyboardFocusManager.getCurrentKeyboardFocusManager().removeKeyEventDispatcher(dispatcher);
         boards.stopEffects();
+        endTimer.stop();
+        ended = null;
         router.updateWindowSize(previousWidth, previousHeight);
     }
 
@@ -110,14 +119,35 @@ public final class P2pGameScreen extends JPanel implements Screen {
             repaint();
             return;
         }
+        if (state == P2pSession.State.LOBBY && session.result() != null) {
+            // 경기가 끝나 대기실로 넘어가도 승리 배너를 잠깐 보여 준 뒤 대기실로 간다.
+            if (ended == null) {
+                ended = session.result();
+                endTimer.restart();
+                repaint();
+            }
+            return;
+        }
         boolean lost = state == P2pSession.State.IDLE && session.hasError();
         String reason = session.status();
+        endTimer.stop();
+        ended = null;
         router.showScreen(ScreenRouter.P2P_LOBBY);
         if (lost) {
             // 세션 알림 도중에 모달 대화상자를 띄우지 않도록 한 박자 늦게 띄운다.
             SwingUtilities.invokeLater(() -> ThemedDialog.showMessage(router, "연결 끊김",
                     reason + "\nP2P 첫 화면으로 돌아갑니다.", ThemedDialog.Tone.ERROR));
         }
+    }
+
+    private void leaveToLobby() {
+        endTimer.stop();
+        if (ScreenRouter.P2P_GAME.equals(router.getCurrentScreenName())) router.showScreen(ScreenRouter.P2P_LOBBY);
+    }
+
+    /** 승리 배너를 띄우고 있는지. */
+    boolean showingResult() {
+        return ended != null;
     }
 
     /** 세션의 두 보드 스냅샷을 보드 영역에 옮긴다. 대기열이 바뀌면 공격 연출이 시작된다. */
@@ -154,6 +184,7 @@ public final class P2pGameScreen extends JPanel implements Screen {
 
     private boolean dispatch(KeyEvent event) {
         if (dialogOpen || event.getID() != KeyEvent.KEY_PRESSED) return false;
+        if (ended != null) return true;   // 승리 배너 동안에는 키를 받지 않는다.
         return keyPressed(event.getKeyCode());
     }
 
@@ -205,6 +236,8 @@ public final class P2pGameScreen extends JPanel implements Screen {
                     VersusScreen.keyName(settings.get().keyBindings().keyFor(GameAction.PAUSE)) + " 키로 재개 (두 사람 모두 누를 수 있어요)");
             if (session.state() == P2pSession.State.FINISHING) drawOverlay(g2d, width, height, scale, "경기 종료",
                     "결과를 확인하는 중…");
+            if (ended != null) VersusScreen.drawWinnerBanner(g2d, width, height, scale, boards.vsCenterY(), ended,
+                    ended.isDraw() ? null : ended.winner() == session.localPlayer() ? "내가 이겼어요" : "상대가 이겼어요");
         } finally {
             g2d.dispose();
         }
