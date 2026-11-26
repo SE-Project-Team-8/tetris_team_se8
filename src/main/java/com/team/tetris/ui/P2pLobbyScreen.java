@@ -155,12 +155,26 @@ public final class P2pLobbyScreen extends JPanel implements Screen {
 
     private void typed(char ch) {
         if (session.state() != P2pSession.State.IDLE || hostRole) return;
-        boolean ipChar = Character.isDigit(ch) || ch == '.' || ch == ':'
-                || "abcdefABCDEF".indexOf(ch) >= 0;
-        if (ipChar && ipInput.length() < 39) {
+        if (acceptsIpChar(ipInput, ch)) {
             ipInput += ch;
             repaint();
         }
+    }
+
+    /**
+     * IPv4 주소 입력: 숫자와 점만 받는다. 한 칸은 숫자 3자리까지, 점은 3개까지,
+     * 맨 앞이나 점 바로 뒤에는 점을 받지 않는다.
+     */
+    static boolean acceptsIpChar(String current, char ch) {
+        String segment = current.substring(current.lastIndexOf('.') + 1);
+        if (ch >= '0' && ch <= '9') {
+            return segment.length() < 3;
+        }
+        if (ch == '.') {
+            long dots = current.chars().filter(c -> c == '.').count();
+            return !segment.isEmpty() && dots < 3;
+        }
+        return false;
     }
 
     private void begin() {

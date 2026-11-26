@@ -4,6 +4,7 @@
 package com.team.tetris.ui;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeFalse;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
@@ -59,6 +60,20 @@ class P2pScreensTest {
         assertEquals("192.168.0.12, 10.0.0.3",
                 P2pLobbyScreen.addressesFrom("상대 접속 대기 중 · 포트 47820\n내 IP  192.168.0.12, 10.0.0.3"));
         assertEquals("", P2pLobbyScreen.addressesFrom("서버를 여는 중…"));
+    }
+
+    @Test
+    void theServerAddressAcceptsOnlyDigitsAndDots() {
+        assertTrue(P2pLobbyScreen.acceptsIpChar("", '1'));
+        assertTrue(P2pLobbyScreen.acceptsIpChar("192", '.'));
+        assertTrue(P2pLobbyScreen.acceptsIpChar("192.168.0.1", '2'));
+        assertFalse(P2pLobbyScreen.acceptsIpChar("", 'a'));
+        assertFalse(P2pLobbyScreen.acceptsIpChar("192", 'ㄱ'));
+        assertFalse(P2pLobbyScreen.acceptsIpChar("192", ':'));
+        assertFalse(P2pLobbyScreen.acceptsIpChar("", '.'));
+        assertFalse(P2pLobbyScreen.acceptsIpChar("192.", '.'));
+        assertFalse(P2pLobbyScreen.acceptsIpChar("192", '1'));
+        assertFalse(P2pLobbyScreen.acceptsIpChar("1.2.3.4", '.'));
     }
 
     @Test
