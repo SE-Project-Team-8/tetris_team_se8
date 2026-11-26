@@ -39,9 +39,10 @@ class VersusKeyBindingsTest {
     }
 
     @Test
-    void eachPlayerHasTheFiveMovesButNotPauseOrQuit() {
+    void eachPlayerHasTheSixMovesButNotPauseOrQuit() {
         assertEquals(List.of(GameAction.MOVE_LEFT, GameAction.MOVE_RIGHT, GameAction.SOFT_DROP,
-                GameAction.ROTATE_CLOCKWISE, GameAction.HARD_DROP), List.copyOf(VersusKeyBindings.PLAYER_ACTIONS));
+                GameAction.ROTATE_CLOCKWISE, GameAction.ROTATE_COUNTERCLOCKWISE, GameAction.HARD_DROP),
+                List.copyOf(VersusKeyBindings.PLAYER_ACTIONS));
         assertEquals(Set.of(GameAction.PAUSE, GameAction.QUIT), VersusKeyBindings.SHARED_ACTIONS);
         for (Player player : Player.values()) {
             assertEquals(VersusKeyBindings.PLAYER_ACTIONS, DEFAULTS.keys(player).keySet());
@@ -66,7 +67,7 @@ class VersusKeyBindingsTest {
     }
 
     @Test
-    void theTenKeysMustAllDiffer() {
+    void theTwelveKeysMustAllDiffer() {
         assertThrows(IllegalArgumentException.class,
                 () -> DEFAULTS.withKey(Player.P1, GameAction.MOVE_LEFT, KeyEvent.VK_D), "same player");
         assertThrows(IllegalArgumentException.class,
@@ -164,9 +165,11 @@ class VersusKeyBindingsTest {
     }
 
     @Test
-    void theKeyMapForTheInputHasAllTenKeys() {
+    void theKeyMapForTheInputHasAllTwelveKeys() {
         Map<Integer, PlayerMove> map = GameSettings.defaults().versusKeyMap();
-        assertEquals(10, map.size());
+        assertEquals(12, map.size());
+        assertEquals(new PlayerMove(Player.P1, GameAction.ROTATE_COUNTERCLOCKWISE), map.get(KeyEvent.VK_Q));
+        assertEquals(new PlayerMove(Player.P2, GameAction.ROTATE_COUNTERCLOCKWISE), map.get(KeyEvent.VK_SLASH));
         assertEquals(new PlayerMove(Player.P1, GameAction.MOVE_LEFT), map.get(KeyEvent.VK_A));
         assertEquals(new PlayerMove(Player.P1, GameAction.HARD_DROP), map.get(SidedKey.left(KeyEvent.VK_SHIFT)));
         assertEquals(new PlayerMove(Player.P2, GameAction.HARD_DROP), map.get(KeyEvent.VK_ENTER));
@@ -179,7 +182,7 @@ class VersusKeyBindingsTest {
         GameSettings settings = GameSettings.defaults()
                 .withKeyBindings(KeyBindings.defaults().withKey(GameAction.PAUSE, KeyEvent.VK_SHIFT));
         Map<Integer, PlayerMove> map = settings.versusKeyMap();
-        assertEquals(9, map.size());
+        assertEquals(11, map.size());
         assertNull(map.get(SidedKey.left(KeyEvent.VK_SHIFT)), "Shift pauses; it no longer drops P1's piece");
         assertEquals(new PlayerMove(Player.P2, GameAction.HARD_DROP), map.get(KeyEvent.VK_ENTER));
     }

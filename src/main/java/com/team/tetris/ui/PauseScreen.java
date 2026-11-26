@@ -16,6 +16,7 @@ import com.team.tetris.common.Screen;
 import com.team.tetris.game.GameAction;
 import com.team.tetris.game.GameEngine;
 import com.team.tetris.settings.KeyBindings;
+import com.team.tetris.ui.theme.PressFeedback;
 import com.team.tetris.ui.theme.UiColors;
 import com.team.tetris.ui.theme.UiFonts;
 import com.team.tetris.ui.theme.UiPainter;
@@ -34,11 +35,13 @@ public class PauseScreen extends JPanel implements Screen {
     // 일시정지 메뉴 항목
     private final String[] menuItems = {
         "계속하기",
+        "설정",
         "메인 화면으로 나가기",
         "게임 종료"
     };
 
     private int selectedIndex = 0; // 현재 선택된 메뉴 인덱스
+    private final PressFeedback press = new PressFeedback(this);
 
     public PauseScreen(ScreenRouter router, GameEngine engine, Supplier<KeyBindings> bindings) {
         this.router = Objects.requireNonNull(router, "router");
@@ -87,10 +90,13 @@ public class PauseScreen extends JPanel implements Screen {
     public void onHide() {
         KeyboardFocusManager.getCurrentKeyboardFocusManager()
                 .removeKeyEventDispatcher(resumeKeyDispatcher);
+        press.cancel();
     }
 
     // 키보드 조작 처리
     private void handleKeyPress(int keyCode) {
+        // 버튼 눌림 표시 중에는 선택을 바꾸거나 다시 실행하지 않는다.
+        if (press.isPressing()) return;
         GameAction action = bindings.get().actionFor(keyCode).orElse(null);
         if (action == GameAction.PAUSE) {
             router.showScreen(ScreenRouter.GAME);
@@ -111,7 +117,7 @@ public class PauseScreen extends JPanel implements Screen {
             }
             // 시작 메뉴·게임 오버 화면처럼 Enter와 Space 모두 선택 키로 받는다.
             case KeyEvent.VK_ENTER, KeyEvent.VK_SPACE ->
-                executeSelectedMenu();
+                press.press(selectedIndex, this::executeSelectedMenu);
             default -> {
             }
         }
@@ -121,8 +127,10 @@ public class PauseScreen extends JPanel implements Screen {
         switch (selectedIndex) {
             case 0 ->
                 router.showScreen(ScreenRouter.GAME);
-            case 1 -> quitToMenu();
-            case 2 -> {
+            // 게임은 멈춘 채로 두고 설정 화면을 연다. 설정 화면의 뒤로·저장은 이 화면으로 돌아온다.
+            case 1 -> router.showScreen(ScreenRouter.SETTINGS);
+            case 2 -> quitToMenu();
+            case 3 -> {
                 engine.handle(GameAction.QUIT);
                 System.exit(0);
             }
@@ -182,11 +190,8 @@ public class PauseScreen extends JPanel implements Screen {
             int buttonWidth = cardWidth - padding * 2;
             int buttonY = cardY + titleSpace;
             for (int i = 0; i < menuItems.length; i++) {
-                UiPainter.ButtonState state = i == selectedIndex
-                        ? UiPainter.ButtonState.SELECTED
-                        : UiPainter.ButtonState.NORMAL;
                 UiPainter.drawPillButton(g2d, buttonX, buttonY, buttonWidth, buttonHeight,
-                        menuItems[i], state, false, Math.round(18 * scale));
+                        menuItems[i], press.stateOf(i, selectedIndex), false, Math.round(18 * scale));
                 buttonY += buttonHeight + buttonGap;
             }
 

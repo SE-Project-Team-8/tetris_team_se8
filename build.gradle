@@ -27,6 +27,13 @@ application {
     mainClass = 'com.team.tetris.Main'
 }
 
+// 의존성이 없는 jar라서 java -jar로 바로 실행되게 시작 클래스를 적어 둔다.
+tasks.named('jar') {
+    manifest {
+        attributes 'Main-Class': application.mainClass
+    }
+}
+
 tasks.register('packageWindows', Exec) {
     group = 'distribution'
     description = 'Creates a Windows app-image with a bundled Java runtime.'

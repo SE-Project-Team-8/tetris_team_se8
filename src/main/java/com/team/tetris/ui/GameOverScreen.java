@@ -13,6 +13,8 @@ import java.util.Objects;
 import javax.swing.JPanel;
 
 import com.team.tetris.common.Screen;
+import com.team.tetris.ui.theme.MenuBackground;
+import com.team.tetris.ui.theme.PressFeedback;
 import com.team.tetris.ui.theme.UiColors;
 import com.team.tetris.ui.theme.UiFonts;
 import com.team.tetris.ui.theme.UiPainter;
@@ -33,6 +35,7 @@ public class GameOverScreen extends JPanel implements Screen {
     private boolean qualifiesForLeaderboard;
     // 0: 이름 등록/스코어보드, 1: 메인 화면으로. 두 버튼 중 노란 강조가 들어갈 쪽이다.
     private int selectedIndex = 0;
+    private final PressFeedback press = new PressFeedback(this);
 
     public GameOverScreen(ScreenRouter router) {
         this.router = Objects.requireNonNull(router, "router");
@@ -62,26 +65,30 @@ public class GameOverScreen extends JPanel implements Screen {
 
     @Override
     public void onHide() {
-        // 이 화면은 타이머나 별도 리소스를 사용하지 않아 숨길 때 정리할 작업이 없다.
+        press.cancel();
     }
 
     private void handleKeyPress(int keyCode) {
+        // 버튼 눌림 표시 중에는 선택을 바꾸거나 다시 실행하지 않는다.
+        if (press.isPressing()) return;
         switch (keyCode) {
             case KeyEvent.VK_LEFT, KeyEvent.VK_A -> select(0);
             case KeyEvent.VK_RIGHT, KeyEvent.VK_D -> select(1);
-            case KeyEvent.VK_ENTER, KeyEvent.VK_SPACE -> {
-                if (selectedIndex == 1) {
-                    router.showScreen(ScreenRouter.MAIN_MENU);
-                } else if (qualifiesForLeaderboard) {
-                    // 순위권 점수라면 이름을 먼저 받고, 아니면 바로 전체 기록을 보여준다.
-                    router.showScreen(ScreenRouter.NAME_INPUT);
-                } else {
-                    router.showScreen(ScreenRouter.SCOREBOARD);
-                }
-            }
+            case KeyEvent.VK_ENTER, KeyEvent.VK_SPACE -> press.press(selectedIndex, this::executeSelected);
             case KeyEvent.VK_ESCAPE -> router.showScreen(ScreenRouter.MAIN_MENU);
             default -> {
             }
+        }
+    }
+
+    private void executeSelected() {
+        if (selectedIndex == 1) {
+            router.showScreen(ScreenRouter.MAIN_MENU);
+        } else if (qualifiesForLeaderboard) {
+            // 순위권 점수라면 이름을 먼저 받고, 아니면 바로 전체 기록을 보여준다.
+            router.showScreen(ScreenRouter.NAME_INPUT);
+        } else {
+            router.showScreen(ScreenRouter.SCOREBOARD);
         }
     }
 
@@ -105,12 +112,6 @@ public class GameOverScreen extends JPanel implements Screen {
             // 수치는 창 크기 L(600px) 기준이며 창 폭 배율을 곱한다.
             float scale = UiPainter.scale(screenWidth);
 
-            UiPainter.fillBackground(g2d, screenWidth, screenHeight);
-            UiPainter.drawSoftCircle(g2d, Math.round(screenWidth * 0.05f), Math.round(screenHeight * 0.17f),
-                    Math.round(screenWidth * 0.13f), UiColors.withAlpha(LOGO_COLORS[0], 0.18f));
-            UiPainter.drawSoftCircle(g2d, Math.round(screenWidth * 0.96f), Math.round(screenHeight * 0.80f),
-                    Math.round(screenWidth * 0.17f), UiColors.withAlpha(LOGO_COLORS[6], 0.16f));
-
             // 순위권이면 배너 줄이 하나 더 들어가므로 전체 묶음 높이를 먼저 구해 세로 가운데에 둔다.
             int tile = Math.round(46 * scale);
             int cardHeight = Math.round(150 * scale);
@@ -120,6 +121,8 @@ public class GameOverScreen extends JPanel implements Screen {
             int blockHeight = tile + gap + cardHeight + gap
                     + (qualifiesForLeaderboard ? bannerHeight + gap : 0) + buttonHeight;
             int y = Math.max(Math.round(24 * scale), (screenHeight - blockHeight) / 2 - Math.round(20 * scale));
+            // 시작 메뉴와 같은 테트로미노 배경. 조명은 GAMEOVER 로고 뒤에 둔다.
+            MenuBackground.draw(g2d, screenWidth, screenHeight, y + tile / 2, scale);
 
             int logoBottom = UiPainter.drawLogo(g2d, "GAMEOVER", centerX, y, tile, LOGO_COLORS);
             y = logoBottom + gap;
@@ -159,7 +162,7 @@ public class GameOverScreen extends JPanel implements Screen {
     }
 
     private UiPainter.ButtonState buttonState(int index) {
-        return index == selectedIndex ? UiPainter.ButtonState.SELECTED : UiPainter.ButtonState.NORMAL;
+        return press.stateOf(index, selectedIndex);
     }
 
     /** FINAL SCORE 카드: 큰 점수 + 아래에 레벨·줄 수. */

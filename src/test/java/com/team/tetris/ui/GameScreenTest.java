@@ -11,8 +11,10 @@ import com.team.tetris.common.events.CellCodes;
 import com.team.tetris.common.events.GameEventListener;
 import com.team.tetris.game.BlockBoardDriver;
 import com.team.tetris.game.DefaultSpeedPolicy;
+import com.team.tetris.game.GameAction;
 import com.team.tetris.game.GameEngine;
 import com.team.tetris.game.ScoreCalculator;
+import com.team.tetris.game.SpeedPolicy;
 import com.team.tetris.game.item.AnvilItem;
 import com.team.tetris.game.item.LineDeleteItem;
 import com.team.tetris.settings.KeyBindings;
@@ -45,6 +47,8 @@ class GameScreenTest {
     private static final int CREAM = 0xFFF6E8;
     /** 무게추 실루엣 색 (디자인 토큰 steel). */
     private static final int STEEL = 0x4A525E;
+    /** LEVEL 강조색 (디자인 토큰 level). 레벨업 카드 테두리·제목에 쓴다. */
+    private static final int LEVEL = 0xFFA94F;
     private static final GameEngine.DropTimer IDLE = new GameEngine.DropTimer() {
         @Override public void start(int intervalMillis, Runnable tick) { }
         @Override public void stop() { }
@@ -114,15 +118,22 @@ class GameScreenTest {
             assertTrue(piece.y < HEIGHT / 3 && piece.width < ONE_CELL, "Only the spawned cell is added: " + piece);
             assertTrue(countColor(withPiece, piece, CREAM) > 0, "Its L item border comes from the pending board");
         });
-        Thread.sleep(700);
+        // 느린 기기에서는 줄 삭제 플래시가 늦게 끝날 수 있어서, 끝날 때까지(최대 5초) 기다린다.
+        long deadline = System.currentTimeMillis() + 5_000;
+        Rectangle[] remaining = {new Rectangle()};
+        while (remaining[0] != null && System.currentTimeMillis() < deadline) {
+            Thread.sleep(50);
+            edt(() -> {
+                Fixture expected = new Fixture();
+                expected.events().onBoardUpdated(new BoardSnapshot(after));
+                expected.events().onLandingUpdated(nextPiece, new BoardSnapshot(board(Map.of(18, TetrominoType.O.id()))));
+                remaining[0] = difference(expected.render(), holder[0].render());
+                expected.dispose();
+            });
+        }
         edt(() -> {
             Fixture fixture = holder[0];
-            BufferedImage shown = fixture.render();
-            Fixture expected = new Fixture();
-            expected.events().onBoardUpdated(new BoardSnapshot(after));
-            expected.events().onLandingUpdated(nextPiece, new BoardSnapshot(board(Map.of(18, TetrominoType.O.id()))));
-            assertNull(difference(expected.render(), shown), "After the flash the latest board and ghost are shown");
-            expected.dispose();
+            assertNull(remaining[0], "After the flash the latest board and ghost are shown");
             fixture.dispose();
         });
     }
@@ -149,6 +160,36 @@ class GameScreenTest {
             BufferedImage minimumSpeed = fixture.render();
             assertNotNull(difference(slowDown, minimumSpeed),
                     "A slow-down at minimum speed still explains why the level did not change");
+            fixture.dispose();
+        });
+    }
+
+    @Test
+    void levelUpShowsANotificationOnTheBoardOnlyWhenTheLevelRises() throws Exception {
+        // 첫 블록은 레벨 1, 두 번째 블록부터 레벨 2가 되는 속도 정책.
+        SpeedPolicy secondBlockLevelsUp = (generatedBlocks, clearedLines) ->
+                new SpeedPolicy.Speed(generatedBlocks >= 2 ? 2 : 1, 1_000);
+        edt(() -> {
+            Fixture fixture = new Fixture(secondBlockLevelsUp);
+            fixture.engine.start();
+            // 카드는 우측 패널 열의 LEVEL 패널 아래 빈 자리에 뜬다. LEVEL 숫자는 원래 주황색이라 그 아래만 본다.
+            Rectangle cardArea = new Rectangle(WIDTH / 2, Math.round(HEIGHT * 0.57f), WIDTH / 2,
+                    Math.round(HEIGHT * 0.25f));
+            // 헤더의 TETRIS 로고 타일에도 같은 주황이 있으므로 헤더 아래 보드 쪽만 본다.
+            Rectangle boardArea = new Rectangle(0, HEIGHT / 10, WIDTH / 2, HEIGHT - HEIGHT / 10);
+            assertEquals(0, countColor(fixture.render(), cardArea, LEVEL), "No notification at the first level");
+
+            fixture.engine.handle(GameAction.HARD_DROP);
+            assertEquals(2, fixture.engine.getLevel());
+            BufferedImage leveledUp = fixture.render();
+            assertTrue(countColor(leveledUp, cardArea, LEVEL) > 0,
+                    "Rising to level 2 shows the orange level-up card under the LEVEL panel");
+            assertEquals(0, countColor(leveledUp, boardArea, LEVEL), "The card does not cover the board");
+
+            // 새 판을 시작하면 이전 판의 레벨업 카드는 사라지고, 첫 레벨에서는 다시 뜨지 않는다.
+            fixture.engine.stop();
+            fixture.screen.onShow();
+            assertEquals(0, countColor(fixture.render(), cardArea, LEVEL), "A new game starts without the card");
             fixture.dispose();
         });
     }
@@ -218,11 +259,17 @@ class GameScreenTest {
     private static final class Fixture {
         final ScreenRouter router = new ScreenRouter();
         final Forwarding listener = new Forwarding();
-        final GameEngine engine = new GameEngine(new BlockBoardDriver(new Board(), () -> TetrominoType.O),
-                listener, new ScoreCalculator(), new DefaultSpeedPolicy(), IDLE, IDLE, () -> Difficulty.NORMAL);
-        final GameScreen screen = new GameScreen(router, engine, KeyBindings.defaults(), score -> { });
+        final GameEngine engine;
+        final GameScreen screen;
 
         Fixture() {
+            this(new DefaultSpeedPolicy());
+        }
+
+        Fixture(SpeedPolicy speedPolicy) {
+            engine = new GameEngine(new BlockBoardDriver(new Board(), () -> TetrominoType.O),
+                    listener, new ScoreCalculator(), speedPolicy, IDLE, IDLE, () -> Difficulty.NORMAL);
+            screen = new GameScreen(router, engine, KeyBindings.defaults(), score -> { });
             listener.delegate = screen.eventListener();
         }
 

@@ -19,7 +19,8 @@ import java.util.function.Supplier;
  *
  * OS의 자동 반복은 마지막에 누른 키 하나만 반복하므로, 한 사람이 키를 누르고 있는 중에 다른 사람이 키를 누르면 앞사람의
  * 반복이 끊긴다. 그래서 OS 반복은 무시하고, 눌린 키마다 반복 타이머를 따로 돌린다. 새로 누른 키는 바로 한 번 실행하고,
- * {@link #REPEAT_DELAY_MILLIS} 뒤부터 {@link #REPEAT_INTERVAL_MILLIS}마다 반복한다. 하드드롭은 반복하지 않는다.
+ * {@link #REPEAT_DELAY_MILLIS} 뒤부터 {@link #REPEAT_INTERVAL_MILLIS}마다 반복한다. 하드드롭과 회전은 반복하지 않는다
+ * ({@link PlayerMove#repeats()}).
  *
  * 키는 키 코드와 위치(왼쪽·오른쪽)로 받는다. 키 표의 키는 {@link SidedKey}라서 왼쪽 Shift와 오른쪽 Shift를 다른
  * 사람에게 줄 수 있다. 쪽을 정하지 않은 표의 키는 어느 쪽에서 눌려도 맞는다.

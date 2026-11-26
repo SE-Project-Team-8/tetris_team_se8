@@ -1,5 +1,7 @@
 package com.team.tetris.ui;
 
+import com.team.tetris.ui.theme.PressFeedback;
+
 import com.team.tetris.block.Board;
 import com.team.tetris.block.TetrominoType;
 import com.team.tetris.common.Screen;
@@ -29,6 +31,17 @@ import static org.junit.jupiter.api.Assumptions.assumeFalse;
  * 새 화면으로 넘어가지 않는지 확인한다. 이벤트는 실제 창의 키 처리 경로로 보낸다.
  */
 class HeldKeyRepeatTest {
+    // 메뉴 버튼은 눌림 모습을 80ms 보여 준 뒤 실행한다. 여기서는 키 입력 직후의 화면 전환만 확인한다.
+    @org.junit.jupiter.api.BeforeAll
+    static void runMenuPressesImmediately() {
+        PressFeedback.setPressDurationForTests(0);
+    }
+
+    @org.junit.jupiter.api.AfterAll
+    static void restoreMenuPressDuration() {
+        PressFeedback.setPressDurationForTests(PressFeedback.PRESS_MS);
+    }
+
     @BeforeEach
     void requireDisplay() {
         assumeFalse(GraphicsEnvironment.isHeadless(), "Key bindings need a visible window");

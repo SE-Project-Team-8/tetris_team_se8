@@ -41,6 +41,15 @@ public final class UiColors {
     public static final Color DIFFICULTY_NORMAL = new Color(0xFFD34E);
     public static final Color DIFFICULTY_HARD = new Color(0xD85A30);
 
+    /**
+     * TETRIS 로고 타일 색 순서 (시작 메뉴·게임 화면 헤더 공용).
+     * 팔레트 모드와 무관한 장식이라 일반 팔레트 값을 고정으로 쓴다.
+     */
+    public static final Color[] LOGO_TILES = {
+            new Color(0x4FC3E8), new Color(0xFFD34E), new Color(0xB07FE8),
+            new Color(0x6FD66F), new Color(0xFF7F7F), new Color(0xFFA94F)
+    };
+
     /** NEW 같은 강조 뱃지 배경. */
     public static final Color BADGE_NEW = new Color(0xFF7F7F);
 

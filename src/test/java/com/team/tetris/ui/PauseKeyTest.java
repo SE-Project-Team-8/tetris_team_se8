@@ -1,5 +1,7 @@
 package com.team.tetris.ui;
 
+import com.team.tetris.ui.theme.PressFeedback;
+
 import com.team.tetris.block.Board;
 import com.team.tetris.block.TetrominoType;
 import com.team.tetris.common.Screen;
@@ -26,6 +28,17 @@ import static org.junit.jupiter.api.Assumptions.assumeFalse;
 
 /** 일시정지 화면은 설정한 일시정지 키로만 재개하고, 메뉴는 다른 메뉴처럼 Enter와 Space로 고른다. */
 class PauseKeyTest {
+    // 메뉴 버튼은 눌림 모습을 80ms 보여 준 뒤 실행한다. 여기서는 키 입력 직후의 화면 전환만 확인한다.
+    @org.junit.jupiter.api.BeforeAll
+    static void runMenuPressesImmediately() {
+        PressFeedback.setPressDurationForTests(0);
+    }
+
+    @org.junit.jupiter.api.AfterAll
+    static void restoreMenuPressDuration() {
+        PressFeedback.setPressDurationForTests(PressFeedback.PRESS_MS);
+    }
+
     private final KeyBindings oPauses = KeyBindings.defaults().withKey(GameAction.PAUSE, KeyEvent.VK_O);
 
     @BeforeEach
@@ -79,6 +92,8 @@ class PauseKeyTest {
                 tap(pause, KeyEvent.VK_SPACE);
                 assertEquals(ScreenRouter.GAME, router.getCurrentScreenName(), "Space on Resume resumes");
                 tap(game, KeyEvent.VK_P);
+                // 계속하기 → 설정 → 메인 화면으로 나가기 순서다.
+                tap(pause, KeyEvent.VK_DOWN);
                 tap(pause, KeyEvent.VK_DOWN);
                 tap(pause, KeyEvent.VK_SPACE);
                 assertEquals(ScreenRouter.MAIN_MENU, router.getCurrentScreenName(), "Space on Main Menu leaves");

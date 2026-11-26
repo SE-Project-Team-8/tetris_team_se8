@@ -1,6 +1,5 @@
 package com.team.tetris.ui;
 
-import java.awt.Color;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.event.KeyAdapter;
@@ -11,6 +10,8 @@ import java.util.Objects;
 import javax.swing.JPanel;
 
 import com.team.tetris.common.Screen;
+import com.team.tetris.ui.theme.MenuBackground;
+import com.team.tetris.ui.theme.PressFeedback;
 import com.team.tetris.ui.theme.ThemedDialog;
 import com.team.tetris.ui.theme.UiColors;
 import com.team.tetris.ui.theme.UiFonts;
@@ -18,17 +19,12 @@ import com.team.tetris.ui.theme.UiPainter;
 
 /**
  * 시작 화면 메뉴 패널.
- * - 일반 게임 시작, 아이템 모드 시작, 설정, 스코어보드, 게임 종료 메뉴를 보여준다.
+ * - 일반 게임 시작, 아이템 모드 시작, 대전 모드, P2P 대전, 설정, 스코어보드, 게임 종료 메뉴를 보여준다.
+ * - 대전 모드와 P2P 대전은 동작이 주어지지 않으면 "준비 중" 안내만 띄운다.
  * - 키보드 방향키와 W/S 키로 메뉴 이동이 가능하다.
  * - Enter 또는 Space로 선택된 메뉴를 실행한다.
  */
 public class MainMenuScreen extends JPanel implements Screen {
-    /** 로고 타일과 장식 원에 쓰는 블럭색. 팔레트 모드와 무관한 장식이라 일반 팔레트 값을 고정으로 쓴다. */
-    private static final Color[] LOGO_COLORS = {
-            new Color(0x4FC3E8), new Color(0xFFD34E), new Color(0xB07FE8),
-            new Color(0x6FD66F), new Color(0xFF7F7F), new Color(0xFFA94F)
-    };
-
     // 창 크기 L(600px) 기준 수치. 그릴 때 UiPainter.scale()을 곱한다.
     private static final int LOGO_TILE = 52;
     private static final int LOGO_TO_MENU_GAP = 68;
@@ -37,14 +33,34 @@ public class MainMenuScreen extends JPanel implements Screen {
 
     private final List<MenuItem> menuItems;
     private int selectedIndex = 0;
+    private final PressFeedback press = new PressFeedback(this);
 
+    /** 대전 모드 항목은 "준비 중" 안내를 띄운다. */
     public MainMenuScreen(ScreenRouter router, Runnable startNormal, Runnable startItemMode) {
+        this(router, startNormal, startItemMode, null);
+    }
+
+    /**
+     * @param openVersus 대전 모드 항목의 동작(게임 방식 선택 화면 열기). null이면 "준비 중" 안내를 띄운다.
+     */
+    public MainMenuScreen(ScreenRouter router, Runnable startNormal, Runnable startItemMode, Runnable openVersus) {
+        this(router, startNormal, startItemMode, openVersus, null);
+    }
+
+    /**
+     * @param openVersus 대전 모드 항목의 동작(게임 방식 선택 화면 열기). null이면 "준비 중" 안내를 띄운다.
+     * @param openP2p P2P 대전 항목의 동작(P2P 화면 열기). null이면 "준비 중" 안내를 띄운다.
+     */
+    public MainMenuScreen(ScreenRouter router, Runnable startNormal, Runnable startItemMode, Runnable openVersus,
+                          Runnable openP2p) {
     Objects.requireNonNull(router, "router");
     Objects.requireNonNull(startNormal, "startNormal");
     Objects.requireNonNull(startItemMode, "startItemMode");
     menuItems = List.of(
         new MenuItem("게임 시작", startNormal),
         new MenuItem("아이템 모드", startItemMode),
+        new MenuItem("대전 모드", openVersus != null ? openVersus : () -> showComingSoon("대전 모드")),
+        new MenuItem("P2P 대전", openP2p != null ? openP2p : () -> showComingSoon("P2P 대전")),
         new MenuItem("설정", () -> router.showScreen(ScreenRouter.SETTINGS)),
         new MenuItem("스코어보드", () -> router.showScreen(ScreenRouter.SCOREBOARD)),
         new MenuItem("게임 종료", this::confirmExit)
@@ -77,7 +93,7 @@ public class MainMenuScreen extends JPanel implements Screen {
 
     @Override
     public void onHide() {
-        // 화면이 숨겨질 때 추가로 정리할 작업이 없으므로 비워 둔다.
+        press.cancel();
     }
 
     /**
@@ -87,6 +103,8 @@ public class MainMenuScreen extends JPanel implements Screen {
      * - Enter / Space: 선택된 항목 실행
      */
     private void handleKeyPress(int keyCode) {
+        // 버튼 눌림 표시 중에는 선택을 바꾸거나 다시 실행하지 않는다.
+        if (press.isPressing()) return;
         switch (keyCode) {
             case KeyEvent.VK_UP, KeyEvent.VK_W -> {
                 selectedIndex = (selectedIndex - 1 + menuItems.size()) % menuItems.size();
@@ -107,7 +125,13 @@ public class MainMenuScreen extends JPanel implements Screen {
      * 현재 선택된 메뉴에 따라 적절한 화면으로 전환하거나 프로그램을 종료한다.
      */
     private void executeSelectedMenu() {
-        menuItems.get(selectedIndex).action().run();
+        press.press(selectedIndex, menuItems.get(selectedIndex).action());
+    }
+
+    /** 아직 만들지 않은 메뉴를 골랐을 때 준비 중임을 알린다. */
+    private void showComingSoon(String mode) {
+        ThemedDialog.showMessage(this, mode, "아직 준비 중인 기능입니다.\n조금만 기다려 주세요!",
+                ThemedDialog.Tone.INFO);
     }
 
     /** 실수로 Enter를 눌러 바로 꺼지지 않도록 한 번 더 묻는다. 처음 선택은 "취소"다. */
@@ -131,12 +155,11 @@ public class MainMenuScreen extends JPanel implements Screen {
             // 수치는 창 크기 L(600px) 기준이며 창 폭 배율을 곱해 S/M/L에서 같은 비율을 유지한다.
             float scale = UiPainter.scale(width);
 
-            UiPainter.fillBackground(g2d, width, height);
-            drawDecorations(g2d, width, height);
             // 로고와 메뉴를 한 묶음으로 보고 화면 세로 가운데에 둔다. 하단 안내 문구 몫만큼 살짝 위로 올린다.
             int tile = Math.round(LOGO_TILE * scale);
             int blockHeight = tile + Math.round(LOGO_TO_MENU_GAP * scale) + menuHeight(scale);
             int top = Math.max(Math.round(24 * scale), (height - blockHeight) / 2 - Math.round(20 * scale));
+            MenuBackground.draw(g2d, width, height, top + tile / 2, scale);
             int logoBottom = drawTitle(g2d, width, top, tile);
             drawMenuItems(g2d, width, logoBottom, scale);
             drawHint(g2d, width, height, scale);
@@ -146,26 +169,12 @@ public class MainMenuScreen extends JPanel implements Screen {
     }
 
     /**
-     * 배경의 은은한 장식 원. 정적 도형이라 애니메이션 비용이 없다.
-     */
-    private static void drawDecorations(Graphics2D g2d, int width, int height) {
-        UiPainter.drawSoftCircle(g2d, Math.round(width * 0.03f), Math.round(height * 0.17f),
-                Math.round(width * 0.12f), UiColors.withAlpha(LOGO_COLORS[0], 0.22f));
-        UiPainter.drawSoftCircle(g2d, Math.round(width * 0.97f), Math.round(height * 0.52f),
-                Math.round(width * 0.16f), UiColors.withAlpha(LOGO_COLORS[4], 0.18f));
-        UiPainter.drawSoftCircle(g2d, Math.round(width * 0.84f), Math.round(height * 0.78f),
-                Math.round(width * 0.06f), UiColors.withAlpha(LOGO_COLORS[3], 0.16f));
-        UiPainter.drawSoftCircle(g2d, Math.round(width * 0.12f), Math.round(height * 0.90f),
-                Math.round(width * 0.10f), UiColors.withAlpha(LOGO_COLORS[5], 0.16f));
-    }
-
-    /**
      * 글자마다 블럭색 타일을 깐 로고를 그린다.
      *
      * @return 로고 아래 y. 메뉴 버튼은 그 아래부터 놓는다.
      */
     private static int drawTitle(Graphics2D g2d, int width, int top, int tile) {
-        return UiPainter.drawLogo(g2d, "TETRIS", width / 2, top, tile, LOGO_COLORS);
+        return UiPainter.drawLogo(g2d, "TETRIS", width / 2, top, tile, UiColors.LOGO_TILES);
     }
 
     /** 메뉴 버튼 전체 묶음의 높이. */
@@ -186,11 +195,8 @@ public class MainMenuScreen extends JPanel implements Screen {
         float fontSize = Math.round(19 * scale);
 
         for (int i = 0; i < menuItems.size(); i++) {
-            UiPainter.ButtonState state = i == selectedIndex
-                    ? UiPainter.ButtonState.SELECTED
-                    : UiPainter.ButtonState.NORMAL;
             UiPainter.drawPillButton(g2d, x, y, buttonWidth, buttonHeight,
-                    menuItems.get(i).label(), state, false, fontSize);
+                    menuItems.get(i).label(), press.stateOf(i, selectedIndex), false, fontSize);
             y += buttonHeight + gap;
         }
     }

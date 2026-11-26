@@ -32,6 +32,8 @@ public final class UiPainter {
         SELECTED,
         /** 클릭·Enter 직후 80ms 동안의 눌린 모습. */
         PRESSED,
+        /** 눌림 뒤 화면이 바뀌기 직전의 확정 플래시: 선택 모습 + 크림 테두리 + 오른쪽 위 ✦. */
+        CONFIRMED,
         /** 선택할 수 없는 항목. */
         DISABLED
     }
@@ -66,16 +68,6 @@ public final class UiPainter {
     public static void fillBackground(Graphics2D g, int width, int height) {
         g.setColor(UiColors.BACKGROUND);
         g.fillRect(0, 0, width, height);
-    }
-
-    /**
-     * 메뉴·게임오버 배경의 은은한 장식 원을 그린다. 정적 도형이라 리페인트 비용만 든다.
-     *
-     * @param color 원 색. 알파 0.2 내외를 권장한다.
-     */
-    public static void drawSoftCircle(Graphics2D g, int centerX, int centerY, int radius, Color color) {
-        g.setColor(color);
-        g.fillOval(centerX - radius, centerY - radius, radius * 2, radius * 2);
     }
 
     /**
@@ -126,7 +118,7 @@ public final class UiPainter {
                                       String label, ButtonState state, boolean centered, float fontSize) {
         Graphics2D g2 = (Graphics2D) g.create();
         try {
-            if (state == ButtonState.SELECTED) {
+            if (state == ButtonState.SELECTED || state == ButtonState.CONFIRMED) {
                 // 선택 항목은 중심 기준으로 5% 확대한다.
                 AffineTransform t = new AffineTransform();
                 double cx = x + width / 2.0;
@@ -142,7 +134,8 @@ public final class UiPainter {
 
             int arc = height;
             int shadow = Math.max(2, Math.round(height * 0.09f));
-            boolean filled = state == ButtonState.SELECTED || state == ButtonState.PRESSED;
+            boolean filled = state == ButtonState.SELECTED || state == ButtonState.PRESSED
+                    || state == ButtonState.CONFIRMED;
             Color fill = filled ? UiColors.ACCENT : UiColors.PANEL;
             int top = y;
             if (state == ButtonState.PRESSED) {
@@ -158,6 +151,13 @@ public final class UiPainter {
             g2.fillRoundRect(x, top, width, height, arc, arc);
             if (!filled) {
                 strokeRoundRect(g2, x, top, width, height, height / 2, UiColors.PANEL_BORDER, 2f);
+            }
+            if (state == ButtonState.CONFIRMED) {
+                // 확정 플래시: 크림 테두리를 두르고 오른쪽 위 모서리에 ✦를 띄운다 (컴포넌트 시트 "버튼 선택(클릭) 이펙트" ③).
+                float stroke = Math.max(2f, height * 0.06f);
+                strokeRoundRect(g2, x, top, width, height, height / 2, UiColors.CREAM, stroke);
+                drawSparkle(g2, Math.round(x + width - height * 0.08f), Math.round(top - height * 0.06f),
+                        Math.max(4, Math.round(height * 0.2f)), UiColors.CREAM);
             }
 
             Color textColor = filled ? UiColors.TEXT_ON_ACCENT : UiColors.TEXT_PRIMARY;
@@ -303,6 +303,19 @@ public final class UiPainter {
         triangle.moveTo(centerX - size / 2f, centerY - size * 0.4f);
         triangle.lineTo(centerX + size / 2f, centerY - size * 0.4f);
         triangle.lineTo(centerX, centerY + size * 0.45f);
+        triangle.closePath();
+        g.setColor(color);
+        g.fill(triangle);
+    }
+
+    /**
+     * 위를 향한 삼각형(▲). 레벨업 카드 제목 양옆 장식.
+     */
+    public static void drawUpTriangle(Graphics2D g, int centerX, int centerY, int size, Color color) {
+        Path2D.Float triangle = new Path2D.Float();
+        triangle.moveTo(centerX - size / 2f, centerY + size * 0.4f);
+        triangle.lineTo(centerX + size / 2f, centerY + size * 0.4f);
+        triangle.lineTo(centerX, centerY - size * 0.45f);
         triangle.closePath();
         g.setColor(color);
         g.fill(triangle);

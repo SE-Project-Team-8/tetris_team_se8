@@ -25,6 +25,7 @@ import javax.swing.event.DocumentListener;
 
 import com.team.tetris.common.Screen;
 import com.team.tetris.ui.theme.PillButton;
+import com.team.tetris.ui.theme.PressFeedback;
 import com.team.tetris.ui.theme.ThemedLabel;
 import com.team.tetris.ui.theme.UiColors;
 import com.team.tetris.ui.theme.UiFonts;
@@ -68,7 +69,6 @@ public class NameInputScreen extends JPanel implements Screen {
 		nameField.setForeground(UiColors.CREAM);
 		nameField.setCaretColor(UiColors.ACCENT);
 		nameField.setBorder(BorderFactory.createEmptyBorder());
-		nameField.addActionListener(event -> submitName());
 		nameField.getDocument().addDocumentListener(new DocumentListener() {
 			@Override
 			public void insertUpdate(DocumentEvent event) { updateNameFont(); }
@@ -87,6 +87,8 @@ public class NameInputScreen extends JPanel implements Screen {
 
 		submitButton = new PillButton("등록", true);
 		submitButton.addActionListener(event -> submitName());
+		// 입력칸의 Enter도 등록 버튼을 눌러, 마우스 클릭과 같은 눌림 모습을 보여 준다.
+		nameField.addActionListener(event -> submitButton.doClick(PressFeedback.PRESS_MS));
 
 		GridBagConstraints constraints = new GridBagConstraints();
 		constraints.gridx = 0;
