@@ -35,6 +35,7 @@ import com.team.tetris.scoreboard.ScoreboardRepository;
 import com.team.tetris.settings.GameSettings;
 import com.team.tetris.settings.SettingsRepository;
 import com.team.tetris.settings.VersusKeyBindings;
+import com.team.tetris.ui.theme.ThemedDialog;
 
 class VersusKeySettingsTest {
     @TempDir
@@ -72,15 +73,17 @@ class VersusKeySettingsTest {
             assertEquals(VersusKeyBindings.PLAYER_ACTIONS.size(), p1.size(),
                     "A versus player shows only its six keys, without pause and quit");
             // 대전 칸 순서: 왼쪽 이동, 오른쪽 이동, 소프트 드롭, 하드 드롭, 오른쪽 회전, 왼쪽 회전
-            press(p1.get(3), KeyEvent.VK_E, KeyEvent.KEY_LOCATION_STANDARD);
-            press(p1.get(5), KeyEvent.VK_R, KeyEvent.KEY_LOCATION_STANDARD);
+            assign(p1.get(3), KeyEvent.VK_E, KeyEvent.KEY_LOCATION_STANDARD);
+            assign(p1.get(5), KeyEvent.VK_R, KeyEvent.KEY_LOCATION_STANDARD);
 
             press(target, KeyEvent.VK_RIGHT, KeyEvent.KEY_LOCATION_STANDARD);   // 대전 P1 → 대전 P2
             List<Component> p2 = visible(settings, "KeyChip");
-            press(p2.get(0), KeyEvent.VK_J, KeyEvent.KEY_LOCATION_STANDARD);
-            // 오른쪽 Shift는 P1의 왼쪽 Shift와 다른 키로 받는다. 수정 키라 눌렀다 뗄 때 지정된다.
-            press(p2.get(3), KeyEvent.VK_SHIFT, KeyEvent.KEY_LOCATION_RIGHT);
-            release(p2.get(3), KeyEvent.VK_SHIFT, KeyEvent.KEY_LOCATION_RIGHT);
+            assign(p2.get(0), KeyEvent.VK_J, KeyEvent.KEY_LOCATION_STANDARD);
+            // 오른쪽 Shift는 P1의 왼쪽 Shift와 다른 키로 받는다.
+            assign(p2.get(3), KeyEvent.VK_SHIFT, KeyEvent.KEY_LOCATION_RIGHT);
+            // 상대의 키(P1 왼쪽 이동 A)와 겹치면 팝업이 받지 않는다.
+            assertEquals("이미 'P1 왼쪽 이동'에 쓰이는 키입니다", problemFor(p2.get(1), KeyEvent.VK_A,
+                    KeyEvent.KEY_LOCATION_STANDARD));
 
             press(target, KeyEvent.VK_LEFT, KeyEvent.KEY_LOCATION_STANDARD);
             press(target, KeyEvent.VK_LEFT, KeyEvent.KEY_LOCATION_STANDARD);   // 다시 1인용
@@ -121,6 +124,36 @@ class VersusKeySettingsTest {
             if ("저장".equals(((AbstractButton) button).getText())) return (AbstractButton) button;
         }
         throw new AssertionError("No save button");
+    }
+
+    /** 칸에서 Enter를 눌러 키 변경 팝업을 열고, 팝업에서 그 키를 누른 것으로 친다. 문제가 있으면 팝업은 취소된다. */
+    private static void assign(Component chip, int keyCode, int location) {
+        SettingsScreen.setKeyPromptForTests((parent, title, message, openingKey, problem) -> {
+            ThemedDialog.KeyPress pressed = new ThemedDialog.KeyPress(keyCode, location);
+            return problem.apply(pressed) == null ? pressed : null;
+        });
+        try {
+            press(chip, KeyEvent.VK_ENTER, KeyEvent.KEY_LOCATION_STANDARD);
+            release(chip, KeyEvent.VK_ENTER, KeyEvent.KEY_LOCATION_STANDARD);
+        } finally {
+            SettingsScreen.setKeyPromptForTests(null);
+        }
+    }
+
+    /** 팝업에서 그 키를 눌렀을 때 팝업이 보여 줄 문제 안내. */
+    private static String problemFor(Component chip, int keyCode, int location) {
+        String[] problem = {null};
+        SettingsScreen.setKeyPromptForTests((parent, title, message, openingKey, check) -> {
+            problem[0] = check.apply(new ThemedDialog.KeyPress(keyCode, location));
+            return null;
+        });
+        try {
+            press(chip, KeyEvent.VK_ENTER, KeyEvent.KEY_LOCATION_STANDARD);
+            release(chip, KeyEvent.VK_ENTER, KeyEvent.KEY_LOCATION_STANDARD);
+        } finally {
+            SettingsScreen.setKeyPromptForTests(null);
+        }
+        return problem[0];
     }
 
     private static void press(Component target, int keyCode, int location) {

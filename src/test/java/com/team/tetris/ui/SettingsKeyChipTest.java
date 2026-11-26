@@ -1,13 +1,14 @@
 package com.team.tetris.ui;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeFalse;
 
 import java.awt.Component;
 import java.awt.Container;
 import java.awt.GraphicsEnvironment;
-import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
 import java.lang.reflect.InvocationTargetException;
 import java.nio.file.Path;
@@ -18,9 +19,11 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import javax.swing.AbstractButton;
+import javax.swing.JComponent;
 import javax.swing.JPanel;
 import javax.swing.SwingUtilities;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -31,8 +34,12 @@ import com.team.tetris.scoreboard.ScoreboardRepository;
 import com.team.tetris.settings.GameSettings;
 import com.team.tetris.settings.KeyBindings;
 import com.team.tetris.settings.SettingsRepository;
+import com.team.tetris.ui.theme.ThemedDialog;
 
-/** 설정의 조작 키 칸: Shift 같은 수정 키는 단독으로 눌렀다 뗄 때만 지정되고, Shift+Tab은 키를 바꾸지 않는다. */
+/**
+ * 설정의 조작 키 칸: 방향키로 칸을 옮기고, 칸에서 Enter·Space를 누르면 키 변경 팝업이 열려 다음에 누른 키가 새 키가 된다.
+ * 팝업은 Shift·Tab 같은 키도 받고, 다른 동작의 키와 겹치면 받지 않는다.
+ */
 class SettingsKeyChipTest {
     @TempDir
     Path files;
@@ -42,37 +49,128 @@ class SettingsKeyChipTest {
         assumeFalse(GraphicsEnvironment.isHeadless(), "ScreenRouter is a window");
     }
 
+    @AfterEach
+    void restorePrompt() {
+        SettingsScreen.setKeyPromptForTests(null);
+    }
+
     @Test
-    void shiftTabMovesBackWithoutBindingShift() throws Exception {
-        KeyBindings saved = savedAfter(chips -> {
-            Component second = chips.get(1);
-            press(second, KeyEvent.VK_SHIFT, InputEvent.SHIFT_DOWN_MASK);
-            press(second, KeyEvent.VK_TAB, InputEvent.SHIFT_DOWN_MASK);
-            // Shift+Tab으로 포커스가 이전 칸으로 옮겨 간 뒤 Shift를 뗀다.
-            release(chips.get(0), KeyEvent.VK_SHIFT, 0);
+    void enterOnAKeyOpensThePopupAndThePressedKeyBecomesTheControlKey() throws Exception {
+        List<Integer> openingKeys = new ArrayList<>();
+        KeyBindings saved = savedAfter((settings, chips) -> {
+            prompt(KeyEvent.VK_K, openingKeys);
+            press(chips.get(0), KeyEvent.VK_ENTER);
+            prompt(KeyEvent.VK_SHIFT, openingKeys);
+            press(chips.get(1), KeyEvent.VK_SPACE);
         });
-        assertEquals(KeyBindings.defaults().keys(), saved.keys(), "Shift+Tab leaves every control key unchanged");
+        assertEquals(List.of(KeyEvent.VK_ENTER, KeyEvent.VK_SPACE), openingKeys, "Enter and Space both open it");
+        assertEquals(KeyEvent.VK_K, saved.keyFor(GameAction.MOVE_LEFT));
+        assertEquals(KeyEvent.VK_SHIFT, saved.keyFor(GameAction.MOVE_RIGHT), "Shift alone can be a control key");
     }
 
     @Test
-    void shiftPressedAndReleasedAloneBecomesTheControlKey() throws Exception {
-        GameAction first = GameAction.values()[0];
-        KeyBindings saved = savedAfter(chips -> {
-            press(chips.get(0), KeyEvent.VK_SHIFT, InputEvent.SHIFT_DOWN_MASK);
-            release(chips.get(0), KeyEvent.VK_SHIFT, 0);
+    void otherKeysOnAKeyChipDoNotChangeIt() throws Exception {
+        KeyBindings saved = savedAfter((settings, chips) -> {
+            SettingsScreen.setKeyPromptForTests((parent, title, message, openingKey, problem) -> {
+                throw new AssertionError("Only Enter or Space opens the popup");
+            });
+            press(chips.get(0), KeyEvent.VK_K);
+            press(chips.get(0), KeyEvent.VK_TAB);
         });
-        assertEquals(KeyEvent.VK_SHIFT, saved.keyFor(first));
+        assertEquals(KeyBindings.defaults().keys(), saved.keys());
     }
 
     @Test
-    void ordinaryKeysAreStillBoundOnPress() throws Exception {
-        GameAction first = GameAction.values()[0];
-        KeyBindings saved = savedAfter(chips -> press(chips.get(0), KeyEvent.VK_K, 0));
-        assertEquals(KeyEvent.VK_K, saved.keyFor(first));
+    void aKeyUsedByAnotherActionIsRejectedInsideThePopup() throws Exception {
+        String[] problem = {null};
+        KeyBindings saved = savedAfter((settings, chips) -> {
+            SettingsScreen.setKeyPromptForTests((parent, title, message, openingKey, check) -> {
+                problem[0] = check.apply(new ThemedDialog.KeyPress(KeyEvent.VK_SPACE, KeyEvent.KEY_LOCATION_STANDARD));
+                return null;   // 그다음 Esc로 닫았다
+            });
+            press(chips.get(0), KeyEvent.VK_ENTER);
+        });
+        assertEquals("이미 '하드 드롭'에 쓰이는 키입니다", problem[0]);
+        assertEquals(KeyBindings.defaults().keys(), saved.keys(), "Closing the popup keeps the old key");
     }
 
-    /** 설정 화면을 열어 키 칸에 입력한 뒤 저장을 눌러, 저장된 조작 키를 돌려준다. */
-    private KeyBindings savedAfter(java.util.function.Consumer<List<Component>> typing) throws Exception {
+    @Test
+    void arrowKeysMoveBetweenRowsAndBetweenTheTwoKeyColumns() throws Exception {
+        savedAfter((settings, chips) -> {
+            List<List<JComponent>> rows = settings.navigationRows();
+            assertEquals(4 + GameAction.values().length / 2 + 1, rows.size(),
+                    "size, difficulty, colour, key target, key pairs, buttons");
+            assertSame(chips.get(0), rows.get(4).get(0));
+            assertSame(chips.get(1), rows.get(4).get(1));
+
+            Component at = rows.get(0).get(0);   // 화면 크기
+            List<String> moves = new ArrayList<>();
+            for (int step = 0; step < 4; step++) at = settings.navigationTarget(at, 1, 0);
+            moves.add(name(at, chips));
+            at = settings.navigationTarget(at, 0, 1);
+            moves.add(name(at, chips));
+            at = settings.navigationTarget(at, 0, 1);
+            moves.add(name(at, chips));   // 오른쪽 끝에서는 그대로
+            at = settings.navigationTarget(at, 1, 0);
+            moves.add(name(at, chips));
+            at = settings.navigationTarget(at, 0, -1);
+            moves.add(name(at, chips));
+            for (int step = 0; step < 10; step++) at = settings.navigationTarget(at, 1, 0);
+            moves.add(name(at, chips));
+            at = settings.navigationTarget(at, -1, 0);
+            moves.add(name(at, chips));
+            assertEquals(List.of("chip 0", "chip 1", "chip 1", "chip 3", "chip 2", "button", "chip 6"), moves);
+        });
+    }
+
+    @Test
+    void realArrowKeyEventsMoveTheSelectionAndLeftRightChangeValuesOnTheTopRows() throws Exception {
+        savedAfter((settings, chips) -> {
+            List<List<JComponent>> rows = settings.navigationRows();
+            JComponent screenSize = rows.get(0).get(0);
+            JComponent keyTarget = rows.get(3).get(0);
+            JComponent saveButton = rows.get(rows.size() - 1).get(0);
+
+            press(screenSize, KeyEvent.VK_DOWN);
+            assertSame(rows.get(1).get(0), settings.lastMoveTarget, "↓ on screen size goes to difficulty");
+            press(keyTarget, KeyEvent.VK_DOWN);
+            assertSame(chips.get(0), settings.lastMoveTarget, "↓ on the key target goes to the first key");
+            press(chips.get(0), KeyEvent.VK_RIGHT);
+            assertSame(chips.get(1), settings.lastMoveTarget, "→ on a key goes to the key beside it");
+            press(chips.get(1), KeyEvent.VK_UP);
+            assertSame(keyTarget, settings.lastMoveTarget);
+            press(saveButton, KeyEvent.VK_UP);
+            assertSame(chips.get(6), settings.lastMoveTarget, "↑ on the buttons goes back to the keys");
+
+            settings.lastMoveTarget = null;
+            press(screenSize, KeyEvent.VK_LEFT);
+            assertNull(settings.lastMoveTarget, "←→ on a top row changes its value instead of moving");
+
+            // 아무 항목에도 포커스가 없을 때(설정을 막 열었을 때 등) 방향키는 첫 줄부터 고른다.
+            press(settings, KeyEvent.VK_DOWN);
+            assertSame(screenSize, settings.lastMoveTarget, "an arrow with nothing selected starts at screen size");
+        });
+    }
+
+    private static String name(Component component, List<Component> chips) {
+        int chip = chips.indexOf(component);
+        if (chip >= 0) return "chip " + chip;
+        if (component instanceof AbstractButton) return "button";
+        return String.valueOf(component);
+    }
+
+    private static void prompt(int keyCode, List<Integer> openingKeys) {
+        SettingsScreen.setKeyPromptForTests((parent, title, message, openingKey, problem) -> {
+            openingKeys.add(openingKey);
+            ThemedDialog.KeyPress pressed = new ThemedDialog.KeyPress(keyCode, KeyEvent.KEY_LOCATION_STANDARD);
+            assertNull(problem.apply(pressed));
+            return pressed;
+        });
+    }
+
+    /** 설정 화면을 열어 키 칸을 다룬 뒤 저장을 눌러, 저장된 조작 키를 돌려준다. */
+    private KeyBindings savedAfter(java.util.function.BiConsumer<SettingsScreen, List<Component>> typing)
+            throws Exception {
         AtomicReference<GameSettings> updated = new AtomicReference<>();
         CountDownLatch savedLatch = new CountDownLatch(1);
         ScreenRouter[] router = new ScreenRouter[1];
@@ -94,7 +192,7 @@ class SettingsKeyChipTest {
             List<Component> chips = new ArrayList<>();
             collect(settings, "KeyChip", chips);
             assertEquals(GameAction.values().length, chips.size());
-            typing.accept(chips);
+            typing.accept(settings, chips);
             saveButton(settings).doClick();
         });
         try {
@@ -132,13 +230,10 @@ class SettingsKeyChipTest {
         };
     }
 
-    private static void press(Component target, int keyCode, int modifiers) {
-        target.dispatchEvent(new KeyEvent(target, KeyEvent.KEY_PRESSED, System.currentTimeMillis(), modifiers,
+    private static void press(Component target, int keyCode) {
+        target.dispatchEvent(new KeyEvent(target, KeyEvent.KEY_PRESSED, System.currentTimeMillis(), 0,
                 keyCode, KeyEvent.CHAR_UNDEFINED));
-    }
-
-    private static void release(Component target, int keyCode, int modifiers) {
-        target.dispatchEvent(new KeyEvent(target, KeyEvent.KEY_RELEASED, System.currentTimeMillis(), modifiers,
+        target.dispatchEvent(new KeyEvent(target, KeyEvent.KEY_RELEASED, System.currentTimeMillis(), 0,
                 keyCode, KeyEvent.CHAR_UNDEFINED));
     }
 

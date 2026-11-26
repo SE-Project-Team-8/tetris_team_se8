@@ -27,6 +27,7 @@ import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.KeyStroke;
 import javax.swing.SwingConstants;
+import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
 import javax.swing.plaf.basic.BasicScrollBarUI;
 import java.awt.BorderLayout;
@@ -38,6 +39,7 @@ import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.GridLayout;
 import java.awt.KeyboardFocusManager;
+import java.awt.Rectangle;
 import java.awt.event.FocusAdapter;
 import java.awt.event.FocusEvent;
 import java.awt.event.KeyAdapter;
@@ -52,6 +54,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.IntConsumer;
 import java.util.function.Supplier;
 
 /**
@@ -116,16 +119,27 @@ public final class SettingsScreen extends JPanel implements Screen {
     private final List<PillButton> buttons = new ArrayList<>();
     private final List<SettingCard> cards = new ArrayList<>();
     private final JLabel title = new JLabel("설정");
-    private final JLabel keySection = new ThemedLabel("조작 키  ·  칸을 누른 뒤 새 키를 입력하세요");
-    private static final String SAVE_NOTICE = "변경한 내용은 저장을 눌러야 적용됩니다";
+    private final JLabel keySection = new ThemedLabel("조작 키  ·  칸에서 Enter를 눌러 키를 바꾸세요");
+    private static final String SAVE_NOTICE = "변경한 내용은 저장을 눌러야 적용됩니다  ·  Esc 나가기";
     private static final String PAUSED_NOTICE = "저장을 눌러야 적용되며, 난이도는 다음 게임부터 바뀝니다";
     private final JLabel notice = new ThemedLabel(SAVE_NOTICE, SwingConstants.CENTER);
     /** 뒤로·저장·Esc로 돌아갈 화면. 일시정지 화면에서 열었으면 그리로 돌아가 게임을 이어 한다. */
     private String returnScreen = ScreenRouter.MAIN_MENU;
-    private final JLabel hint = new ThemedLabel("←→ 값 변경  ·  Tab 다음 항목  ·  Esc 나가기", SwingConstants.CENTER);
     private final JPanel form = new JPanel();
     private final PropertyChangeListener focusRepaint = event -> repaint();
     private float appliedScale = -1f;
+
+    /** 새 조작 키를 받는 팝업. 테스트는 팝업 대신 정해 둔 키를 돌려주는 것으로 바꾼다. */
+    interface KeyPrompt {
+        ThemedDialog.KeyPress ask(Component parent, String title, String message, int openingKey,
+                                  Function<ThemedDialog.KeyPress, String> problem);
+    }
+
+    private static KeyPrompt keyPrompt = ThemedDialog::captureKey;
+
+    static void setKeyPromptForTests(KeyPrompt prompt) {
+        keyPrompt = prompt == null ? ThemedDialog::captureKey : prompt;
+    }
 
     public SettingsScreen(ScreenRouter router, SettingsRepository settingsRepository,
                           ScoreboardRepository scoreboardRepository, Supplier<GameSettings> currentSettings,
@@ -160,55 +174,7 @@ public final class SettingsScreen extends JPanel implements Screen {
         singleGrid = keyGrid;
         for (GameAction action : KEY_ORDER) {
             KeyChip field = new KeyChip();
-            // 눌렀지만 아직 지정하지 않은 수정 키. 다른 키 없이 떼면 그때 지정한다.
-            int[] pendingModifier = {KeyEvent.VK_UNDEFINED};
-            // Shift+Tab은 포커스 이동이 Tab을 먼저 가져가므로, 칸을 벗어나면 대기 중이던 수정 키를 버린다.
-            field.addFocusListener(new FocusAdapter() {
-                @Override public void focusLost(FocusEvent event) {
-                    pendingModifier[0] = KeyEvent.VK_UNDEFINED;
-                }
-            });
-            field.addKeyListener(new KeyAdapter() {
-                @Override public void keyPressed(KeyEvent event) {
-                    int keyCode = event.getKeyCode();
-                    // Tab은 다음 항목으로 넘어가는 데 쓰므로 조작 키로 받지 않는다.
-                    if (keyCode <= KeyEvent.VK_UNDEFINED || keyCode > 0xFFFF || keyCode == KeyEvent.VK_TAB) {
-                        pendingModifier[0] = KeyEvent.VK_UNDEFINED;
-                        return;
-                    }
-                    // Shift·Ctrl·Alt·Meta는 Shift+Tab처럼 다른 키와 함께 누르는 경우가 많다.
-                    // 누르는 순간 지정하면 Shift+Tab으로 이전 칸에 가려다 Shift로 바뀌므로, 단독으로 눌렀다 뗄 때 지정한다.
-                    if (isModifier(keyCode)) {
-                        pendingModifier[0] = keyCode;
-                        event.consume();
-                        return;
-                    }
-                    pendingModifier[0] = KeyEvent.VK_UNDEFINED;
-                    assign(keyCode, event);
-                }
-
-                @Override public void keyReleased(KeyEvent event) {
-                    if (pendingModifier[0] != KeyEvent.VK_UNDEFINED && event.getKeyCode() == pendingModifier[0]) {
-                        pendingModifier[0] = KeyEvent.VK_UNDEFINED;
-                        assign(event.getKeyCode(), event);
-                    }
-                }
-
-                private void assign(int keyCode, KeyEvent event) {
-                    for (var entry : selectedKeys.entrySet()) {
-                        if (entry.getKey() != action && entry.getValue() == keyCode) {
-                            showMessage("이미 다른 동작에 쓰이는 키입니다.", "키 중복",
-                                    ThemedDialog.Tone.WARNING);
-                            // 충돌한 키(예: ESC)가 설정 화면의 단축키로 넘어가 화면을 닫지 않게 한다.
-                            event.consume();
-                            return;
-                        }
-                    }
-                    selectedKeys.put(action, keyCode);
-                    field.setKey(keyCode);
-                    event.consume();
-                }
-            });
+            field.setOnActivate(openingKey -> changeSingleKey(action, field, openingKey));
             keyFields.put(action, field);
             JLabel label = new CardLabel(actionLabel(action));
             label.setForeground(UiColors.TEXT_PRIMARY);
@@ -221,7 +187,7 @@ public final class SettingsScreen extends JPanel implements Screen {
         versusGrid = newKeyGrid();
         for (GameAction action : VERSUS_KEY_ORDER) {
             KeyChip field = new KeyChip();
-            addVersusKeyListener(field, action);
+            field.setOnActivate(openingKey -> changeVersusKey(action, field, openingKey));
             versusFields.put(action, field);
             JLabel label = new CardLabel(actionLabel(action));
             label.setForeground(UiColors.TEXT_PRIMARY);
@@ -242,9 +208,11 @@ public final class SettingsScreen extends JPanel implements Screen {
         formScroll.getVerticalScrollBar().setOpaque(false);
         formScroll.getVerticalScrollBar().setPreferredSize(new Dimension(8, 0));
         formScroll.getVerticalScrollBar().setUnitIncrement(16);
+        // 스크롤 영역은 방향키를 스크롤에 쓰므로 그 바인딩을 끈다. 방향키는 항목 이동에 쓴다 (스크롤은 이동할 때 맞춘다).
+        formScroll.setInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT, new javax.swing.InputMap());
         add(formScroll, BorderLayout.CENTER);
 
-        JPanel footer = new JPanel(new BorderLayout(0, 10));
+        JPanel footer = new JPanel(new BorderLayout(0, 8));
         footer.setOpaque(false);
         JPanel buttonRow = new JPanel(new FlowLayout(FlowLayout.CENTER, 8, 0));
         buttonRow.setOpaque(false);
@@ -254,13 +222,28 @@ public final class SettingsScreen extends JPanel implements Screen {
         addButton(buttonRow, "뒤로").addActionListener(event -> router.showScreen(returnScreen));
         PillButton.linkArrowKeys(buttons);
         // 저장 안내는 버튼 바로 아래에, 조작 방법은 맨 아래에 따로 둔다.
-        notice.setForeground(UiColors.TEXT_SECONDARY);
-        hint.setForeground(UiColors.withAlpha(UiColors.TEXT_MUTED, 0.8f));
-        footer.add(buttonRow, BorderLayout.NORTH);
-        footer.add(notice, BorderLayout.CENTER);
-        footer.add(hint, BorderLayout.SOUTH);
+        // 버튼은 화면 아래쪽에 붙이고, 그 밑에 저장 안내 한 줄만 작게 둔다.
+        notice.setForeground(UiColors.withAlpha(UiColors.TEXT_MUTED, 0.85f));
+        footer.add(buttonRow, BorderLayout.CENTER);
+        footer.add(notice, BorderLayout.SOUTH);
         add(footer, BorderLayout.SOUTH);
 
+        // 방향키로 줄과 칸을 옮긴다. 각 항목이 직접 받는다.
+        // 알약 줄(화면 크기·난이도·색맹 모드·조작 키 대상)의 ←→는 값 바꾸기, 아래 버튼 줄의 ←→는 버튼 이동이라 ↑↓만 건다.
+        for (JComponent control : List.of(size, difficulty, color, keyTarget)) bindArrows(control, false);
+        for (KeyChip chip : keyFields.values()) bindArrows(chip, true);
+        for (KeyChip chip : versusFields.values()) bindArrows(chip, true);
+        for (PillButton button : buttons) bindArrows(button, false);
+        // 포커스가 어느 항목에도 없을 때(예: 클릭으로 빈 곳을 눌렀을 때) 방향키를 누르면 첫 줄부터 고른다.
+        // 항목에 포커스가 있으면 그 항목의 방향키 처리가 먼저 키를 쓰므로 여기까지 오지 않는다.
+        for (String key : List.of("UP", "DOWN", "LEFT", "RIGHT")) {
+            getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(key), "settingsStart");
+        }
+        getActionMap().put("settingsStart", new javax.swing.AbstractAction() {
+            @Override public void actionPerformed(java.awt.event.ActionEvent event) {
+                focus(size);
+            }
+        });
         getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke("ESCAPE"), "back");
         getActionMap().put("back", new javax.swing.AbstractAction() {
             @Override public void actionPerformed(java.awt.event.ActionEvent event) {
@@ -281,7 +264,11 @@ public final class SettingsScreen extends JPanel implements Screen {
         // 포커스가 옮겨 갈 때마다 선택 강조(노란 테두리)를 다시 그린다.
         KeyboardFocusManager.getCurrentKeyboardFocusManager()
                 .addPropertyChangeListener("permanentFocusOwner", focusRepaint);
-        size.requestFocusInWindow();
+        // 화면을 바꾸는 쪽(ScreenRouter)이 onShow 뒤에 패널에 포커스를 주므로, 그다음에 첫 줄(화면 크기)을 고른다.
+        // 그래야 설정을 열자마자 방향키로 움직일 수 있다.
+        SwingUtilities.invokeLater(() -> {
+            if (isShowing()) size.requestFocusInWindow();
+        });
     }
 
     @Override public void onHide() {
@@ -300,11 +287,10 @@ public final class SettingsScreen extends JPanel implements Screen {
     private void applyScale(float scale) {
         appliedScale = scale;
         int margin = Math.round(40 * scale);
-        setBorder(BorderFactory.createEmptyBorder(Math.round(36 * scale), margin, Math.round(22 * scale), margin));
+        setBorder(BorderFactory.createEmptyBorder(Math.round(36 * scale), margin, Math.round(14 * scale), margin));
         title.setFont(UiFonts.display(Math.round(30 * scale)));
         keySection.setFont(UiFonts.body(Math.round(13 * scale)));
-        notice.setFont(UiFonts.body(Math.round(13 * scale)));
-        hint.setFont(UiFonts.body(Math.round(12 * scale)));
+        notice.setFont(UiFonts.body(Math.round(12 * scale)));
         for (JLabel label : rowLabels) label.setFont(UiFonts.display(Math.round(18 * scale)));
         for (JLabel label : keyLabels) label.setFont(UiFonts.display(Math.round(15 * scale)));
         for (SegmentedControl<?> control : List.of(size, difficulty, color, keyTarget)) control.applyScale(scale);
@@ -363,63 +349,126 @@ public final class SettingsScreen extends JPanel implements Screen {
         return grid;
     }
 
-    /**
-     * 대전 키 칸: 키를 {@code SidedKey.of(코드, 위치)}로 받아 왼쪽·오른쪽 Shift를 구분해 저장한다.
-     * 수정 키는 1인용 칸처럼 단독으로 눌렀다 뗄 때 지정한다 (Shift+Tab으로 칸을 옮겨도 바뀌지 않게).
-     */
-    private void addVersusKeyListener(KeyChip field, GameAction action) {
-        int[] pendingModifier = {KeyEvent.VK_UNDEFINED};
-        field.addFocusListener(new FocusAdapter() {
-            @Override public void focusLost(FocusEvent event) {
-                pendingModifier[0] = KeyEvent.VK_UNDEFINED;
-            }
-        });
-        field.addKeyListener(new KeyAdapter() {
-            @Override public void keyPressed(KeyEvent event) {
-                int keyCode = event.getKeyCode();
-                if (keyCode <= KeyEvent.VK_UNDEFINED || keyCode > 0xFFFF || keyCode == KeyEvent.VK_TAB) {
-                    pendingModifier[0] = KeyEvent.VK_UNDEFINED;
-                    return;
-                }
-                if (isModifier(keyCode)) {
-                    pendingModifier[0] = keyCode;
-                    event.consume();
-                    return;
-                }
-                pendingModifier[0] = KeyEvent.VK_UNDEFINED;
-                assignVersusKey(field, action, SidedKey.of(keyCode, event.getKeyLocation()), event);
-            }
+    /** 그 항목에 포커스가 있을 때 방향키로 다른 항목으로 옮기게 한다. */
+    private void bindArrows(JComponent control, boolean sideways) {
+        bindArrow(control, "UP", -1, 0);
+        bindArrow(control, "DOWN", 1, 0);
+        if (sideways) {
+            bindArrow(control, "LEFT", 0, -1);
+            bindArrow(control, "RIGHT", 0, 1);
+        }
+    }
 
-            @Override public void keyReleased(KeyEvent event) {
-                if (pendingModifier[0] != KeyEvent.VK_UNDEFINED && event.getKeyCode() == pendingModifier[0]) {
-                    pendingModifier[0] = KeyEvent.VK_UNDEFINED;
-                    assignVersusKey(field, action, SidedKey.of(event.getKeyCode(), event.getKeyLocation()), event);
-                }
+    private void bindArrow(JComponent control, String key, int rowStep, int columnStep) {
+        String name = "settingsMove" + key;
+        control.getInputMap(JComponent.WHEN_FOCUSED).put(KeyStroke.getKeyStroke(key), name);
+        control.getActionMap().put(name, new javax.swing.AbstractAction() {
+            @Override public void actionPerformed(java.awt.event.ActionEvent event) {
+                focus(navigationTarget(control, rowStep, columnStep));
             }
         });
     }
 
-    /** 대전 키 하나를 바꾼다. 일시정지·나가기 키나 다른 대전 키(상대 포함)와 겹치면 받지 않는다. */
-    void assignVersusKey(KeyChip field, GameAction action, int key, KeyEvent event) {
-        if (event != null) event.consume();
+    /**
+     * 방향키로 고를 수 있는 자리를 줄마다 모은다: 화면 크기, 난이도, 색맹 모드, 조작 키 대상, 키 칸(두 칸씩), 아래 버튼.
+     * 키 칸은 지금 보이는 대상(1인용 / 대전)의 칸만 넣는다.
+     */
+    List<List<JComponent>> navigationRows() {
+        List<List<JComponent>> rows = new ArrayList<>();
+        for (JComponent control : List.of(size, difficulty, color, keyTarget)) rows.add(List.of(control));
+        boolean versus = keyTarget.getSelected() != KeyTarget.SINGLE;
+        List<GameAction> order = versus ? VERSUS_KEY_ORDER : KEY_ORDER;
+        Map<GameAction, KeyChip> chips = versus ? versusFields : keyFields;
+        for (int index = 0; index < order.size(); index += 2) {
+            List<JComponent> row = new ArrayList<>();
+            for (int column = index; column < Math.min(order.size(), index + 2); column++) {
+                row.add(chips.get(order.get(column)));
+            }
+            rows.add(row);
+        }
+        rows.add(List.copyOf(buttons));
+        return rows;
+    }
+
+    /**
+     * 방향키를 눌렀을 때 옮겨 갈 자리. 줄을 옮기면 같은 열(없으면 그 줄의 마지막 칸)로 가고, 옆 칸이 없으면 그대로다.
+     * 이동할 수 있는 자리 밖에 포커스가 있으면 첫 줄(화면 크기)로 간다.
+     */
+    JComponent navigationTarget(Component owner, int rowStep, int columnStep) {
+        List<List<JComponent>> rows = navigationRows();
+        for (int row = 0; row < rows.size(); row++) {
+            int column = rows.get(row).indexOf(owner);
+            if (column < 0) continue;
+            int nextRow = Math.max(0, Math.min(rows.size() - 1, row + rowStep));
+            int nextColumn = column + columnStep;
+            if (rowStep != 0) nextColumn = Math.min(column, rows.get(nextRow).size() - 1);
+            if (nextColumn < 0 || nextColumn >= rows.get(nextRow).size()) return rows.get(row).get(column);
+            return rows.get(nextRow).get(nextColumn);
+        }
+        return size;
+    }
+
+    /** 방향키로 마지막에 옮겨 간 항목. 테스트가 창 포커스 없이 이동을 확인할 때 쓴다. */
+    JComponent lastMoveTarget;
+
+    private void focus(JComponent target) {
+        lastMoveTarget = target;
+        target.requestFocusInWindow();
+        // 작은 창에서 스크롤 밖에 있는 칸으로 가면 그 카드가 보이게 스크롤한다.
+        if (target.getParent() instanceof JComponent holder && SwingUtilities.isDescendingFrom(holder, form)) {
+            holder.scrollRectToVisible(new Rectangle(0, 0, holder.getWidth(), holder.getHeight()));
+        }
+    }
+
+    /** 1인용 키 칸: 팝업으로 새 키를 받는다. 다른 동작의 키와 겹치면 팝업 안에서 알리고 다시 받는다. */
+    private void changeSingleKey(GameAction action, KeyChip field, int openingKey) {
+        ThemedDialog.KeyPress press = keyPrompt.ask(this, "키 변경", promptMessage(actionLabel(action)), openingKey,
+                pressed -> {
+                    for (var entry : selectedKeys.entrySet()) {
+                        if (entry.getKey() != action && entry.getValue() == pressed.keyCode()) {
+                            return "이미 '" + actionLabel(entry.getKey()) + "'에 쓰이는 키입니다";
+                        }
+                    }
+                    return null;
+                });
+        if (press == null) return;
+        selectedKeys.put(action, press.keyCode());
+        field.setKey(press.keyCode());
+    }
+
+    /**
+     * 대전 키 칸: 키를 {@code SidedKey.of(코드, 위치)}로 받아 왼쪽·오른쪽 Shift를 구분해 저장한다.
+     * 일시정지·나가기 키나 다른 대전 키(상대 포함)와 겹치면 팝업 안에서 알리고 다시 받는다.
+     */
+    private void changeVersusKey(GameAction action, KeyChip field, int openingKey) {
         Player player = playerOf(keyTarget.getSelected());
+        ThemedDialog.KeyPress press = keyPrompt.ask(this, "키 변경",
+                promptMessage(player.name() + " " + actionLabel(action)), openingKey,
+                pressed -> versusKeyProblem(player, action, SidedKey.of(pressed.keyCode(), pressed.location())));
+        if (press == null) return;
+        int key = SidedKey.of(press.keyCode(), press.location());
+        selectedVersus.get(player).put(action, key);
+        field.setLabel(VersusScreen.versusKeyName(key));
+    }
+
+    /** 그 대전 키를 쓸 수 없는 이유. 쓸 수 있으면 null. */
+    private String versusKeyProblem(Player player, GameAction action, int key) {
         for (GameAction shared : VersusKeyBindings.SHARED_ACTIONS) {
-            if (SidedKey.overlaps(key, selectedKeys.get(shared))) {
-                showMessage("일시정지·나가기 키와 겹치는 키입니다.", "키 중복", ThemedDialog.Tone.WARNING);
-                return;
+            if (SidedKey.overlaps(key, selectedKeys.get(shared))) return "일시정지·나가기 키와 겹치는 키입니다";
+        }
+        for (Player owner : Player.values()) {
+            for (var entry : selectedVersus.get(owner).entrySet()) {
+                if (owner == player && entry.getKey() == action) continue;
+                if (SidedKey.overlaps(key, entry.getValue())) {
+                    return "이미 '" + owner.name() + " " + actionLabel(entry.getKey()) + "'에 쓰이는 키입니다";
+                }
             }
         }
-        EnumMap<GameAction, Integer> changed = new EnumMap<>(selectedVersus.get(player));
-        changed.put(action, key);
-        try {
-            new VersusKeyBindings(player == Player.P1 ? changed : selectedVersus.get(Player.P1),
-                    player == Player.P2 ? changed : selectedVersus.get(Player.P2));
-        } catch (IllegalArgumentException duplicate) {
-            showMessage("이미 다른 동작에 쓰이는 키입니다.", "키 중복", ThemedDialog.Tone.WARNING);
-            return;
-        }
-        selectedVersus.put(player, changed);
-        field.setLabel(VersusScreen.versusKeyName(key));
+        return null;
+    }
+
+    private static String promptMessage(String actionName) {
+        return "'" + actionName + "'에 쓸 키를 누르세요";
     }
 
     private void saveSelected() {
@@ -521,12 +570,6 @@ public final class SettingsScreen extends JPanel implements Screen {
         buttons.add(button);
         row.add(button);
         return button;
-    }
-
-    /** 다른 키와 함께 누르는 수정 키(Shift·Ctrl·Alt·Meta·AltGr)인지. */
-    private static boolean isModifier(int keyCode) {
-        return keyCode == KeyEvent.VK_SHIFT || keyCode == KeyEvent.VK_CONTROL || keyCode == KeyEvent.VK_ALT
-                || keyCode == KeyEvent.VK_META || keyCode == KeyEvent.VK_ALT_GRAPH;
     }
 
     private static String actionLabel(GameAction action) {
@@ -816,23 +859,39 @@ public final class SettingsScreen extends JPanel implements Screen {
         }
     }
 
-    /** 조작 키 한 개를 보여 주는 칩. 포커스를 받은 뒤 누른 키가 새 조작 키가 된다. */
+    /** 조작 키 한 개를 보여 주는 칩. Enter·Space나 클릭으로 키 변경 팝업을 연다. */
     private static final class KeyChip extends JComponent {
         private String text = "";
         private float fontSize = 15f;
+        private IntConsumer onActivate = openingKey -> { };
 
         KeyChip() {
             setFocusable(true);
-            setToolTipText("누른 뒤 새 키를 입력하세요");
+            setToolTipText("Enter나 클릭으로 키를 바꿉니다");
             addMouseListener(new MouseAdapter() {
                 @Override public void mousePressed(MouseEvent event) {
                     requestFocusInWindow();
+                    onActivate.accept(KeyEvent.VK_UNDEFINED);
+                }
+            });
+            addKeyListener(new KeyAdapter() {
+                @Override public void keyPressed(KeyEvent event) {
+                    int keyCode = event.getKeyCode();
+                    if (keyCode != KeyEvent.VK_ENTER && keyCode != KeyEvent.VK_SPACE) return;
+                    event.consume();
+                    // 팝업을 닫은 뒤에도 Enter를 누르고 있으면 자동 반복으로 팝업이 다시 열리지 않게 한다.
+                    if (HeldKeys.isAutoRepeat()) return;
+                    onActivate.accept(keyCode);
                 }
             });
             addFocusListener(new FocusAdapter() {
                 @Override public void focusGained(FocusEvent event) { repaint(); }
                 @Override public void focusLost(FocusEvent event) { repaint(); }
             });
+        }
+
+        void setOnActivate(IntConsumer onActivate) {
+            this.onActivate = Objects.requireNonNull(onActivate, "onActivate");
         }
 
         void setLabel(String label) {

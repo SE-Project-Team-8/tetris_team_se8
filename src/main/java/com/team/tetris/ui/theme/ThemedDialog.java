@@ -12,10 +12,15 @@ import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.GraphicsDevice;
 import java.awt.GraphicsEnvironment;
+import java.awt.KeyEventDispatcher;
+import java.awt.KeyboardFocusManager;
 import java.awt.Window;
 import java.awt.event.ActionEvent;
+import java.awt.event.KeyAdapter;
+import java.awt.event.KeyEvent;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Function;
 
 import javax.swing.AbstractAction;
 import javax.swing.BorderFactory;
@@ -143,6 +148,117 @@ public final class ThemedDialog {
             SwingUtilities.invokeLater(first::requestFocusInWindow);
         }
         dialog.setVisible(true);
+        return result[0];
+    }
+
+    /** {@link #captureKey}로 받은 키: 키 코드와 위치(왼쪽·오른쪽 Shift 구분). */
+    public record KeyPress(int keyCode, int location) { }
+
+    /**
+     * 새 조작 키를 하나 받는다. 설정 화면의 "키 변경" 팝업이다.
+     * <p>
+     * Esc를 뺀 아무 키나 누르면 그 키를 돌려준다. Tab·Enter·Space·방향키·Shift도 받는다. 팝업을 연 키(Enter·Space)를
+     * 누르고 있는 동안 들어오는 자동 반복은 새 키로 치지 않는다. {@code problem}이 문제를 알려 주면 팝업 안에 그 글을 빨갛게
+     * 띄우고 다시 기다린다. Esc나 "취소" 버튼은 null을 돌려준다.
+     *
+     * @param openingKey 팝업을 연 키 코드. 마우스로 열었으면 {@link KeyEvent#VK_UNDEFINED}
+     * @param problem 받은 키에 문제가 있으면 안내 글, 없으면 null
+     */
+    public static KeyPress captureKey(Component parent, String title, String message, int openingKey,
+                                      Function<KeyPress, String> problem) {
+        Window owner = parent == null ? null
+                : parent instanceof Window window ? window : SwingUtilities.getWindowAncestor(parent);
+        float scale = dialogScale(owner);
+        JDialog dialog = new JDialog(owner, title, Dialog.ModalityType.APPLICATION_MODAL);
+        dialog.setUndecorated(true);
+        dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
+        if (supportsTranslucency()) dialog.setBackground(new Color(0, 0, 0, 0));
+
+        KeyPress[] result = {null};
+        Card card = new Card(Tone.INFO.color, Math.round(20 * scale), !supportsTranslucency());
+        int padding = Math.round(28 * scale);
+        card.setBorder(BorderFactory.createEmptyBorder(Math.round(24 * scale), padding, Math.round(22 * scale), padding));
+        card.setLayout(new BorderLayout(0, Math.round(12 * scale)));
+
+        JLabel titleLabel = new ThemedLabel(title, SwingConstants.CENTER);
+        titleLabel.setFont(UiFonts.display(Math.round(22 * scale)));
+        titleLabel.setForeground(Tone.INFO.color);
+        card.add(titleLabel, BorderLayout.NORTH);
+
+        Font messageFont = UiFonts.body(Math.round(15 * scale));
+        int textWidth = Math.round(300 * scale);
+        JLabel messageLabel = new JLabel(wrapHtml(message, textWidth, messageFont), SwingConstants.CENTER);
+        messageLabel.setFont(messageFont);
+        messageLabel.setForeground(UiColors.TEXT_PRIMARY);
+        // 문제 안내 줄은 처음부터 자리를 잡아 두어 글이 생겨도 팝업 크기가 바뀌지 않게 한다.
+        JLabel problemLabel = new JLabel(wrapHtml(" ", textWidth, messageFont), SwingConstants.CENTER);
+        problemLabel.setFont(messageFont);
+        problemLabel.setForeground(UiColors.PLAYER2);
+        JPanel body = new JPanel(new BorderLayout(0, Math.round(8 * scale)));
+        body.setOpaque(false);
+        body.add(messageLabel, BorderLayout.CENTER);
+        body.add(problemLabel, BorderLayout.SOUTH);
+        card.add(body, BorderLayout.CENTER);
+
+        // 취소 버튼은 카드 아래쪽에 붙여 둔다. 버튼 위에 여백을 두어 본문과 떨어뜨린다.
+        JPanel cancelRow = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
+        cancelRow.setOpaque(false);
+        cancelRow.setBorder(BorderFactory.createEmptyBorder(Math.round(10 * scale), 0, 0, 0));
+        PillButton cancel = new PillButton("취소", false);
+        float fontSize = Math.round(16 * scale);
+        cancel.setFontSize(fontSize);
+        cancel.setPreferredSize(new Dimension(Math.round(110 * scale), Math.round(44 * scale)));
+        // 버튼이 포커스를 가져가면 키를 받을 수 없으므로 마우스로만 누른다.
+        cancel.setFocusable(false);
+        cancel.addActionListener(event -> dialog.dispose());
+        cancelRow.add(cancel);
+        card.add(cancelRow, BorderLayout.SOUTH);
+
+        // Tab도 조작 키로 받도록 포커스 이동 키를 끈 카드가 키를 받는다.
+        card.setFocusable(true);
+        card.setFocusTraversalKeysEnabled(false);
+        boolean[] openingHeld = {openingKey != KeyEvent.VK_UNDEFINED};
+        card.addKeyListener(new KeyAdapter() {
+            @Override public void keyPressed(KeyEvent event) {
+                event.consume();
+                int keyCode = event.getKeyCode();
+                if (keyCode == KeyEvent.VK_ESCAPE) {
+                    dialog.dispose();
+                    return;
+                }
+                if (keyCode <= KeyEvent.VK_UNDEFINED || keyCode > 0xFFFF) return;
+                if (openingHeld[0] && keyCode == openingKey) return;   // 팝업을 연 키의 자동 반복
+                KeyPress press = new KeyPress(keyCode, event.getKeyLocation());
+                String issue = problem.apply(press);
+                if (issue != null) {
+                    problemLabel.setText(wrapHtml(issue, textWidth, messageFont));
+                    return;
+                }
+                result[0] = press;
+                dialog.dispose();
+            }
+
+            @Override public void keyReleased(KeyEvent event) {
+                event.consume();
+            }
+        });
+        // 팝업을 연 키를 떼는 이벤트는 팝업이 포커스를 받기 전에 올 수도 있어서 창과 상관없이 지켜본다.
+        KeyEventDispatcher openingReleased = event -> {
+            if (event.getID() == KeyEvent.KEY_RELEASED && event.getKeyCode() == openingKey) openingHeld[0] = false;
+            return false;
+        };
+
+        dialog.setContentPane(card);
+        dialog.pack();
+        dialog.setLocationRelativeTo(owner);
+        SwingUtilities.invokeLater(card::requestFocusInWindow);
+        KeyboardFocusManager focus = KeyboardFocusManager.getCurrentKeyboardFocusManager();
+        focus.addKeyEventDispatcher(openingReleased);
+        try {
+            dialog.setVisible(true);
+        } finally {
+            focus.removeKeyEventDispatcher(openingReleased);
+        }
         return result[0];
     }
 
