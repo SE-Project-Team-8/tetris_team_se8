@@ -5,6 +5,7 @@ import com.team.tetris.common.battle.GarbageLine;
 import com.team.tetris.common.battle.Player;
 import com.team.tetris.common.battle.VersusMode;
 import com.team.tetris.common.events.BoardSnapshot;
+import com.team.tetris.common.events.CellPosition;
 import com.team.tetris.common.events.GameEventListener;
 import com.team.tetris.common.persistence.PropertiesFile;
 import com.team.tetris.game.BlockBoardDriver;
@@ -56,6 +57,7 @@ public final class P2pSession implements AutoCloseable {
     private final Timer pulse = new Timer(250, event -> tick());
     private final GarbageQueue incoming = new GarbageQueue();
 
+    private P2pEffectListener effectListener;
     private P2pConnection connection;
     private long connectionId;
     private State state = State.IDLE;
@@ -103,6 +105,11 @@ public final class P2pSession implements AutoCloseable {
         this.difficulty = difficulty;
         this.changed = changed;
         this.port = port;
+    }
+
+    /** Registers the effect callbacks on the EDT. Pass null to remove the listener. */
+    public void setEffectListener(P2pEffectListener listener) {
+        effectListener = listener;
     }
 
     public void host() {
@@ -247,6 +254,30 @@ public final class P2pSession implements AutoCloseable {
             }
             @Override public void onPauseStateChanged(boolean value) { }
 
+            @Override public void onLinesCleared(List<Integer> rows, BoardSnapshot boardBeforeClear) {
+                publishEffect(new P2pProtocol.LinesCleared(rows, boardBeforeClear));
+            }
+
+            @Override public void onHardDropped(BoardSnapshot fallingBefore, BoardSnapshot fallingAfter) {
+                publishEffect(new P2pProtocol.HardDropped(fallingBefore, fallingAfter));
+            }
+
+            @Override public void onBombExploded(CellPosition center, List<CellPosition> blastCells) {
+                publishEffect(new P2pProtocol.BombExploded(center, blastCells));
+            }
+
+            @Override public void onAnvilCrushed(List<CellPosition> crushedCells) {
+                publishEffect(new P2pProtocol.AnvilCrushed(crushedCells));
+            }
+
+            @Override public void onFeverActivated(int seconds) {
+                publishEffect(new P2pProtocol.FeverActivated(seconds));
+            }
+
+            @Override public void onSlowDownActivated(int previousLevel, int currentLevel) {
+                publishEffect(new P2pProtocol.SlowDownActivated(previousLevel, currentLevel));
+            }
+
             @Override public void onGameOver(int score) {
                 publishFrame();
                 if (checkDeadline(System.nanoTime())) return;
@@ -367,6 +398,9 @@ public final class P2pSession implements AutoCloseable {
                     changed.run();
                 }
             }
+            case P2pProtocol.Effect m -> {
+                if (isCurrentRound(m.round())) notifyEffect(local.opponent(), m.data());
+            }
             case P2pProtocol.Attack m -> {
                 if (state == State.PLAYING && m.round() == round && incoming.offer(m.lines()) > 0) scheduleFrame();
             }
@@ -409,6 +443,25 @@ public final class P2pSession implements AutoCloseable {
 
     private boolean isCurrentRound(int candidate) {
         return candidate == round && (state == State.PLAYING || state == State.FINISHING);
+    }
+
+    private void publishEffect(P2pProtocol.EffectData data) {
+        // Queue the effect before the board update that follows this engine event.
+        send(new P2pProtocol.Effect(round, data));
+        notifyEffect(local, data);
+    }
+
+    private void notifyEffect(Player player, P2pProtocol.EffectData data) {
+        P2pEffectListener listener = effectListener;
+        if (listener == null) return;
+        switch (data) {
+            case P2pProtocol.LinesCleared e -> listener.linesCleared(player, e.rows(), e.boardBeforeClear());
+            case P2pProtocol.HardDropped e -> listener.hardDropped(player, e.fallingBefore(), e.fallingAfter());
+            case P2pProtocol.BombExploded e -> listener.bombExploded(player, e.center(), e.cells());
+            case P2pProtocol.AnvilCrushed e -> listener.anvilCrushed(player, e.cells());
+            case P2pProtocol.FeverActivated e -> listener.feverActivated(player, e.seconds());
+            case P2pProtocol.SlowDownActivated e -> listener.slowDownActivated(player, e.previousLevel(), e.currentLevel());
+        }
     }
 
     private void scheduleFrame() {
