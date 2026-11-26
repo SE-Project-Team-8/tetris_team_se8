@@ -21,7 +21,7 @@ import java.util.List;
 /** Versioned, length-prefixed messages. Remote data is decoded as bounded primitive fields. */
 final class P2pProtocol {
     static final int SIGNATURE = 0x54455450; // TETP
-    static final int VERSION = 1;
+    static final int VERSION = 2;
     private static final int MAX_MESSAGE_BYTES = 2048;
     private static final int ITEM_CELL = 9;
     private static final int ROWS = GameConstants.BOARD_ROWS;
@@ -32,9 +32,9 @@ final class P2pProtocol {
     sealed interface Message permits Mode, Ready, Start, Board, Attack, PauseRequest, Pause,
             TopOut, Stop, FinalScore, Result, Ping, Pong { }
 
-    record Mode(int selection, VersusMode mode) implements Message { }
+    record Mode(int selection, VersusMode mode, int timeLimitMinutes) implements Message { }
     record Ready(int round, int selection) implements Message { }
-    record Start(int round, VersusMode mode, Difficulty difficulty) implements Message { }
+    record Start(int round, VersusMode mode, Difficulty difficulty, int timeLimitMinutes) implements Message { }
     record Board(int round, P2pSession.BoardState state) implements Message { }
     record Attack(int round, List<GarbageLine> lines) implements Message { }
     record PauseRequest(int round) implements Message { }
@@ -54,6 +54,7 @@ final class P2pProtocol {
                 out.writeByte(1);
                 out.writeInt(m.selection());
                 out.writeByte(m.mode().ordinal());
+                out.writeByte(m.timeLimitMinutes());
             }
             case Ready m -> {
                 writeHeader(out, 2, m.round());
@@ -63,6 +64,7 @@ final class P2pProtocol {
                 writeHeader(out, 3, m.round());
                 out.writeByte(m.mode().ordinal());
                 out.writeByte(m.difficulty().ordinal());
+                out.writeByte(m.timeLimitMinutes());
             }
             case Board m -> {
                 writeHeader(out, 4, m.round());
@@ -113,9 +115,10 @@ final class P2pProtocol {
         Message message;
         try {
             message = switch (in.readUnsignedByte()) {
-                case 1 -> new Mode(readRound(in), readMode(in));
+                case 1 -> new Mode(readRound(in), readMode(in), readTimeLimitMinutes(in));
                 case 2 -> new Ready(readRound(in), bounded(in.readInt(), 0, Integer.MAX_VALUE));
-                case 3 -> new Start(readRound(in), readMode(in), enumValue(Difficulty.values(), in.readUnsignedByte()));
+                case 3 -> new Start(readRound(in), readMode(in),
+                        enumValue(Difficulty.values(), in.readUnsignedByte()), readTimeLimitMinutes(in));
                 case 4 -> new Board(readRound(in), readBoard(in));
                 case 5 -> new Attack(readRound(in), readLines(in, ROWS));
                 case 6 -> new PauseRequest(readRound(in));
@@ -146,6 +149,10 @@ final class P2pProtocol {
 
     private static VersusMode readMode(DataInputStream in) throws IOException {
         return enumValue(VersusMode.values(), in.readUnsignedByte());
+    }
+
+    private static int readTimeLimitMinutes(DataInputStream in) throws IOException {
+        return bounded(in.readUnsignedByte(), P2pSession.MIN_TIME_LIMIT_MINUTES, P2pSession.MAX_TIME_LIMIT_MINUTES);
     }
 
     private static void writeBoard(DataOutputStream out, P2pSession.BoardState frame) throws IOException {
