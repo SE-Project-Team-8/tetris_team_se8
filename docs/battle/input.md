@@ -44,7 +44,7 @@
 
 - `KEY_PRESSED`: 이미 눌려 있는 키면(OS 자동 반복) 무시한다. 새로 눌린 키면 동작을 한 번 바로 실행하고, 반복되는 동작이면 그 키의 반복 타이머를 시작한다.
 - `KEY_RELEASED`: 그 키의 반복 타이머를 멈춘다.
-- 반복 타이머는 실제로는 Swing `Timer`(`GameEngine.newSwingTimer()`)이고, 엔진의 `DropTimer`처럼 주입해 테스트에서 직접 넘긴다. 첫 반복까지의 지연과 이후 간격은 상수(`REPEAT_DELAY_MILLIS`, `REPEAT_INTERVAL_MILLIS`)로 두고 플레이해 보며 맞춘다(시작값: 지연 170ms, 간격 50ms).
+- 반복 타이머는 실제로는 Swing `Timer`(`GameEngine.newSwingTimer()`)이고, 엔진의 `DropTimer`처럼 주입해 테스트에서 직접 넘긴다. 첫 반복까지의 지연과 이후 간격은 1인 모드(OS 자동 반복)와 같은 손맛이 나도록, 무시하는 OS 자동 반복의 시각을 재서 맞춘다. OS는 마지막에 새로 누른 키만 반복하므로 그 키의 반복만 잰다. 재기 전에는 Windows 기본값(`REPEAT_DELAY_MILLIS` 500ms, `REPEAT_INTERVAL_MILLIS` 33ms)을 쓴다. (처음 값 170ms·50ms는 1인 모드보다 예민해서 바꿨다.)
 - 엔진의 타이머는 첫 지연이 간격보다 길 수 없어서, 지연만큼 한 번 기다린 뒤 간격으로 다시 건다.
 - 키를 뗀 뒤 늦게 도착한 반복 호출은 무시한다.
 

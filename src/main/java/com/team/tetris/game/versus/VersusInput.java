@@ -12,6 +12,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.LongSupplier;
 import java.util.function.Supplier;
 
 /**
@@ -19,8 +20,11 @@ import java.util.function.Supplier;
  *
  * OS의 자동 반복은 마지막에 누른 키 하나만 반복하므로, 한 사람이 키를 누르고 있는 중에 다른 사람이 키를 누르면 앞사람의
  * 반복이 끊긴다. 그래서 OS 반복은 무시하고, 눌린 키마다 반복 타이머를 따로 돌린다. 새로 누른 키는 바로 한 번 실행하고,
- * {@link #REPEAT_DELAY_MILLIS} 뒤부터 {@link #REPEAT_INTERVAL_MILLIS}마다 반복한다. 하드드롭과 회전은 반복하지 않는다
- * ({@link PlayerMove#repeats()}).
+ * 첫 반복 지연 뒤부터 반복 간격마다 반복한다. 하드드롭과 회전은 반복하지 않는다 ({@link PlayerMove#repeats()}).
+ *
+ * 지연과 간격은 1인용(OS 자동 반복을 그대로 쓴다)과 같은 손맛이 나도록, 들어오는 OS 자동 반복의 시각을 재서 맞춘다
+ * ({@link #repeatDelayMillis()}, {@link #repeatIntervalMillis()}). 재기 전에는 Windows 기본값
+ * ({@link #REPEAT_DELAY_MILLIS}, {@link #REPEAT_INTERVAL_MILLIS})을 쓴다.
  *
  * 키는 키 코드와 위치(왼쪽·오른쪽)로 받는다. 키 표의 키는 {@link SidedKey}라서 왼쪽 Shift와 오른쪽 Shift를 다른
  * 사람에게 줄 수 있다. 쪽을 정하지 않은 표의 키는 어느 쪽에서 눌려도 맞는다.
@@ -29,10 +33,16 @@ import java.util.function.Supplier;
  * 받지 않고, 반복 중이던 키는 다음 반복 때 스스로 멈춘다. 모든 메서드는 Swing EDT에서 호출한다.
  */
 public final class VersusInput {
-    /** 키를 누른 뒤 첫 반복까지. 플레이해 보며 맞춘다 (input.md 3절의 시작값). */
-    public static final int REPEAT_DELAY_MILLIS = 170;
-    /** 첫 반복 뒤의 반복 간격. */
-    public static final int REPEAT_INTERVAL_MILLIS = 50;
+    /** OS 반복을 재기 전의 첫 반복 지연. Windows 기본값(키 반복 지연 1단계)이다. */
+    public static final int REPEAT_DELAY_MILLIS = 500;
+    /** OS 반복을 재기 전의 반복 간격. Windows 기본값(초당 약 30회)이다. */
+    public static final int REPEAT_INTERVAL_MILLIS = 33;
+    /** 잰 값으로 받아들이는 범위. 벗어나면(EDT가 밀렸거나 테스트가 한꺼번에 넣은 반복) 버린다. */
+    static final int MIN_DELAY_MILLIS = 100;
+    static final int MAX_DELAY_MILLIS = 1_500;
+    static final int MIN_INTERVAL_MILLIS = 10;
+    static final int MAX_INTERVAL_MILLIS = 500;
+    private static final int NO_KEY = Integer.MIN_VALUE;
 
     /** 조작을 받는 쪽. 실제로는 {@link VersusMatch}다. */
     interface Target {
@@ -46,6 +56,16 @@ public final class VersusInput {
     private final Set<Integer> down = new HashSet<>();
     private final Map<Integer, GameEngine.DropTimer> repeating = new HashMap<>();
     private Map<Integer, PlayerMove> keys;
+    private final LongSupplier clock;
+    private int repeatDelayMillis = REPEAT_DELAY_MILLIS;
+    private int repeatIntervalMillis = REPEAT_INTERVAL_MILLIS;
+    private boolean delayMeasured;
+    private boolean intervalMeasured;
+    /** OS가 지금 자동 반복하고 있을 키(마지막으로 새로 누른 키)와 그 시각들. */
+    private int osKey = NO_KEY;
+    private long osPressedNanos;
+    private long osLastRepeatNanos;
+    private boolean osRepeated;
 
     /**
      * 실제 게임: 반복은 Swing 타이머로 잰다.
@@ -62,9 +82,26 @@ public final class VersusInput {
     }
 
     VersusInput(Target target, Map<Integer, PlayerMove> keys, Supplier<GameEngine.DropTimer> timers) {
+        this(target, keys, timers, System::nanoTime);
+    }
+
+    /** @param clock OS 반복 시각을 재는 시계(ns). 테스트는 직접 돌리는 시계를 넣는다. */
+    VersusInput(Target target, Map<Integer, PlayerMove> keys, Supplier<GameEngine.DropTimer> timers,
+                LongSupplier clock) {
         this.target = Objects.requireNonNull(target, "target");
         this.timers = Objects.requireNonNull(timers, "timers");
+        this.clock = Objects.requireNonNull(clock, "clock");
         setKeys(keys);
+    }
+
+    /** 키를 누른 뒤 첫 반복까지(ms). 1인용과 같도록 OS 자동 반복에서 잰 값이다. */
+    public int repeatDelayMillis() {
+        return repeatDelayMillis;
+    }
+
+    /** 첫 반복 뒤의 반복 간격(ms). 1인용과 같도록 OS 자동 반복에서 잰 값이다. */
+    public int repeatIntervalMillis() {
+        return repeatIntervalMillis;
     }
 
     /** 키 설정이 바뀌었다. 눌려 있던 키는 모두 뗀 것으로 친다. */
@@ -85,7 +122,13 @@ public final class VersusInput {
         int key = SidedKey.of(keyCode, location);
         PlayerMove move = moveFor(key);
         if (move == null || !target.isRunning()) return false;
-        if (!down.add(key)) return true;   // OS 자동 반복: 반복은 직접 돌린다
+        if (!down.add(key)) {   // OS 자동 반복: 반복은 직접 돌리고, 시각만 재 둔다
+            measureOsRepeat(key);
+            return true;
+        }
+        osKey = key;
+        osPressedNanos = clock.getAsLong();
+        osRepeated = false;
         target.handle(move.player(), move.action());
         if (move.repeats()) startRepeat(key, move);
         return true;
@@ -95,6 +138,7 @@ public final class VersusInput {
     public void keyReleased(int keyCode, int location) {
         int key = SidedKey.of(keyCode, location);
         down.remove(key);
+        if (key == osKey) osKey = NO_KEY;
         GameEngine.DropTimer timer = repeating.remove(key);
         if (timer != null) timer.stop();
     }
@@ -109,6 +153,7 @@ public final class VersusInput {
     /** 눌린 키를 모두 뗀 것으로 친다. 화면을 떠날 때, 창이 포커스를 잃을 때, 대화상자를 띄울 때 부른다. */
     public void releaseAll() {
         down.clear();
+        osKey = NO_KEY;
         repeating.values().forEach(GameEngine.DropTimer::stop);
         repeating.clear();
     }
@@ -117,11 +162,39 @@ public final class VersusInput {
         GameEngine.DropTimer timer = Objects.requireNonNull(timers.get(), "timer");
         repeating.put(keyCode, timer);
         // 첫 지연이 간격보다 길어서 한 번 기다린 뒤 간격으로 다시 건다 (SwingDropTimer는 첫 지연이 간격 이하만 받는다).
-        timer.start(REPEAT_DELAY_MILLIS, () -> {
+        timer.start(repeatDelayMillis, () -> {
             if (repeatOnce(keyCode, move, timer)) {
-                timer.start(REPEAT_INTERVAL_MILLIS, () -> repeatOnce(keyCode, move, timer));
+                timer.start(repeatIntervalMillis, () -> repeatOnce(keyCode, move, timer));
             }
         });
+    }
+
+    /**
+     * OS 자동 반복 한 번의 시각으로 지연·간격을 잰다. OS는 마지막에 새로 누른 키만 반복하므로 그 키의 반복만 센다.
+     * 처음 잰 값은 그대로 쓰고, 그 뒤로는 흔들림을 줄이려고 이전 값과 섞는다.
+     */
+    private void measureOsRepeat(int key) {
+        if (key != osKey) return;
+        long now = clock.getAsLong();
+        if (!osRepeated) {
+            int delay = millisBetween(osPressedNanos, now);
+            if (delay >= MIN_DELAY_MILLIS && delay <= MAX_DELAY_MILLIS) {
+                repeatDelayMillis = delayMeasured ? (repeatDelayMillis + delay + 1) / 2 : delay;
+                delayMeasured = true;
+            }
+        } else {
+            int interval = millisBetween(osLastRepeatNanos, now);
+            if (interval >= MIN_INTERVAL_MILLIS && interval <= MAX_INTERVAL_MILLIS) {
+                repeatIntervalMillis = intervalMeasured ? (3 * repeatIntervalMillis + interval + 2) / 4 : interval;
+                intervalMeasured = true;
+            }
+        }
+        osRepeated = true;
+        osLastRepeatNanos = now;
+    }
+
+    private static int millisBetween(long fromNanos, long toNanos) {
+        return (int) Math.max(0L, Math.min(Integer.MAX_VALUE, (toNanos - fromNanos) / 1_000_000L));
     }
 
     /**

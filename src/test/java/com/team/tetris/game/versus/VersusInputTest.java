@@ -95,8 +95,8 @@ class VersusInputTest {
         input.keyPressed(KeyEvent.VK_A, STANDARD);
         ManualTimer timer = timers.getFirst();
         assertEquals(VersusInput.REPEAT_DELAY_MILLIS, timer.intervalMillis);
-        assertEquals(170, VersusInput.REPEAT_DELAY_MILLIS);
-        assertEquals(50, VersusInput.REPEAT_INTERVAL_MILLIS);
+        assertEquals(500, VersusInput.REPEAT_DELAY_MILLIS, "Windows default before the OS repeat is measured");
+        assertEquals(33, VersusInput.REPEAT_INTERVAL_MILLIS);
 
         timer.fire();
         assertEquals(VersusInput.REPEAT_INTERVAL_MILLIS, timer.intervalMillis, "after the first repeat");
