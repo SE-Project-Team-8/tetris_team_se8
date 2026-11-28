@@ -9,6 +9,8 @@ import java.awt.Color;
 import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Graphics2D;
+import java.awt.Rectangle;
+import java.awt.geom.Area;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
@@ -380,6 +382,7 @@ final class BoardView {
             }
         }
         if (hasAnvil) {
+            drawAnvilGuide(g2d, anvil, x, y, cellSize);
             CellPainter.drawAnvil(g2d, anvil, x, y, cellSize, cellInset(cellSize), AnvilItem.SYMBOL);
         }
         drawHardDropTrail(g2d, x, y, cellSize);
@@ -766,6 +769,64 @@ final class BoardView {
         } else {
             CellPainter.drawBlock(g2d, x, y, size, color);
         }
+    }
+
+    /**
+     * 무게추 표시선: 무게추는 바닥까지 떨어지며 지나가는 줄을 부수므로(착지 고스트가 없다) 떨어질 길을 옅은 띠와 양옆
+     * 점선으로, 바닥에 닿을 자리를 점선 윤곽으로 보여 준다. 띠가 지나가는 블록은 부서질 블록이다.
+     */
+    private void drawAnvilGuide(Graphics2D g2d, boolean[][] anvil, int x, int y, int cellSize) {
+        int minCol = Integer.MAX_VALUE;
+        int maxCol = -1;
+        int bottom = -1;
+        for (int row = 0; row < anvil.length; row++) {
+            for (int col = 0; col < anvil[row].length; col++) {
+                if (!anvil[row][col]) continue;
+                minCol = Math.min(minCol, col);
+                maxCol = Math.max(maxCol, col);
+                bottom = Math.max(bottom, row);
+            }
+        }
+        int drop = anvil.length - 1 - bottom;
+        if (maxCol < 0 || drop <= 0) return;   // 이미 바닥에 닿았다
+
+        Graphics2D guide = (Graphics2D) g2d.create();
+        int inset = cellInset(cellSize);
+        int laneLeft = x + minCol * cellSize + inset;
+        int laneRight = x + (maxCol + 1) * cellSize - inset;
+        int laneTop = y + (bottom + 1) * cellSize;
+        int laneBottom = y + anvil.length * cellSize;
+        guide.setColor(UiColors.withAlpha(ANVIL_SMOKE, 0.08f));
+        guide.fillRect(laneLeft, laneTop, laneRight - laneLeft, laneBottom - laneTop);
+
+        float stroke = Math.max(1f, cellSize * 0.06f);
+        float dash = Math.max(3f, cellSize * 0.22f);
+        guide.setStroke(new BasicStroke(stroke, BasicStroke.CAP_BUTT, BasicStroke.JOIN_ROUND, 10f,
+                new float[]{dash, dash * 0.8f}, 0f));
+        guide.setColor(UiColors.withAlpha(ANVIL_SMOKE, 0.45f));
+        guide.drawLine(laneLeft, laneTop, laneLeft, laneBottom);
+        guide.drawLine(laneRight, laneTop, laneRight, laneBottom);
+
+        // 바닥에 닿을 자리: 무게추 모양 그대로의 점선 윤곽.
+        // 칸마다 바깥쪽 변만 안으로 들여 합치면, 이음새 자국 없이 한 덩어리 윤곽이 된다.
+        Area landing = new Area();
+        for (int row = 0; row < anvil.length; row++) {
+            for (int col = 0; col < anvil[row].length; col++) {
+                if (!anvil[row][col]) continue;
+                int cellX = x + col * cellSize;
+                int cellY = y + (row + drop) * cellSize;
+                int left = col > 0 && anvil[row][col - 1] ? cellX : cellX + inset;
+                int right = col + 1 < anvil[row].length && anvil[row][col + 1] ? cellX + cellSize : cellX + cellSize - inset;
+                int upper = row > 0 && anvil[row - 1][col] ? cellY : cellY + inset;
+                int lower = row + 1 < anvil.length && anvil[row + 1][col] ? cellY + cellSize : cellY + cellSize - inset;
+                landing.add(new Area(new Rectangle(left, upper, right - left, lower - upper)));
+            }
+        }
+        guide.setStroke(new BasicStroke(Math.max(1.5f, cellSize * 0.08f), BasicStroke.CAP_BUTT,
+                BasicStroke.JOIN_ROUND, 10f, new float[]{dash, dash * 0.7f}, 0f));
+        guide.setColor(UiColors.withAlpha(ANVIL_SMOKE, 0.85f));
+        guide.draw(landing);
+        guide.dispose();
     }
 
     private void drawLandingGhost(Graphics2D g2d, int x, int y, int cellSize) {

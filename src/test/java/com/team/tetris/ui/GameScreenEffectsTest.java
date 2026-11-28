@@ -256,6 +256,31 @@ class GameScreenEffectsTest {
     }
 
     @Test
+    void aFallingAnvilShowsItsPathAndWhereItLands() throws Exception {
+        BufferedImage[] images = new BufferedImage[3];
+        Fixture[] fixture = new Fixture[1];
+        int anvil = CellCodes.cell(TetrominoType.J.id(), AnvilItem.SYMBOL);
+        List<CellPosition> top = List.of(new CellPosition(0, 4), new CellPosition(0, 5), new CellPosition(1, 3),
+                new CellPosition(1, 4), new CellPosition(1, 5), new CellPosition(1, 6));
+        List<CellPosition> floor = List.of(new CellPosition(18, 4), new CellPosition(18, 5),
+                new CellPosition(19, 3), new CellPosition(19, 4), new CellPosition(19, 5), new CellPosition(19, 6));
+        edt(() -> {
+            fixture[0] = new Fixture();
+            images[0] = fixture[0].render();
+            fixture[0].events().onBoardUpdated(new BoardSnapshot(board(top, anvil)));
+            images[1] = fixture[0].render();
+            fixture[0].events().onBoardUpdated(new BoardSnapshot(board(floor, anvil)));
+            images[2] = fixture[0].render();
+            fixture[0].dispose();
+        });
+        assertNotEquals(cell(images[0], 10, 4), cell(images[1], 10, 4), "The path below the anvil is tinted");
+        assertEquals(cell(images[0], 10, 1), cell(images[1], 10, 1), "Columns outside the path are untouched");
+        assertNotEquals(pixel(images[0], 19, 3, 0.02f, 0.5f), pixel(images[1], 19, 3, 0.02f, 0.5f),
+                "The landing spot is outlined on the floor");
+        assertEquals(cell(images[0], 10, 4), cell(images[2], 10, 4), "No guide once the anvil is on the floor");
+    }
+
+    @Test
     void bombToastShowsOnceWhenABombPieceAppears() throws Exception {
         BufferedImage[] images = new BufferedImage[2];
         Fixture[] fixture = new Fixture[1];
